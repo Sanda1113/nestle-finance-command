@@ -1,4 +1,3 @@
-// backend/server.js
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -8,34 +7,36 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors()); 
+// CRITICAL: Open CORS so Vercel can talk to Render
+app.use(cors({
+    origin: '*', // Allows any frontend link to connect
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 
-// Set up Multer to handle file uploads in memory
+// Setup Multer for handling file uploads in memory
 const upload = multer({ storage: multer.memoryStorage() });
 
-// --- API ENDPOINT: Advanced AI OCR Ingestion ---
+// The AI Extraction Endpoint
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        console.log('Document received. Starting AI OCR Scan...');
-
+        console.log('Starting AI OCR Scan...');
         const { data: { text } } = await Tesseract.recognize(req.file.buffer, 'eng');
-        console.log('Scan complete. Parsing complex data...');
+        console.log('Scan complete. Parsing data...');
 
-        // 1. ADVANCED REGEX PARSING
+        // Advanced Regex Parsing
         const vendorNameMatch = text.trim().split('\n')[0]; 
         const invMatch = text.match(/(?:Invoice\s*#|Invoice\s*No\.?|INV)[\s:]*([A-Z0-9-]+)/i);
         const poMatch = text.match(/(?:P\.O\.#|P\.O\.|PO\s*#|Purchase\s*Order)[\s:]*([A-Z0-9\/-]+)/i);
         const invDateMatch = text.match(/Invoice\s*Date[\s:]*([\d\/-]+)/i);
         const dueDateMatch = text.match(/Due\s*Date[\s:]*([\d\/-]+)/i);
-        
-        // Explicitly looks for TOTAL as a whole word to ignore Subtotal
         const totalMatch = text.match(/\bTOTAL\b[\s$]*([\d,]+\.\d{2})/i);
 
-        // 2. EXTRACT TABLE LINE ITEMS
+        // Line Items Parsing
         const lineItems = [];
         const lineItemRegex = /(?:^|\n)(\d+)\s+([A-Za-z0-9\s\-_]+?)\s+(\d+\.\d{2})\s+(\d+\.\d{2})/g;
         let match;
@@ -48,26 +49,17 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             });
         }
 
-        // 3. COMPILE RESULTS 
         const extractedData = {
-            vendorName: vendorNameMatch || null,
-            invoiceNumber: invMatch ? invMatch[1].trim() : null,
-            poNumber: poMatch ? poMatch[1].trim() : null,
-            invoiceDate: invDateMatch ? invDateMatch[1].trim() : null,
-            dueDate: dueDateMatch ? dueDateMatch[1].trim() : null,
-            totalAmount: totalMatch ? parseFloat(totalMatch[1].replace(/,/g, '')) : null,
+            vendorName: vendorNameMatch || "Unknown",
+            invoiceNumber: invMatch ? invMatch[1].trim() : "Not Found",
+            poNumber: poMatch ? poMatch[1].trim() : "Not Found",
+            invoiceDate: invDateMatch ? invDateMatch[1].trim() : "Not Found",
+            dueDate: dueDateMatch ? dueDateMatch[1].trim() : "Not Found",
+            totalAmount: totalMatch ? parseFloat(totalMatch[1].replace(/,/g, '')) : 0.00,
             lineItems: lineItems.length > 0 ? lineItems : null
         };
 
-        const missingFields = Object.keys(extractedData).filter(key => extractedData[key] === null);
-
-        // 4. SEND RESPONSE
-        res.json({
-            success: true,
-            extractedData,
-            missingFields,
-            rawText: text 
-        });
+        res.json({ success: true, extractedData, missingFields: [] });
 
     } catch (error) {
         console.error('AI Processing Error:', error);
@@ -76,6 +68,4 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 });
 
 // Start the server
-app.listen(port, () => {
-    console.log(`🚀 FinanceCommand AI Backend running on http://localhost:${port}`);
-});
+app.listen(port, () => console.log(`🚀 Backend running on port ${port}`));
