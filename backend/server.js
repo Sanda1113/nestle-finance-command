@@ -27,7 +27,7 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 
         // 1. Setup the Gemini Model (Forcing it to reply in pure JSON format)
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
+            model: "gemini-1.5-flash-latest",
             generationConfig: { responseMimeType: "application/json" }
         });
 
