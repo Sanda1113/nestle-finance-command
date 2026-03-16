@@ -69,6 +69,7 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 });
 
 // 4. CRITICAL: Force Express to bind to Railway's external network
-app.listen(port, "0.0.0.0", () => {
-    console.log(`🚀 Backend running on port ${port}`);
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Backend is LIVE and listening on port ${PORT}`);
 });
