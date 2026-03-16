@@ -2,24 +2,29 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const Tesseract = require('tesseract.js');
-require('dotenv').config();
 
 const app = express();
-const port = process.env.PORT || 5000;
+// Railway dynamically assigns a PORT. We MUST use process.env.PORT.
+const port = process.env.PORT || 5000; 
 
-// CRITICAL: Open CORS so Vercel can talk to Render
+// 1. Bulletproof CORS policy
 app.use(cors({
-    origin: '*', // Allows any frontend link to connect
+    origin: '*', // Allows Vercel to connect
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
 
-// Setup Multer for handling file uploads in memory
+// 2. Health Check Route (To test if it's awake)
+app.get('/', (req, res) => {
+    res.status(200).send('✅ Nestle Finance Backend is Awake and Ready!');
+});
+
+// Setup File Uploads
 const upload = multer({ storage: multer.memoryStorage() });
 
-// The AI Extraction Endpoint
+// 3. The AI Extraction Endpoint
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -32,11 +37,9 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         const vendorNameMatch = text.trim().split('\n')[0]; 
         const invMatch = text.match(/(?:Invoice\s*#|Invoice\s*No\.?|INV)[\s:]*([A-Z0-9-]+)/i);
         const poMatch = text.match(/(?:P\.O\.#|P\.O\.|PO\s*#|Purchase\s*Order)[\s:]*([A-Z0-9\/-]+)/i);
-        const invDateMatch = text.match(/Invoice\s*Date[\s:]*([\d\/-]+)/i);
-        const dueDateMatch = text.match(/Due\s*Date[\s:]*([\d\/-]+)/i);
         const totalMatch = text.match(/\bTOTAL\b[\s$]*([\d,]+\.\d{2})/i);
 
-        // Line Items Parsing
+        // Parse out the line items
         const lineItems = [];
         const lineItemRegex = /(?:^|\n)(\d+)\s+([A-Za-z0-9\s\-_]+?)\s+(\d+\.\d{2})\s+(\d+\.\d{2})/g;
         let match;
@@ -53,13 +56,11 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             vendorName: vendorNameMatch || "Unknown",
             invoiceNumber: invMatch ? invMatch[1].trim() : "Not Found",
             poNumber: poMatch ? poMatch[1].trim() : "Not Found",
-            invoiceDate: invDateMatch ? invDateMatch[1].trim() : "Not Found",
-            dueDate: dueDateMatch ? dueDateMatch[1].trim() : "Not Found",
             totalAmount: totalMatch ? parseFloat(totalMatch[1].replace(/,/g, '')) : 0.00,
             lineItems: lineItems.length > 0 ? lineItems : null
         };
 
-        res.json({ success: true, extractedData, missingFields: [] });
+        res.json({ success: true, extractedData });
 
     } catch (error) {
         console.error('AI Processing Error:', error);
@@ -67,5 +68,7 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
     }
 });
 
-// Start the server
-app.listen(port, () => console.log(`🚀 Backend running on port ${port}`));
+// 4. CRITICAL: Force Express to bind to Railway's external network
+app.listen(port, "0.0.0.0", () => {
+    console.log(`🚀 Backend running on port ${port}`);
+});
