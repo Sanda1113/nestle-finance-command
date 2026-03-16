@@ -27,8 +27,8 @@ export default function Upload() {
     formData.append('invoiceFile', file);
 
     try {
-      // CRITICAL: Pointing to /api/extract for Vercel Serverless compatibility
-      const response = await axios.post('/api/extract', formData, {
+      // 🚀 CRITICAL UPDATE: Pointing to the live Railway Backend
+      const response = await axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
@@ -37,7 +37,7 @@ export default function Upload() {
       }
     } catch (err) {
       console.error("Upload Error:", err);
-      setError("Failed to process invoice. Ensure the backend is deployed.");
+      setError("Failed to process invoice. Ensure the Railway backend is live.");
     } finally {
       setLoading(false);
     }
@@ -85,7 +85,7 @@ export default function Upload() {
               </div>
               <div>
                 <p className="text-xs uppercase text-slate-400 font-bold">Purchase Order (PO)</p>
-                <p className={`font-semibold ${result.poNumber ? 'text-slate-800' : 'text-orange-500 italic'}`}>
+                <p className={`font-semibold ${result.poNumber && result.poNumber !== "Not Found" ? 'text-slate-800' : 'text-orange-500 italic'}`}>
                   {result.poNumber || "Missing PO Number"}
                 </p>
               </div>
