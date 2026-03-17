@@ -4,7 +4,7 @@ const multer = require('multer');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const mindee = require('mindee'); 
+const mindee = require('mindee');
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -18,21 +18,27 @@ app.get('/', (req, res) => {
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-const getAddressString = (addressObj) => {
-    if (!addressObj) return 'Not Found';
-    return addressObj.value || addressObj.address || addressObj.content || 'Not Found';
+// Helper to extract address string from address field
+const getAddressString = (addressField) => {
+    if (!addressField) return 'Not Found';
+    // The raw address is stored in the 'address' subfield
+    const rawAddress = addressField.address?.value || addressField.address?.content || addressField.address;
+    if (rawAddress) return rawAddress;
+    // fallback to any string representation
+    return addressField.value || addressField.content || 'Not Found';
 };
 
+// Helper to format bank details from supplier_payment_details array
 const formatBankDetails = (paymentDetailsArray) => {
-    // Handle V5 SDK Array structure
-    const details = Array.isArray(paymentDetailsArray) ? paymentDetailsArray[0] : paymentDetailsArray?.values?.[0];
-    if (!details) return 'Not Found';
-    
+    if (!paymentDetailsArray || !Array.isArray(paymentDetailsArray) || paymentDetailsArray.length === 0) {
+        return 'Not Found';
+    }
+    const details = paymentDetailsArray[0]; // take the first if multiple
     const parts = [];
-    if (details.account_number) parts.push(`Account: ${details.account_number}`);
-    if (details.routing_number) parts.push(`Routing: ${details.routing_number}`);
-    if (details.iban) parts.push(`IBAN: ${details.iban}`);
-    if (details.swift) parts.push(`SWIFT: ${details.swift}`);
+    if (details.account_number?.value) parts.push(`Account: ${details.account_number.value}`);
+    if (details.routing_number?.value) parts.push(`Routing: ${details.routing_number.value}`);
+    if (details.iban?.value) parts.push(`IBAN: ${details.iban.value}`);
+    if (details.swift?.value) parts.push(`SWIFT: ${details.swift.value}`);
     return parts.join(', ') || 'Not Found';
 };
 
@@ -41,69 +47,90 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
+        // Save temp file
         const tempDir = os.tmpdir();
         const fileExt = path.extname(req.file.originalname) || '.pdf';
         tempFilePath = path.join(tempDir, `invoice_${Date.now()}${fileExt}`);
         fs.writeFileSync(tempFilePath, req.file.buffer);
 
-        const apiKey = process.env.MINDEE_API_KEY; 
+        const apiKey = process.env.MINDEE_API_KEY;
         if (!apiKey) throw new Error('MINDEE_API_KEY environment variable not set');
-        
+
         const mindeeClient = new mindee.Client({ apiKey });
 
         const productParams = {
-            modelId: 'b3467dd3-63d2-4914-9791-a2dfadfbfe9a'
+            modelId: 'b3467dd3-63d2-4914-9791-a2dfadfbfe9a',
         };
 
         const inputSource = new mindee.PathInput({ inputPath: tempFilePath });
 
         console.log('Sending to Mindee Custom Model...');
-        const response = await mindeeClient.enqueueAndGetResult(
+        // CORRECT: enqueueAndGetResult returns the Document directly
+        const document = await mindeeClient.enqueueAndGetResult(
             mindee.product.Extraction,
             inputSource,
             productParams
         );
-        
-        // 🚀 THE CRITICAL FIX: The correct V5 Object Path
-        const prediction = response.document?.inference?.prediction || {};
-        
-        // Custom models sometimes store data directly on prediction, or inside a fields object
-        const fields = prediction.fields || prediction || {};
 
-        console.log('🔥 Raw Prediction Keys Found:', Object.keys(fields));
+        // The extracted fields are in document.inference.prediction
+        const prediction = document.inference?.prediction || {};
+        console.log('🔥 Prediction keys found:', Object.keys(prediction));
 
-        // Helper to grab values safely regardless of how the custom model wraps it
-        const getVal = (field) => field?.value || field?.content || field || null;
-        const getNum = (field) => parseFloat(getVal(field)) || 0.00;
+        // Helper to safely get a scalar field value
+        const getValue = (field) => field?.value || field?.content || null;
 
-        const customerName = getVal(fields.customer_name);
-        const customerAddress = getAddressString(fields.customer_address);
-        const billTo = [customerName, customerAddress].filter(Boolean).join(', ') || 'Not Found';
+        // --- Vendor / Supplier Info ---
+        const vendorName = getValue(prediction.supplier_name) || 'Not Found';
+        const vendorAddress = getAddressString(prediction.supplier_address) || 'Not Found';
 
-        // Map Line Items Safely
-        const rawLineItems = fields.line_items?.values || fields.line_items?.elements || fields.line_items || [];
-        const mappedLineItems = rawLineItems.map(item => ({
-            qty: getVal(item.quantity) || '1',
-            description: getVal(item.description) || 'Item',
-            unitPrice: `$${getNum(item.unit_price).toFixed(2)}`,
-            amount: `$${getNum(item.total_price || item.amount).toFixed(2)}`
-        }));
+        // --- Invoice Metadata ---
+        const invoiceNumber = getValue(prediction.invoice_number) || 'Not Found';
+        const invoiceDate = getValue(prediction.date) || 'Not Found';
+        const poNumber = getValue(prediction.po_number) || 'Not Found';
+        const dueDate = getValue(prediction.due_date) || 'Not Found';
 
+        // --- Customer Addresses (Bill To / Ship To) ---
+        const billTo = getAddressString(prediction.billing_address) || 'Not Found';
+        const shipTo = getAddressString(prediction.shipping_address) || 'Not Found';
+
+        // --- Financial Totals ---
+        const subtotal = parseFloat(getValue(prediction.total_net)) || 0.00;
+        const salesTax = parseFloat(getValue(prediction.total_tax)) || 0.00;
+        const totalAmount = parseFloat(getValue(prediction.total_amount)) || 0.00;
+
+        // --- Bank Details ---
+        const bankDetails = formatBankDetails(prediction.supplier_payment_details);
+
+        // --- Line Items ---
+        const lineItems = [];
+        const rawLineItems = prediction.line_items || [];
+        if (Array.isArray(rawLineItems)) {
+            rawLineItems.forEach(item => {
+                lineItems.push({
+                    qty: getValue(item.quantity) || '',
+                    description: getValue(item.description) || '',
+                    unitPrice: getValue(item.unit_price) ? `$${parseFloat(getValue(item.unit_price)).toFixed(2)}` : '$0.00',
+                    amount: getValue(item.total_price) ? `$${parseFloat(getValue(item.total_price)).toFixed(2)}` : '$0.00'
+                });
+            });
+        }
+
+        // Build final output exactly as your frontend expects
         const extractedData = {
-            vendorName: getVal(fields.supplier_name) || 'Not Found',
-            vendorAddress: getAddressString(fields.supplier_address),
-            invoiceNumber: getVal(fields.invoice_number) || 'Not Found',
-            invoiceDate: getVal(fields.date) || 'Not Found',
-            poNumber: getVal(fields.po_number) || 'Not Found',
-            dueDate: getVal(fields.due_date) || 'Not Found',
-            billTo: billTo,
-            shipTo: getAddressString(fields.shipping_address) || billTo,
-            subtotal: getNum(fields.total_net),
-            salesTax: getNum(fields.total_tax),
-            totalAmount: getNum(fields.total_amount),
-            terms: 'Check Due Date',
-            bankDetails: formatBankDetails(fields.supplier_payment_details),
-            lineItems: mappedLineItems.length > 0 ? mappedLineItems : null
+            vendorName,
+            vendorAddress,
+            invoiceNumber,
+            invoiceDate,
+            poNumber,
+            dueDate,
+            billTo,
+            shipTo,
+            subtotal,
+            salesTax,
+            totalAmount,
+            terms: 'Not Found', // You can adjust if your model extracts terms
+            bankDetails,
+            lineItems: lineItems.length > 0 ? lineItems : null
         };
 
         res.json({ success: true, extractedData });
@@ -112,6 +139,7 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         console.error('❌ Mindee processing error:', error);
         res.status(500).json({ error: 'Invoice processing failed', details: error.message });
     } finally {
+        // Clean up temporary file
         if (tempFilePath && fs.existsSync(tempFilePath)) {
             fs.unlinkSync(tempFilePath);
         }
