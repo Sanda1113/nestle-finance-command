@@ -21,34 +21,41 @@ const upload = multer({ storage: multer.memoryStorage() });
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Deeply extract a string from a Mindee address field.
- * Address fields can be nested in various ways:
- * - { address: { value: "..." } }
- * - { address: { content: "..." } }
- * - { value: "..." }
- * - { content: "..." }
- * - or even a plain string.
+ * Deeply extract the raw address string from any Mindee address field.
+ * The schema says address fields have a nested "address" object that contains the raw string.
+ * But we try multiple possible paths to be safe.
  */
-const extractAddressString = (addrField) => {
+const extractRawAddress = (addrField) => {
     if (!addrField) return null;
+
+    // If it's an array (unlikely for single address), take first
+    if (Array.isArray(addrField)) {
+        addrField = addrField[0];
+        if (!addrField) return null;
+    }
+
     // Try the most common pattern: addrField.address.value
     if (addrField.address) {
         if (addrField.address.value) return addrField.address.value;
         if (addrField.address.content) return addrField.address.content;
         if (typeof addrField.address === 'string') return addrField.address;
     }
-    // Try direct value/content
+
+    // Try direct value/content (some addresses may be flat)
     if (addrField.value) return addrField.value;
     if (addrField.content) return addrField.content;
-    // If it's a plain string (unlikely but safe)
+
+    // If it's a plain string
     if (typeof addrField === 'string') return addrField;
-    // Fallback: log the structure for debugging
-    console.log('⚠️ Unhandled address structure:', JSON.stringify(addrField).slice(0, 200));
+
+    // Log the structure we couldn't handle
+    console.log('⚠️ Unhandled address structure:', JSON.stringify(addrField).slice(0, 300));
     return null;
 };
 
 const getAddressString = (addrField) => {
-    return extractAddressString(addrField) || 'Not Found';
+    const raw = extractRawAddress(addrField);
+    return raw || 'Not Found';
 };
 
 /**
@@ -125,38 +132,51 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         const fields = document.rawHttp?.inference?.result?.fields || {};
         console.log('🔍 Fields keys found:', Object.keys(fields));
 
-        // ---- DEBUG: print raw address fields ----
+        // ---- DEBUG: print raw address fields and line items ----
         console.log('🧪 supplier_address raw:', JSON.stringify(fields.supplier_address));
         console.log('🧪 billing_address raw:', JSON.stringify(fields.billing_address));
         console.log('🧪 shipping_address raw:', JSON.stringify(fields.shipping_address));
         console.log('🧪 customer_address raw:', JSON.stringify(fields.customer_address));
 
-        // ---- DEBUG: print first line item if exists ----
-        if (Array.isArray(fields.line_items) && fields.line_items.length > 0) {
-            console.log('🧪 First line item raw:', JSON.stringify(fields.line_items[0]));
+        // Log line items if present
+        if (Array.isArray(fields.line_items)) {
+            console.log(`🧪 line_items array length: ${fields.line_items.length}`);
+            if (fields.line_items.length > 0) {
+                console.log('🧪 First line item raw:', JSON.stringify(fields.line_items[0]));
+            }
+        } else {
+            console.log('🧪 line_items is not an array:', fields.line_items);
         }
 
         // ========== MAP FIELDS TO YOUR EXACT OUTPUT STRUCTURE ==========
 
+        // Vendor
         const vendorName = getValue(fields.supplier_name) || 'Not Found';
         const vendorAddress = getAddressString(fields.supplier_address);
+
+        // Invoice metadata
         const invoiceNumber = getValue(fields.invoice_number) || 'Not Found';
         const invoiceDate = getValue(fields.date) || 'Not Found';
         const poNumber = getValue(fields.po_number) || 'Not Found';
         const dueDate = getValue(fields.due_date) || 'Not Found';
 
-        // Bill To: try billing_address first, fallback to customer_address
+        // Addresses
         const billTo = getAddressString(fields.billing_address) ||
                        getAddressString(fields.customer_address) || 'Not Found';
         const shipTo = getAddressString(fields.shipping_address) || billTo;
 
+        // Financials
         const subtotal = getNumber(fields.total_net);
         const salesTax = getNumber(fields.total_tax);
         const totalAmount = getNumber(fields.total_amount);
-        const bankDetails = formatBankDetails(fields.supplier_payment_details);
-        const terms = 'Not Found'; // adjust if your model provides this
 
-        // Line items
+        // Bank details
+        const bankDetails = formatBankDetails(fields.supplier_payment_details);
+
+        // Terms (if your model provides it, otherwise static)
+        const terms = 'Not Found'; // adjust if your model extracts terms & conditions
+
+        // Line items (product details)
         const lineItems = [];
         const rawItems = fields.line_items || [];
         if (Array.isArray(rawItems)) {
@@ -174,6 +194,7 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             });
         }
 
+        // Assemble final object
         const extractedData = {
             vendorName,
             vendorAddress,
