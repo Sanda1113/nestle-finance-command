@@ -9,33 +9,37 @@ const port = process.env.PORT || 8080;
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
-// Note this message so we know when Railway has successfully updated!
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Nestle Finance Backend (Mindee SDK Edition) is Awake!');
+    res.status(200).send('✅ Nestle Finance Backend (Mindee V5 SDK) is Awake!');
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// 🚀 PASTE YOUR NEW "OFF-THE-SHELF" INVOICE KEY HERE
-const mindeeClient = new mindee.Client({ apiKey: "md_rzdzT3Hg0p1dT_R4k1K0LKrd4_orzdDvvBafvfKSM6Q" });
+// 🚀 PASTE YOUR "OFF-THE-SHELF" INVOICE KEY HERE
+const mindeeClient = new mindee.Client({ apiKey: "PASTE_NEW_KEY_HERE" });
 
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        console.log('Sending Invoice to Mindee SDK...');
+        console.log('Sending Invoice to Mindee V5 SDK...');
 
-        // 1. Load the image buffer
+        // 1. Load the image buffer using V5 Syntax
         const inputSource = new mindee.BufferInput({
-                        buffer: req.file.buffer,
-                        filename: req.file.originalname || 'invoice.png'
-                        });
+            buffer: req.file.buffer,
+            filename: req.file.originalname || 'invoice.png'
+        });
 
-        // 2. Call the Official pre-trained Invoice V4 model
-        const apiResponse = await mindeeClient.parse(mindee.product.InvoiceV4, inputSource);
+        // 2. CRITICAL FIX: Using V5's enqueueAndGetResult function
+        const apiResponse = await mindeeClient.enqueueAndGetResult(
+            mindee.product.InvoiceV4,
+            inputSource
+        );
+        
+        // 3. Extract the prediction payload
         const prediction = apiResponse.document.inference.prediction;
 
-        // 3. Map Addresses & Banks
+        // 4. Map Addresses & Banks safely
         const vendorAddress = prediction.supplierAddress?.value || "Not Found";
         const customerName = prediction.customerName?.value || "";
         const customerAddress = prediction.customerAddress?.value || "";
@@ -48,7 +52,7 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             bankDetails = `Account: ${bankData.accountNumber || 'N/A'}, Routing: ${bankData.routingNumber || 'N/A'}`;
         }
 
-        // 4. Build the final JSON
+        // 5. Build the final JSON
         const extractedData = {
             vendorName: prediction.supplierName?.value || "Unknown Vendor",
             vendorAddress: vendorAddress,
@@ -83,5 +87,5 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 });
 
 app.listen(port, '0.0.0.0', () => {
-    console.log(`🚀 Mindee SDK Backend is LIVE on port ${port}`);
+    console.log(`🚀 Mindee V5 Backend is LIVE on port ${port}`);
 });
