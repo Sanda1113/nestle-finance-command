@@ -21,34 +21,33 @@ const upload = multer({ storage: multer.memoryStorage() });
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Deeply extract the raw address string from any Mindee address field.
- * The schema says address fields have a nested "address" object that contains the raw string.
- * But we try multiple possible paths to be safe.
+ * Extract raw address string from a Mindee address field.
+ * The schema defines address fields as nested objects with an "address" property.
  */
 const extractRawAddress = (addrField) => {
     if (!addrField) return null;
 
-    // If it's an array (unlikely for single address), take first
+    // If it's an array, take the first element (should not happen for single address)
     if (Array.isArray(addrField)) {
         addrField = addrField[0];
         if (!addrField) return null;
     }
 
-    // Try the most common pattern: addrField.address.value
+    // Try the documented path: addrField.address.value or addrField.address.content
     if (addrField.address) {
         if (addrField.address.value) return addrField.address.value;
         if (addrField.address.content) return addrField.address.content;
         if (typeof addrField.address === 'string') return addrField.address;
     }
 
-    // Try direct value/content (some addresses may be flat)
+    // Try direct value/content (some addresses might be flat)
     if (addrField.value) return addrField.value;
     if (addrField.content) return addrField.content;
 
-    // If it's a plain string
+    // If it's a plain string (unlikely but safe)
     if (typeof addrField === 'string') return addrField;
 
-    // Log the structure we couldn't handle
+    // Log unhandled structure for debugging
     console.log('⚠️ Unhandled address structure:', JSON.stringify(addrField).slice(0, 300));
     return null;
 };
@@ -128,58 +127,32 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         console.log('📦 Full Mindee document (first 2000 chars):');
         console.log(JSON.stringify(document, null, 2).substring(0, 2000) + '...');
 
-        // ---- CRITICAL: fields live inside rawHttp ----
+        // ---- Fields are inside rawHttp ----
         const fields = document.rawHttp?.inference?.result?.fields || {};
         console.log('🔍 Fields keys found:', Object.keys(fields));
 
-        // ---- DEBUG: print raw address fields and line items ----
+        // ---- DEBUG: print raw address fields ----
         console.log('🧪 supplier_address raw:', JSON.stringify(fields.supplier_address));
         console.log('🧪 billing_address raw:', JSON.stringify(fields.billing_address));
         console.log('🧪 shipping_address raw:', JSON.stringify(fields.shipping_address));
         console.log('🧪 customer_address raw:', JSON.stringify(fields.customer_address));
 
-        // Log line items if present
-        if (Array.isArray(fields.line_items)) {
-            console.log(`🧪 line_items array length: ${fields.line_items.length}`);
-            if (fields.line_items.length > 0) {
-                console.log('🧪 First line item raw:', JSON.stringify(fields.line_items[0]));
+        // ---- DEBUG: print line_items structure ----
+        console.log('🧪 line_items raw:', JSON.stringify(fields.line_items).slice(0, 500));
+
+        // ========== EXTRACT LINE ITEMS ==========
+        let lineItems = [];
+        if (fields.line_items) {
+            // Try different possible paths for the line items array
+            let rawItems = [];
+            if (Array.isArray(fields.line_items)) {
+                rawItems = fields.line_items;
+            } else if (fields.line_items.items && Array.isArray(fields.line_items.items)) {
+                rawItems = fields.line_items.items;
+            } else if (fields.line_items.values && Array.isArray(fields.line_items.values)) {
+                rawItems = fields.line_items.values;
             }
-        } else {
-            console.log('🧪 line_items is not an array:', fields.line_items);
-        }
 
-        // ========== MAP FIELDS TO YOUR EXACT OUTPUT STRUCTURE ==========
-
-        // Vendor
-        const vendorName = getValue(fields.supplier_name) || 'Not Found';
-        const vendorAddress = getAddressString(fields.supplier_address);
-
-        // Invoice metadata
-        const invoiceNumber = getValue(fields.invoice_number) || 'Not Found';
-        const invoiceDate = getValue(fields.date) || 'Not Found';
-        const poNumber = getValue(fields.po_number) || 'Not Found';
-        const dueDate = getValue(fields.due_date) || 'Not Found';
-
-        // Addresses
-        const billTo = getAddressString(fields.billing_address) ||
-                       getAddressString(fields.customer_address) || 'Not Found';
-        const shipTo = getAddressString(fields.shipping_address) || billTo;
-
-        // Financials
-        const subtotal = getNumber(fields.total_net);
-        const salesTax = getNumber(fields.total_tax);
-        const totalAmount = getNumber(fields.total_amount);
-
-        // Bank details
-        const bankDetails = formatBankDetails(fields.supplier_payment_details);
-
-        // Terms (if your model provides it, otherwise static)
-        const terms = 'Not Found'; // adjust if your model extracts terms & conditions
-
-        // Line items (product details)
-        const lineItems = [];
-        const rawItems = fields.line_items || [];
-        if (Array.isArray(rawItems)) {
             rawItems.forEach(item => {
                 const qty = getValue(item.quantity) || '';
                 const description = getValue(item.description) || '';
@@ -194,21 +167,23 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             });
         }
 
-        // Assemble final object
+        // ========== MAP ALL FIELDS ==========
         const extractedData = {
-            vendorName,
-            vendorAddress,
-            invoiceNumber,
-            invoiceDate,
-            poNumber,
-            dueDate,
-            billTo,
-            shipTo,
-            subtotal,
-            salesTax,
-            totalAmount,
-            terms,
-            bankDetails,
+            vendorName: getValue(fields.supplier_name) || 'Not Found',
+            vendorAddress: getAddressString(fields.supplier_address),
+            invoiceNumber: getValue(fields.invoice_number) || 'Not Found',
+            invoiceDate: getValue(fields.date) || 'Not Found',
+            poNumber: getValue(fields.po_number) || 'Not Found',
+            dueDate: getValue(fields.due_date) || 'Not Found',
+            billTo: getAddressString(fields.billing_address) ||
+                    getAddressString(fields.customer_address) || 'Not Found',
+            shipTo: getAddressString(fields.shipping_address) ||
+                    getAddressString(fields.billing_address) || 'Not Found',
+            subtotal: getNumber(fields.total_net),
+            salesTax: getNumber(fields.total_tax),
+            totalAmount: getNumber(fields.total_amount),
+            terms: 'Not Found', // adjust if your model provides this
+            bankDetails: formatBankDetails(fields.supplier_payment_details),
             lineItems: lineItems.length > 0 ? lineItems : null
         };
 
