@@ -21,39 +21,41 @@ const upload = multer({ storage: multer.memoryStorage() });
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Extract raw address string from a Mindee address field.
- * The schema defines address fields as nested objects with an "address" property.
+ * Extract raw address string from any Mindee field by trying multiple paths.
  */
-const extractRawAddress = (addrField) => {
-    if (!addrField) return null;
+const extractRawAddress = (field) => {
+    if (!field) return null;
 
-    // If it's an array, take the first element (should not happen for single address)
-    if (Array.isArray(addrField)) {
-        addrField = addrField[0];
-        if (!addrField) return null;
+    // If it's an array, take first element (unlikely but safe)
+    if (Array.isArray(field)) {
+        field = field[0];
+        if (!field) return null;
     }
 
-    // Try the documented path: addrField.address.value or addrField.address.content
-    if (addrField.address) {
-        if (addrField.address.value) return addrField.address.value;
-        if (addrField.address.content) return addrField.address.content;
-        if (typeof addrField.address === 'string') return addrField.address;
+    // Try nested address object (most common)
+    if (field.address) {
+        if (field.address.value) return field.address.value;
+        if (field.address.content) return field.address.content;
+        if (typeof field.address === 'string') return field.address;
     }
 
-    // Try direct value/content (some addresses might be flat)
-    if (addrField.value) return addrField.value;
-    if (addrField.content) return addrField.content;
+    // Try direct value/content
+    if (field.value) return field.value;
+    if (field.content) return field.content;
 
-    // If it's a plain string (unlikely but safe)
-    if (typeof addrField === 'string') return addrField;
+    // If the field itself is a string
+    if (typeof field === 'string') return field;
+
+    // If it's an object with a 'raw' property (rare)
+    if (field.raw) return field.raw;
 
     // Log unhandled structure for debugging
-    console.log('⚠️ Unhandled address structure:', JSON.stringify(addrField).slice(0, 300));
+    console.log('⚠️ Unhandled address structure:', JSON.stringify(field).slice(0, 500));
     return null;
 };
 
-const getAddressString = (addrField) => {
-    const raw = extractRawAddress(addrField);
+const getAddressString = (field) => {
+    const raw = extractRawAddress(field);
     return raw || 'Not Found';
 };
 
@@ -78,7 +80,11 @@ const formatBankDetails = (paymentArr) => {
  */
 const getValue = (field) => {
     if (!field) return null;
-    return field.value ?? field.content ?? null;
+    // Try common paths
+    if (field.value) return field.value;
+    if (field.content) return field.content;
+    if (typeof field === 'string') return field;
+    return null;
 };
 
 /**
@@ -127,24 +133,23 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         console.log('📦 Full Mindee document (first 2000 chars):');
         console.log(JSON.stringify(document, null, 2).substring(0, 2000) + '...');
 
-        // ---- Fields are inside rawHttp ----
+        // ---- CRITICAL: fields are inside rawHttp ----
         const fields = document.rawHttp?.inference?.result?.fields || {};
         console.log('🔍 Fields keys found:', Object.keys(fields));
 
-        // ---- DEBUG: print raw address fields ----
-        console.log('🧪 supplier_address raw:', JSON.stringify(fields.supplier_address));
-        console.log('🧪 billing_address raw:', JSON.stringify(fields.billing_address));
-        console.log('🧪 shipping_address raw:', JSON.stringify(fields.shipping_address));
-        console.log('🧪 customer_address raw:', JSON.stringify(fields.customer_address));
-
-        // ---- DEBUG: print line_items structure ----
-        console.log('🧪 line_items raw:', JSON.stringify(fields.line_items).slice(0, 500));
+        // ---- DEBUG: log full raw fields for addresses and line items ----
+        console.log('🧪 FULL supplier_address:', JSON.stringify(fields.supplier_address, null, 2));
+        console.log('🧪 FULL billing_address:', JSON.stringify(fields.billing_address, null, 2));
+        console.log('🧪 FULL shipping_address:', JSON.stringify(fields.shipping_address, null, 2));
+        console.log('🧪 FULL customer_address:', JSON.stringify(fields.customer_address, null, 2));
+        console.log('🧪 FULL line_items:', JSON.stringify(fields.line_items, null, 2));
 
         // ========== EXTRACT LINE ITEMS ==========
         let lineItems = [];
+
+        // Try to locate the line items array – common paths: line_items, line_items.items, line_items.values
+        let rawItems = null;
         if (fields.line_items) {
-            // Try different possible paths for the line items array
-            let rawItems = [];
             if (Array.isArray(fields.line_items)) {
                 rawItems = fields.line_items;
             } else if (fields.line_items.items && Array.isArray(fields.line_items.items)) {
@@ -152,8 +157,12 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             } else if (fields.line_items.values && Array.isArray(fields.line_items.values)) {
                 rawItems = fields.line_items.values;
             }
+        }
 
-            rawItems.forEach(item => {
+        if (rawItems) {
+            console.log(`🧪 Found ${rawItems.length} line items.`);
+            rawItems.forEach((item, idx) => {
+                console.log(`🧪 Line item ${idx} raw:`, JSON.stringify(item, null, 2));
                 const qty = getValue(item.quantity) || '';
                 const description = getValue(item.description) || '';
                 const unitPrice = getNumber(item.unit_price);
@@ -165,6 +174,8 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
                     amount: amount ? `$${amount.toFixed(2)}` : '$0.00'
                 });
             });
+        } else {
+            console.log('🧪 No line items array found.');
         }
 
         // ========== MAP ALL FIELDS ==========
@@ -182,7 +193,7 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             subtotal: getNumber(fields.total_net),
             salesTax: getNumber(fields.total_tax),
             totalAmount: getNumber(fields.total_amount),
-            terms: 'Not Found', // adjust if your model provides this
+            terms: 'Not Found', // adjust if your model extracts this
             bankDetails: formatBankDetails(fields.supplier_payment_details),
             lineItems: lineItems.length > 0 ? lineItems : null
         };
