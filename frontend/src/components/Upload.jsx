@@ -27,9 +27,11 @@ export default function Upload() {
     formData.append('invoiceFile', file);
 
     try {
-      const response = await axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const response = await axios.post(
+        'https://nestle-finance-command-production.up.railway.app/api/extract-invoice',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
 
       if (response.data.success) {
         setResult(response.data.extractedData);
@@ -58,7 +60,9 @@ export default function Upload() {
           <button 
             onClick={handleUpload}
             disabled={loading}
-            className={`px-6 py-2 rounded-lg font-bold text-white transition whitespace-nowrap ${loading ? 'bg-slate-400' : 'bg-blue-600 hover:bg-blue-700'}`}
+            className={`px-6 py-2 rounded-lg font-bold text-white transition whitespace-nowrap ${
+              loading ? 'bg-slate-400' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             {loading ? "AI Scanning..." : "Extract Data"}
           </button>
@@ -87,7 +91,7 @@ export default function Upload() {
 
               <div>
                 <p className="text-xs uppercase text-slate-400 font-bold mb-1">Vendor Address</p>
-                <p className="text-sm text-slate-600">{result.vendorAddress || "N/A"}</p>
+                <p className="text-sm text-slate-600 whitespace-pre-wrap">{result.vendorAddress || "N/A"}</p>
               </div>
               <div>
                 <p className="text-xs uppercase text-slate-400 font-bold mb-1">Invoice Date</p>
@@ -96,18 +100,22 @@ export default function Upload() {
 
               <div>
                 <p className="text-xs uppercase text-slate-400 font-bold mb-1">Bill To</p>
-                <p className="text-sm text-slate-600 pr-4">{result.billTo || "N/A"}</p>
+                <p className="text-sm text-slate-600 pr-4 whitespace-pre-wrap">{result.billTo || "N/A"}</p>
               </div>
               <div>
                 <p className="text-xs uppercase text-slate-400 font-bold mb-1">Purchase Order (PO)</p>
-                <p className={`font-semibold ${result.poNumber && result.poNumber !== "Not Found" ? 'text-blue-700' : 'text-orange-500 italic'}`}>
+                <p className={`font-semibold ${
+                  result.poNumber && result.poNumber !== "Not Found" 
+                    ? 'text-blue-700' 
+                    : 'text-orange-500 italic'
+                }`}>
                   {result.poNumber || "Missing PO Number"}
                 </p>
               </div>
 
               <div>
                 <p className="text-xs uppercase text-slate-400 font-bold mb-1">Ship To</p>
-                <p className="text-sm text-slate-600 pr-4">{result.shipTo || "N/A"}</p>
+                <p className="text-sm text-slate-600 pr-4 whitespace-pre-wrap">{result.shipTo || "N/A"}</p>
               </div>
               <div>
                 <p className="text-xs uppercase text-slate-400 font-bold mb-1">Due Date</p>
@@ -116,7 +124,7 @@ export default function Upload() {
             </div>
 
             {/* Line Items Table */}
-            {result.lineItems && (
+            {result.lineItems && result.lineItems.length > 0 && (
               <div className="mt-6 border-t pt-6">
                 <h4 className="text-sm font-bold text-slate-600 mb-3">Line Items:</h4>
                 <div className="overflow-x-auto">
@@ -164,8 +172,8 @@ export default function Upload() {
 
             {/* Footer / Terms */}
             <div className="mt-8 pt-6 border-t border-slate-100 text-sm text-slate-600 space-y-2">
-              <p><span className="font-bold text-slate-700">Terms & Conditions:</span> {result.terms}</p>
-              <p><span className="font-bold text-slate-700">Bank Details:</span> {result.bankDetails}</p>
+              <p><span className="font-bold text-slate-700">Terms & Conditions:</span> {result.terms || "Not Found"}</p>
+              <p><span className="font-bold text-slate-700">Bank Details:</span> {result.bankDetails || "Not Found"}</p>
             </div>
           </div>
 
@@ -175,7 +183,9 @@ export default function Upload() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-slate-600">3-Way Match:</span>
-                <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-black rounded-full uppercase tracking-wide">Pending</span>
+                <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-black rounded-full uppercase tracking-wide">
+                  Pending
+                </span>
               </div>
               <div className="p-4 bg-slate-50 rounded-lg text-xs text-slate-500 leading-relaxed border border-slate-100">
                 Matches invoice amount against SAP PO and Goods Received Note (GRN).
