@@ -29,7 +29,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  */
 const getAddressString = (addrField) => {
     if (!addrField) return 'Not Found';
-    // The raw address can be at addrField.address.value or addrField.address.content
+    // The raw address can be at addrField.address?.value or addrField.address?.content
     const raw = addrField.address?.value || addrField.address?.content || addrField.address;
     if (raw) return raw;
     // Fallback: if addrField itself is a string (unlikely but safe)
@@ -114,47 +114,47 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         console.log('📦 Full Mindee document:');
         console.log(JSON.stringify(document, null, 2).substring(0, 2000) + '...'); // truncate for readability
 
-        // ---- Extract prediction object ----
-        const prediction = document.inference?.prediction || {};
-        console.log('🔍 Prediction keys found:', Object.keys(prediction));
+        // ---- CRITICAL FIX: Correct path to fields ----
+        const fields = document.inference?.result?.fields || {};
+        console.log('🔍 Fields keys found:', Object.keys(fields));
 
-        // ---- Log each prediction field's value for verification ----
-        for (const key of Object.keys(prediction)) {
-            const field = prediction[key];
+        // ---- Log each field's value for verification ----
+        for (const key of Object.keys(fields)) {
+            const field = fields[key];
             console.log(`   - ${key}:`, getValue(field) || '(complex object)');
         }
 
         // ========== MAP FIELDS TO YOUR EXACT OUTPUT STRUCTURE ==========
 
         // Vendor
-        const vendorName = getValue(prediction.supplier_name) || 'Not Found';
-        const vendorAddress = getAddressString(prediction.supplier_address);
+        const vendorName = getValue(fields.supplier_name) || 'Not Found';
+        const vendorAddress = getAddressString(fields.supplier_address);
 
         // Invoice metadata
-        const invoiceNumber = getValue(prediction.invoice_number) || 'Not Found';
-        const invoiceDate = getValue(prediction.date) || 'Not Found';
-        const poNumber = getValue(prediction.po_number) || 'Not Found';
-        const dueDate = getValue(prediction.due_date) || 'Not Found';
+        const invoiceNumber = getValue(fields.invoice_number) || 'Not Found';
+        const invoiceDate = getValue(fields.date) || 'Not Found';
+        const poNumber = getValue(fields.po_number) || 'Not Found';
+        const dueDate = getValue(fields.due_date) || 'Not Found';
 
         // Addresses (Bill To & Ship To)
-        const billTo = getAddressString(prediction.billing_address) ||
-                       getAddressString(prediction.customer_address) || 'Not Found';
-        const shipTo = getAddressString(prediction.shipping_address) || billTo;
+        const billTo = getAddressString(fields.billing_address) ||
+                       getAddressString(fields.customer_address) || 'Not Found';
+        const shipTo = getAddressString(fields.shipping_address) || billTo;
 
         // Financials
-        const subtotal = getNumber(prediction.total_net);
-        const salesTax = getNumber(prediction.total_tax);
-        const totalAmount = getNumber(prediction.total_amount);
+        const subtotal = getNumber(fields.total_net);
+        const salesTax = getNumber(fields.total_tax);
+        const totalAmount = getNumber(fields.total_amount);
 
         // Bank details
-        const bankDetails = formatBankDetails(prediction.supplier_payment_details);
+        const bankDetails = formatBankDetails(fields.supplier_payment_details);
 
-        // Terms (if your model provides it, otherwise static or from another field)
+        // Terms (if your model provides it, otherwise static)
         const terms = 'Not Found'; // adjust if your model extracts terms & conditions
 
         // Line items
         const lineItems = [];
-        const rawItems = prediction.line_items || [];
+        const rawItems = fields.line_items || [];
         if (Array.isArray(rawItems)) {
             rawItems.forEach(item => {
                 const qty = getValue(item.quantity) || '';
