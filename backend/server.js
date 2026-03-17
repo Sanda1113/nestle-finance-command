@@ -15,12 +15,11 @@ app.get('/', (req, res) => {
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Initialize Gemini with environment variable
+// Check for API key
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
     console.error('❌ GEMINI_API_KEY is not set');
-} else {
-    console.log('✅ GEMINI_API_KEY is set (length: ' + apiKey.length + ')');
+    process.exit(1); // Exit if no key
 }
 const genAI = new GoogleGenerativeAI(apiKey);
 
@@ -65,17 +64,7 @@ Extract the following fields from this invoice image and return them in **valid 
 If a field is not found, use null. Use the exact field names.
 `;
 
-        // Use gemini-pro (stable, widely available)
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-
-        // Note: gemini-pro does not support image input directly.
-        // We need to use gemini-pro-vision for images. But gemini-pro-vision might be available as "gemini-pro-vision".
-        // Let's check: The error earlier was with gemini-1.5-flash, which does support images.
-        // Actually, gemini-pro is text-only, so it won't work with images. We need a vision model.
-        // The correct model for images is "gemini-pro-vision" (older) or "gemini-1.5-flash" (newer).
-        // Since gemini-1.5-flash gave 404, maybe it's not enabled for this API key. Let's try "gemini-pro-vision".
-        // We'll change to "gemini-pro-vision".
-
+        // Use gemini-pro-vision (supports images)
         const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
 
         const result = await model.generateContent([
