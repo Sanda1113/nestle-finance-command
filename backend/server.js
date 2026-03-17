@@ -21,6 +21,23 @@ app.get('/', (req, res) => {
 // Configure multer (memory storage, we'll write to disk later)
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Helper to safely get nested address string
+const getAddressString = (addressObj) => {
+    return addressObj?.address || 'Not Found';
+};
+
+// Helper to format bank details
+const formatBankDetails = (paymentDetailsArray) => {
+    if (!paymentDetailsArray || paymentDetailsArray.length === 0) return 'Not Found';
+    const details = paymentDetailsArray[0]; // take first if multiple
+    const parts = [];
+    if (details.account_number) parts.push(`Account: ${details.account_number}`);
+    if (details.routing_number) parts.push(`Routing: ${details.routing_number}`);
+    if (details.iban) parts.push(`IBAN: ${details.iban}`);
+    if (details.swift) parts.push(`SWIFT: ${details.swift}`);
+    return parts.join(', ') || 'Not Found';
+};
+
 // Main extraction endpoint
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     let tempFilePath = null;
@@ -37,7 +54,7 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         console.log(`Temporary file created: ${tempFilePath}`);
 
         // 2. Initialize Mindee client with your API key
-        const apiKey = process.env.MINDEE_API_KEY; 
+        const apiKey = process.env.MINDEE_API_KEY;
         if (!apiKey) {
             throw new Error('MINDEE_API_KEY environment variable not set');
         }
@@ -46,10 +63,9 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         // 3. Set up your custom model parameters
         const productParams = {
             modelId: 'b3467dd3-63d2-4914-9791-a2dfadfbfe9a',
-            // You can enable these if needed:
+            // Enable these if needed:
             // rag: true,
             // rawText: true,
-            // polygon: false,
             // confidence: true,
         };
 
@@ -68,33 +84,51 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         // 6. Extract fields from the response
         const fields = response.inference?.result?.fields || {};
 
-        // 🔍 DEBUG: Log all available field names to the console
+        // 🔍 DEBUG: Log all available field names and values
         console.log('🔥 Available fields from Mindee:');
         Object.keys(fields).forEach(key => {
-            console.log(` - ${key}: ${fields[key]?.value}`);
+            const field = fields[key];
+            if (field && field.value !== undefined) {
+                console.log(` - ${key}: ${field.value}`);
+            } else if (Array.isArray(field)) {
+                console.log(` - ${key}: [array with ${field.length} items]`);
+            } else {
+                console.log(` - ${key}: (complex object)`);
+            }
         });
 
         // 7. Map Mindee fields to your desired output structure
-        // ⚠️ IMPORTANT: Replace the field names below with the actual ones from your model
         const extractedData = {
-            vendorName: fields.vendor_name?.value || 'Not Found',
-            vendorAddress: fields.vendor_address?.value || 'Not Found',
+            // Vendor (supplier) info
+            vendorName: fields.supplier_name?.value || 'Not Found',
+            vendorAddress: getAddressString(fields.supplier_address),
+
+            // Invoice details
             invoiceNumber: fields.invoice_number?.value || 'Not Found',
-            invoiceDate: fields.invoice_date?.value || 'Not Found',
+            invoiceDate: fields.date?.value || 'Not Found',
             poNumber: fields.po_number?.value || 'Not Found',
             dueDate: fields.due_date?.value || 'Not Found',
-            billTo: fields.bill_to?.value || 'Not Found',
-            shipTo: fields.ship_to?.value || 'Not Found',
-            subtotal: parseFloat(fields.subtotal?.value) || 0.00,
-            salesTax: parseFloat(fields.tax?.value) || 0.00,
-            totalAmount: parseFloat(fields.total?.value) || 0.00,
-            terms: fields.terms?.value || 'Not Found',
-            bankDetails: fields.bank_details?.value || 'Not Found',
-            lineItems: (fields.line_items?.values || []).map(item => ({
+
+            // Customer addresses (Bill To / Ship To)
+            billTo: getAddressString(fields.billing_address) || 
+                    (fields.customer_address ? getAddressString(fields.customer_address) : 'Not Found'),
+            shipTo: getAddressString(fields.shipping_address) || 'Not Found',
+
+            // Financial totals
+            subtotal: parseFloat(fields.total_net?.value) || 0.00,
+            salesTax: parseFloat(fields.total_tax?.value) || 0.00,
+            totalAmount: parseFloat(fields.total_amount?.value) || 0.00,
+
+            // Terms & bank details
+            terms: 'Not Found', // Not present in schema, could be extracted from raw text if needed
+            bankDetails: formatBankDetails(fields.supplier_payment_details),
+
+            // Line items
+            lineItems: (fields.line_items || []).map(item => ({
                 qty: item.quantity?.value || '',
                 description: item.description?.value || '',
                 unitPrice: item.unit_price?.value ? `$${item.unit_price.value}` : '$0.00',
-                amount: item.amount?.value ? `$${item.amount.value}` : '$0.00'
+                amount: item.total_price?.value ? `$${item.total_price.value}` : '$0.00'
             }))
         };
 
