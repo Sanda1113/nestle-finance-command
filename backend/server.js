@@ -1,7 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const axios = require('axios');
+const FormData = require('form-data');
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -10,82 +11,91 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Nestle Finance Backend (Gemini 1.5 Edition) is Awake and Ready!');
+    res.status(200).send('✅ Nestle Finance Backend (Mindee Enterprise AI) is Awake and Ready!');
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// 🚀 NEW API KEY LOADED HERE
-const genAI = new GoogleGenerativeAI("AIzaSyDFYgTVAcpc13WcNvsmbcBbH8oF7DH_7XU");
+// 🚀 Your Official Mindee API Key
+const MINDEE_API_KEY = "md_3eCFB-xbKwVxP5WZTL6gwJbHU8VV0exqi_RZYaZygzc";
 
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        console.log('Sending Invoice to Gemini 1.5 Flash...');
+        console.log('Sending Invoice to Mindee AI...');
 
-        // Using the strictly supported 1.5 Flash model for new API keys
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
-            generationConfig: { responseMimeType: "application/json" }
+        const formData = new FormData();
+        formData.append('document', req.file.buffer, {
+            filename: req.file.originalname || 'invoice.png',
+            contentType: req.file.mimetype || 'image/png',
         });
 
-        const imagePart = {
-            inlineData: {
-                data: req.file.buffer.toString("base64"),
-                mimeType: req.file.mimetype
+        // Calling the Official Mindee Invoice V4 Endpoint
+        const response = await axios.post(
+            'https://api.mindee.net/v1/products/mindee/invoices/v4/predict',
+            formData,
+            {
+                headers: {
+                    ...formData.getHeaders(),
+                    'Authorization': `Token ${MINDEE_API_KEY}`
+                }
             }
+        );
+
+        // Extracting the data based exactly on your schema
+        const prediction = response.data.document.inference.prediction;
+
+        // --- SMART MAPPING LOGIC ---
+        
+        // Handle Addresses (Mindee stores them as nested objects)
+        const vendorAddress = prediction.supplier_address?.address || prediction.supplier_address?.value || "Not Found";
+        const customerName = prediction.customer_name?.value || "";
+        const customerAddress = prediction.customer_address?.address || prediction.customer_address?.value || "";
+        const billTo = [customerName, customerAddress].filter(Boolean).join(", ") || "Not Found";
+        const shipTo = prediction.shipping_address?.address || prediction.shipping_address?.value || billTo;
+
+        // Handle Bank Details
+        const bankData = prediction.supplier_payment_details?.[0];
+        let bankDetails = "Not Found";
+        if (bankData) {
+            bankDetails = `Account: ${bankData.account_number || 'N/A'}, Routing: ${bankData.routing_number || 'N/A'}`;
+        }
+
+        // --- BUILD FRONTEND RESPONSE ---
+        const extractedData = {
+            vendorName: prediction.supplier_name?.value || "Unknown Vendor",
+            vendorAddress: vendorAddress,
+            invoiceNumber: prediction.invoice_number?.value || "Not Found",
+            invoiceDate: prediction.date?.value || "Not Found",
+            poNumber: prediction.po_number?.value || prediction.reference_numbers?.[0]?.value || "Not Found",
+            dueDate: prediction.due_date?.value || "Not Found",
+            billTo: billTo,
+            shipTo: shipTo,
+            subtotal: prediction.total_net?.value || 0.00,
+            salesTax: prediction.total_tax?.value || 0.00,
+            totalAmount: prediction.total_amount?.value || 0.00,
+            terms: "Check Due Date", // Generic fallback
+            bankDetails: bankDetails,
+            
+            // Map Line Items safely
+            lineItems: prediction.line_items?.length > 0 ? prediction.line_items.map(item => ({
+                qty: item.quantity?.toString() || "1",
+                description: item.description || "Item",
+                unitPrice: `$${item.unit_price ? item.unit_price.toFixed(2) : "0.00"}`,
+                amount: `$${item.total_price ? item.total_price.toFixed(2) : "0.00"}`
+            })) : null
         };
 
-        const prompt = `
-        You are an expert financial data extraction AI. 
-        Analyze this invoice image and extract the following information into this exact JSON structure. 
-        If a field is missing, return "Not Found". Do not make up data.
-        Ensure money amounts are formatted as raw numbers (e.g., 204.75) and NOT strings. Do not include dollar signs in totalAmount, subtotal, or salesTax.
-        For line items, keep the unit price and amount as strings with the currency symbol (e.g. "$15.00").
-
-        {
-            "vendorName": "Company Name",
-            "vendorAddress": "Full vendor address",
-            "invoiceNumber": "Invoice ID",
-            "invoiceDate": "Date of invoice",
-            "poNumber": "Purchase Order Number if present",
-            "dueDate": "Due date if present",
-            "billTo": "Full Bill To address/name",
-            "shipTo": "Full Ship To address/name",
-            "subtotal": 0.00,
-            "salesTax": 0.00,
-            "totalAmount": 0.00,
-            "terms": "Payment terms",
-            "bankDetails": "Any banking/payment routing info",
-            "lineItems": [
-                {
-                    "qty": "Quantity",
-                    "description": "Item description",
-                    "unitPrice": "Price per unit",
-                    "amount": "Total line amount"
-                }
-            ]
-        }
-        `;
-
-        const result = await model.generateContent([prompt, imagePart]);
-        let responseText = result.response.text();
-        
-        // Failsafe: Clean up markdown blocks if Gemini accidentally includes them
-        responseText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
-        
-        const extractedData = JSON.parse(responseText);
-        
-        console.log('Gemini Extraction Successful! Sending to Frontend...');
+        console.log('Mindee Extraction Successful! Sending to Frontend...');
         res.json({ success: true, extractedData });
 
     } catch (error) {
-        console.error('Gemini API Error:', error);
-        res.status(500).json({ error: 'Failed to process document via Gemini AI' });
+        console.error('Mindee API Error:', error.response ? error.response.data : error.message);
+        res.status(500).json({ error: 'Failed to process document via Mindee AI' });
     }
 });
 
 app.listen(port, '0.0.0.0', () => {
-    console.log(`🚀 Gemini Backend is LIVE on port ${port}`);
+    console.log(`🚀 Mindee Backend is LIVE on port ${port}`);
 });
