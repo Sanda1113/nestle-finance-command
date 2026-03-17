@@ -25,13 +25,9 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 
         console.log('Sending Invoice to Gemini Vision AI...');
 
-        // 1. Setup the Gemini Model (Forcing it to reply in pure JSON format)
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash-latest",
-            generationConfig: { responseMimeType: "application/json" }
-        });
+        // 1. Switch to the universally available 1.0 Vision model
+        const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
 
-        // 2. Convert the uploaded image into the format Gemini requires
         const imagePart = {
             inlineData: {
                 data: req.file.buffer.toString("base64"),
@@ -39,14 +35,14 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             }
         };
 
-        // 3. The "Master Prompt" - Tell Gemini exactly what to look for
+        // 2. The Prompt (Told strictly to return raw JSON and NO markdown)
         const prompt = `
         You are an expert financial data extraction AI. 
-        Analyze this invoice image and extract the following information into this exact JSON structure. 
-        If a field is missing, return "Not Found". Do not make up data.
-        Ensure money amounts are formatted as numbers (e.g., 204.75) and NOT strings, do not include dollar signs in totalAmount, subtotal, or salesTax.
-        For line items, keep the unit price and amount as strings with the currency symbol (e.g. "$15.00").
-
+        Analyze this invoice image and extract the following information.
+        You MUST return ONLY a raw JSON object. Do not include formatting blocks like \`\`\`json.
+        If a field is missing, return "Not Found".
+        Format money as raw numbers (e.g., 204.75).
+        
         {
             "vendorName": "Company Name",
             "vendorAddress": "Full vendor address",
@@ -72,11 +68,12 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         }
         `;
 
-        // 4. Send to Google's Servers and wait for the magic
         const result = await model.generateContent([prompt, imagePart]);
-        const responseText = result.response.text();
+        let responseText = result.response.text();
         
-        // Parse the JSON string Gemini gives us back into a JavaScript object
+        // 3. Clean up the response just in case Gemini adds markdown anyway
+        responseText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        
         const extractedData = JSON.parse(responseText);
         
         console.log('Gemini Extraction Successful!');
