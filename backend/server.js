@@ -26,7 +26,10 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         console.log('Sending Invoice to Mindee SDK...');
 
         // 1. Load the image buffer
-        const inputSource = mindeeClient.docFromBuffer(req.file.buffer, req.file.originalname || 'invoice.png');
+        const inputSource = new mindee.BufferInput({
+                        buffer: req.file.buffer,
+                        filename: req.file.originalname || 'invoice.png'
+                        });
 
         // 2. Call the Official pre-trained Invoice V4 model
         const apiResponse = await mindeeClient.parse(mindee.product.InvoiceV4, inputSource);
