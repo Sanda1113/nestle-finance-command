@@ -10,23 +10,25 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Nestle Finance Backend (Gemini Edition) is Awake and Ready!');
+    res.status(200).send('✅ Nestle Finance Backend (Gemini 1.5 Edition) is Awake and Ready!');
 });
 
-// Store image in memory buffer so we can pass it directly to Gemini
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Initialize Gemini with your provided API key
-const genAI = new GoogleGenerativeAI("AIzaSyCges7kUXpqG69X7mKU3jxIiGJTbjgaTfE");
+// 🚀 NEW API KEY LOADED HERE
+const genAI = new GoogleGenerativeAI("AIzaSyDFYgTVAcpc13WcNvsmbcBbH8oF7DH_7XU");
 
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        console.log('Sending Invoice to Gemini Vision AI...');
+        console.log('Sending Invoice to Gemini 1.5 Flash...');
 
-        // 1. Switch to the universally available 1.0 Vision model
-        const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
+        // Using the strictly supported 1.5 Flash model for new API keys
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.5-flash",
+            generationConfig: { responseMimeType: "application/json" }
+        });
 
         const imagePart = {
             inlineData: {
@@ -35,14 +37,13 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             }
         };
 
-        // 2. The Prompt (Told strictly to return raw JSON and NO markdown)
         const prompt = `
         You are an expert financial data extraction AI. 
-        Analyze this invoice image and extract the following information.
-        You MUST return ONLY a raw JSON object. Do not include formatting blocks like \`\`\`json.
-        If a field is missing, return "Not Found".
-        Format money as raw numbers (e.g., 204.75).
-        
+        Analyze this invoice image and extract the following information into this exact JSON structure. 
+        If a field is missing, return "Not Found". Do not make up data.
+        Ensure money amounts are formatted as raw numbers (e.g., 204.75) and NOT strings. Do not include dollar signs in totalAmount, subtotal, or salesTax.
+        For line items, keep the unit price and amount as strings with the currency symbol (e.g. "$15.00").
+
         {
             "vendorName": "Company Name",
             "vendorAddress": "Full vendor address",
@@ -71,12 +72,12 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         const result = await model.generateContent([prompt, imagePart]);
         let responseText = result.response.text();
         
-        // 3. Clean up the response just in case Gemini adds markdown anyway
+        // Failsafe: Clean up markdown blocks if Gemini accidentally includes them
         responseText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
         
         const extractedData = JSON.parse(responseText);
         
-        console.log('Gemini Extraction Successful!');
+        console.log('Gemini Extraction Successful! Sending to Frontend...');
         res.json({ success: true, extractedData });
 
     } catch (error) {
