@@ -1,8 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
-const axios = require('axios');
-const FormData = require('form-data');
+const mindee = require('mindee');
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -11,79 +10,62 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Nestle Finance Backend (Mindee Enterprise AI) is Awake and Ready!');
+    res.status(200).send('✅ Nestle Finance Backend (Mindee SDK Edition) is Awake!');
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// 🚀 Your Official Mindee API Key
-const MINDEE_API_KEY = "md_3eCFB-xbKwVxP5WZTL6gwJbHU8VV0exqi_RZYaZygzc";
+// 🚀 Initialize the Official Mindee Client with your key
+const mindeeClient = new mindee.Client({ apiKey: "md_3eCFB-xbKwVxP5WZTL6gwJbHU8VV0exqi_RZYaZygzc" });
 
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        console.log('Sending Invoice to Mindee AI...');
+        console.log('Sending Invoice to Mindee SDK...');
 
-        const formData = new FormData();
-        formData.append('document', req.file.buffer, {
-            filename: req.file.originalname || 'invoice.png',
-            contentType: req.file.mimetype || 'image/png',
-        });
+        // 1. Load the image buffer into Mindee's required format
+        const inputSource = mindeeClient.docFromBuffer(req.file.buffer, req.file.originalname || 'invoice.png');
 
-        // Calling the Official Mindee Invoice V4 Endpoint
-        const response = await axios.post(
-            'https://api.mindee.net/v1/products/mindee/invoices/v4/predict',
-            formData,
-            {
-                headers: {
-                    ...formData.getHeaders(),
-                    'Authorization': `Token ${MINDEE_API_KEY}`
-                }
-            }
-        );
+        // 2. Call the pre-trained Invoice V4 model
+        const apiResponse = await mindeeClient.parse(mindee.product.InvoiceV4, inputSource);
+        const prediction = apiResponse.document.inference.prediction;
 
-        // Extracting the data based exactly on your schema
-        const prediction = response.data.document.inference.prediction;
-
-        // --- SMART MAPPING LOGIC ---
-        
-        // Handle Addresses (Mindee stores them as nested objects)
-        const vendorAddress = prediction.supplier_address?.address || prediction.supplier_address?.value || "Not Found";
-        const customerName = prediction.customer_name?.value || "";
-        const customerAddress = prediction.customer_address?.address || prediction.customer_address?.value || "";
+        // 3. Map Addresses & Banks (SDK uses camelCase instead of snake_case)
+        const vendorAddress = prediction.supplierAddress?.value || "Not Found";
+        const customerName = prediction.customerName?.value || "";
+        const customerAddress = prediction.customerAddress?.value || "";
         const billTo = [customerName, customerAddress].filter(Boolean).join(", ") || "Not Found";
-        const shipTo = prediction.shipping_address?.address || prediction.shipping_address?.value || billTo;
+        const shipTo = prediction.shippingAddress?.value || billTo;
 
-        // Handle Bank Details
-        const bankData = prediction.supplier_payment_details?.[0];
+        const bankData = prediction.supplierPaymentDetails?.[0];
         let bankDetails = "Not Found";
         if (bankData) {
-            bankDetails = `Account: ${bankData.account_number || 'N/A'}, Routing: ${bankData.routing_number || 'N/A'}`;
+            bankDetails = `Account: ${bankData.accountNumber || 'N/A'}, Routing: ${bankData.routingNumber || 'N/A'}`;
         }
 
-        // --- BUILD FRONTEND RESPONSE ---
+        // 4. Build the final JSON for Nehaa's frontend
         const extractedData = {
-            vendorName: prediction.supplier_name?.value || "Unknown Vendor",
+            vendorName: prediction.supplierName?.value || "Unknown Vendor",
             vendorAddress: vendorAddress,
-            invoiceNumber: prediction.invoice_number?.value || "Not Found",
+            invoiceNumber: prediction.invoiceNumber?.value || "Not Found",
             invoiceDate: prediction.date?.value || "Not Found",
-            poNumber: prediction.po_number?.value || prediction.reference_numbers?.[0]?.value || "Not Found",
-            dueDate: prediction.due_date?.value || "Not Found",
+            poNumber: prediction.referenceNumbers?.[0]?.value || "Not Found",
+            dueDate: prediction.dueDate?.value || "Not Found",
             billTo: billTo,
             shipTo: shipTo,
-            subtotal: prediction.total_net?.value || 0.00,
-            salesTax: prediction.total_tax?.value || 0.00,
-            totalAmount: prediction.total_amount?.value || 0.00,
-            terms: "Check Due Date", // Generic fallback
+            subtotal: prediction.totalNet?.value || 0.00,
+            salesTax: prediction.totalTax?.value || 0.00,
+            totalAmount: prediction.totalAmount?.value || 0.00,
+            terms: "Check Due Date",
             bankDetails: bankDetails,
-            
+
             // Map Line Items safely
-            lineItems: prediction.line_items?.length > 0 ? prediction.line_items.map(item => ({
+            lineItems: prediction.lineItems?.length > 0 ? prediction.lineItems.map(item => ({
                 qty: item.quantity?.toString() || "1",
                 description: item.description || "Item",
-                unitPrice: `$${item.unit_price ? item.unit_price.toFixed(2) : "0.00"}`,
-                amount: `$${item.total_price ? item.total_price.toFixed(2) : "0.00"}`
+                unitPrice: `$${item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"}`,
+                amount: `$${item.totalAmount ? item.totalAmount.toFixed(2) : "0.00"}`
             })) : null
         };
 
@@ -91,8 +73,8 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         res.json({ success: true, extractedData });
 
     } catch (error) {
-        console.error('Mindee API Error:', error.response ? error.response.data : error.message);
-        res.status(500).json({ error: 'Failed to process document via Mindee AI' });
+        console.error('Mindee SDK Error:', error);
+        res.status(500).json({ error: 'Failed to process document via Mindee SDK' });
     }
 });
 
