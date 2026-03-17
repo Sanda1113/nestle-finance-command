@@ -19,9 +19,17 @@ const upload = multer({ storage: multer.memoryStorage() });
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
     console.error('❌ GEMINI_API_KEY is not set');
-    process.exit(1); // Exit if no key
+    process.exit(1);
 }
 const genAI = new GoogleGenerativeAI(apiKey);
+
+// List of possible vision models to try (in order of preference)
+const VISION_MODELS = [
+    "gemini-pro-vision",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-1.0-pro-vision-latest"
+];
 
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
@@ -64,57 +72,68 @@ Extract the following fields from this invoice image and return them in **valid 
 If a field is not found, use null. Use the exact field names.
 `;
 
-        // Use gemini-pro-vision (supports images)
-        const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
+        // Try each model until one works
+        let lastError = null;
+        for (const modelName of VISION_MODELS) {
+            try {
+                console.log(`Trying model: ${modelName}`);
+                const model = genAI.getGenerativeModel({ model: modelName });
+                const result = await model.generateContent([
+                    prompt,
+                    {
+                        inlineData: {
+                            mimeType: req.file.mimetype,
+                            data: imageBase64
+                        }
+                    }
+                ]);
+                const responseText = result.response.text();
 
-        const result = await model.generateContent([
-            prompt,
-            {
-                inlineData: {
-                    mimeType: req.file.mimetype,
-                    data: imageBase64
+                // Clean response (remove markdown code fences if present)
+                let jsonStr = responseText.replace(/```json\n?|```/g, '').trim();
+                const extractedData = JSON.parse(jsonStr);
+
+                // Ensure numbers are parsed correctly
+                if (extractedData.subtotal) extractedData.subtotal = parseFloat(extractedData.subtotal);
+                if (extractedData.salesTax) extractedData.salesTax = parseFloat(extractedData.salesTax);
+                if (extractedData.totalAmount) extractedData.totalAmount = parseFloat(extractedData.totalAmount);
+                if (extractedData.lineItems) {
+                    extractedData.lineItems = extractedData.lineItems.map(item => ({
+                        ...item,
+                        qty: item.qty?.toString() || '',
+                        unitPrice: parseFloat(item.unitPrice) || 0,
+                        amount: parseFloat(item.amount) || 0
+                    }));
                 }
+
+                // Replace nulls with "Not Found" for string fields
+                const finalData = {
+                    vendorName: extractedData.vendorName || 'Not Found',
+                    vendorAddress: extractedData.vendorAddress || 'Not Found',
+                    invoiceNumber: extractedData.invoiceNumber || 'Not Found',
+                    invoiceDate: extractedData.invoiceDate || 'Not Found',
+                    poNumber: extractedData.poNumber || 'Not Found',
+                    dueDate: extractedData.dueDate || 'Not Found',
+                    billTo: extractedData.billTo || 'Not Found',
+                    shipTo: extractedData.shipTo || 'Not Found',
+                    subtotal: extractedData.subtotal || 0,
+                    salesTax: extractedData.salesTax || 0,
+                    totalAmount: extractedData.totalAmount || 0,
+                    terms: extractedData.terms || 'Not Found',
+                    bankDetails: extractedData.bankDetails || 'Not Found',
+                    lineItems: extractedData.lineItems && extractedData.lineItems.length > 0 ? extractedData.lineItems : null
+                };
+
+                return res.json({ success: true, extractedData: finalData });
+            } catch (err) {
+                console.log(`Model ${modelName} failed:`, err.message);
+                lastError = err;
+                // Continue to next model
             }
-        ]);
-
-        const responseText = result.response.text();
-
-        // Clean response (remove markdown code fences if present)
-        let jsonStr = responseText.replace(/```json\n?|```/g, '').trim();
-        const extractedData = JSON.parse(jsonStr);
-
-        // Ensure numbers are parsed correctly
-        if (extractedData.subtotal) extractedData.subtotal = parseFloat(extractedData.subtotal);
-        if (extractedData.salesTax) extractedData.salesTax = parseFloat(extractedData.salesTax);
-        if (extractedData.totalAmount) extractedData.totalAmount = parseFloat(extractedData.totalAmount);
-        if (extractedData.lineItems) {
-            extractedData.lineItems = extractedData.lineItems.map(item => ({
-                ...item,
-                qty: item.qty?.toString() || '',
-                unitPrice: parseFloat(item.unitPrice) || 0,
-                amount: parseFloat(item.amount) || 0
-            }));
         }
 
-        // Replace nulls with "Not Found" for string fields
-        const finalData = {
-            vendorName: extractedData.vendorName || 'Not Found',
-            vendorAddress: extractedData.vendorAddress || 'Not Found',
-            invoiceNumber: extractedData.invoiceNumber || 'Not Found',
-            invoiceDate: extractedData.invoiceDate || 'Not Found',
-            poNumber: extractedData.poNumber || 'Not Found',
-            dueDate: extractedData.dueDate || 'Not Found',
-            billTo: extractedData.billTo || 'Not Found',
-            shipTo: extractedData.shipTo || 'Not Found',
-            subtotal: extractedData.subtotal || 0,
-            salesTax: extractedData.salesTax || 0,
-            totalAmount: extractedData.totalAmount || 0,
-            terms: extractedData.terms || 'Not Found',
-            bankDetails: extractedData.bankDetails || 'Not Found',
-            lineItems: extractedData.lineItems && extractedData.lineItems.length > 0 ? extractedData.lineItems : null
-        };
-
-        res.json({ success: true, extractedData: finalData });
+        // If all models failed
+        throw lastError || new Error('No working vision model found');
 
     } catch (error) {
         console.error('❌ Gemini error:', error);
