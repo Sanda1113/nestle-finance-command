@@ -4,16 +4,14 @@ const multer = require('multer');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const mindee = require('mindee'); // v5 SDK
+const mindee = require('mindee');
 
 const app = express();
 const port = process.env.PORT || 8080;
 
-// Middleware
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
-// Health check
 app.get('/', (req, res) => {
     res.status(200).send('✅ Mindee Invoice Extractor is Live');
 });
@@ -23,28 +21,44 @@ const upload = multer({ storage: multer.memoryStorage() });
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Extract address string from Mindee's address field object.
- * According to schema: supplier_address, billing_address, shipping_address, customer_address
- * have a nested "address" field containing the raw string.
+ * Deeply extract a string from a Mindee address field.
+ * Address fields can be nested in various ways:
+ * - { address: { value: "..." } }
+ * - { address: { content: "..." } }
+ * - { value: "..." }
+ * - { content: "..." }
+ * - or even a plain string.
  */
+const extractAddressString = (addrField) => {
+    if (!addrField) return null;
+    // Try the most common pattern: addrField.address.value
+    if (addrField.address) {
+        if (addrField.address.value) return addrField.address.value;
+        if (addrField.address.content) return addrField.address.content;
+        if (typeof addrField.address === 'string') return addrField.address;
+    }
+    // Try direct value/content
+    if (addrField.value) return addrField.value;
+    if (addrField.content) return addrField.content;
+    // If it's a plain string (unlikely but safe)
+    if (typeof addrField === 'string') return addrField;
+    // Fallback: log the structure for debugging
+    console.log('⚠️ Unhandled address structure:', JSON.stringify(addrField).slice(0, 200));
+    return null;
+};
+
 const getAddressString = (addrField) => {
-    if (!addrField) return 'Not Found';
-    // The raw address can be at addrField.address?.value or addrField.address?.content
-    const raw = addrField.address?.value || addrField.address?.content || addrField.address;
-    if (raw) return raw;
-    // Fallback: if addrField itself is a string (unlikely but safe)
-    return addrField.value || addrField.content || 'Not Found';
+    return extractAddressString(addrField) || 'Not Found';
 };
 
 /**
  * Format bank details from supplier_payment_details array.
- * Each entry may contain account_number, routing_number, iban, swift.
  */
 const formatBankDetails = (paymentArr) => {
     if (!paymentArr || !Array.isArray(paymentArr) || paymentArr.length === 0) {
         return 'Not Found';
     }
-    const details = paymentArr[0]; // take first
+    const details = paymentArr[0];
     const parts = [];
     if (details.account_number?.value) parts.push(`Account: ${details.account_number.value}`);
     if (details.routing_number?.value) parts.push(`Routing: ${details.routing_number.value}`);
@@ -54,11 +68,10 @@ const formatBankDetails = (paymentArr) => {
 };
 
 /**
- * Safely extract a scalar value from a Mindee field.
+ * Safely extract a scalar value from any Mindee field.
  */
 const getValue = (field) => {
     if (!field) return null;
-    // In v5, fields have .value or .content
     return field.value ?? field.content ?? null;
 };
 
@@ -81,28 +94,23 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
-        // ---- Save uploaded file temporarily ----
         const tempDir = os.tmpdir();
         const fileExt = path.extname(req.file.originalname) || '.pdf';
         tempFilePath = path.join(tempDir, `invoice_${Date.now()}${fileExt}`);
         fs.writeFileSync(tempFilePath, req.file.buffer);
         console.log(`📁 Temporary file created: ${tempFilePath}`);
 
-        // ---- Initialize Mindee client ----
         const apiKey = process.env.MINDEE_API_KEY;
-        if (!apiKey) {
-            throw new Error('MINDEE_API_KEY environment variable not set');
-        }
+        if (!apiKey) throw new Error('MINDEE_API_KEY environment variable not set');
+
         const mindeeClient = new mindee.Client({ apiKey });
 
-        // ---- Configure custom model ----
         const productParams = {
-            modelId: 'b3467dd3-63d2-4914-9791-a2dfadfbfe9a', // your model ID
+            modelId: 'b3467dd3-63d2-4914-9791-a2dfadfbfe9a',
         };
 
         const inputSource = new mindee.PathInput({ inputPath: tempFilePath });
 
-        // ---- Call Mindee API ----
         console.log('🚀 Sending to Mindee custom model...');
         const document = await mindeeClient.enqueueAndGetResult(
             mindee.product.Extraction,
@@ -110,47 +118,43 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             productParams
         );
 
-        // ---- Log the complete Mindee response for debugging ----
-        console.log('📦 Full Mindee document:');
+        console.log('📦 Full Mindee document (first 2000 chars):');
         console.log(JSON.stringify(document, null, 2).substring(0, 2000) + '...');
 
-        // ---- CRITICAL FIX: The correct path to fields is inside rawHttp ----
+        // ---- CRITICAL: fields live inside rawHttp ----
         const fields = document.rawHttp?.inference?.result?.fields || {};
         console.log('🔍 Fields keys found:', Object.keys(fields));
 
-        // ---- Log each field's value for verification ----
-        for (const key of Object.keys(fields)) {
-            const field = fields[key];
-            console.log(`   - ${key}:`, getValue(field) || '(complex object)');
+        // ---- DEBUG: print raw address fields ----
+        console.log('🧪 supplier_address raw:', JSON.stringify(fields.supplier_address));
+        console.log('🧪 billing_address raw:', JSON.stringify(fields.billing_address));
+        console.log('🧪 shipping_address raw:', JSON.stringify(fields.shipping_address));
+        console.log('🧪 customer_address raw:', JSON.stringify(fields.customer_address));
+
+        // ---- DEBUG: print first line item if exists ----
+        if (Array.isArray(fields.line_items) && fields.line_items.length > 0) {
+            console.log('🧪 First line item raw:', JSON.stringify(fields.line_items[0]));
         }
 
         // ========== MAP FIELDS TO YOUR EXACT OUTPUT STRUCTURE ==========
 
-        // Vendor
         const vendorName = getValue(fields.supplier_name) || 'Not Found';
         const vendorAddress = getAddressString(fields.supplier_address);
-
-        // Invoice metadata
         const invoiceNumber = getValue(fields.invoice_number) || 'Not Found';
         const invoiceDate = getValue(fields.date) || 'Not Found';
         const poNumber = getValue(fields.po_number) || 'Not Found';
         const dueDate = getValue(fields.due_date) || 'Not Found';
 
-        // Addresses (Bill To & Ship To)
+        // Bill To: try billing_address first, fallback to customer_address
         const billTo = getAddressString(fields.billing_address) ||
                        getAddressString(fields.customer_address) || 'Not Found';
         const shipTo = getAddressString(fields.shipping_address) || billTo;
 
-        // Financials
         const subtotal = getNumber(fields.total_net);
         const salesTax = getNumber(fields.total_tax);
         const totalAmount = getNumber(fields.total_amount);
-
-        // Bank details
         const bankDetails = formatBankDetails(fields.supplier_payment_details);
-
-        // Terms (if your model provides it, otherwise static)
-        const terms = 'Not Found'; // adjust if your model extracts terms & conditions
+        const terms = 'Not Found'; // adjust if your model provides this
 
         // Line items
         const lineItems = [];
@@ -163,14 +167,13 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
                 const amount = getNumber(item.total_price || item.amount);
                 lineItems.push({
                     qty: qty.toString(),
-                    description: description,
+                    description,
                     unitPrice: unitPrice ? `$${unitPrice.toFixed(2)}` : '$0.00',
                     amount: amount ? `$${amount.toFixed(2)}` : '$0.00'
                 });
             });
         }
 
-        // Assemble final object
         const extractedData = {
             vendorName,
             vendorAddress,
@@ -188,17 +191,13 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             lineItems: lineItems.length > 0 ? lineItems : null
         };
 
-        // ---- Log what we are about to send to the frontend ----
         console.log('📤 Data sent to frontend:', JSON.stringify(extractedData, null, 2));
-
-        // ---- Send response ----
         res.json({ success: true, extractedData });
 
     } catch (error) {
         console.error('❌ Mindee processing error:', error);
         res.status(500).json({ error: 'Invoice processing failed', details: error.message });
     } finally {
-        // ---- Clean up temp file ----
         if (tempFilePath && fs.existsSync(tempFilePath)) {
             fs.unlinkSync(tempFilePath);
             console.log(`🗑️ Temporary file deleted: ${tempFilePath}`);
@@ -206,7 +205,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
     }
 });
 
-// ==================== START SERVER ====================
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server listening on port ${PORT}`);
