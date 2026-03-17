@@ -9,93 +9,115 @@ const mindee = require('mindee'); // CommonJS
 const app = express();
 const port = process.env.PORT || 5000;
 
+// Middleware
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
+// Health check
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Mindee Backend is Live');
+    res.status(200).send('✅ Mindee Invoice Extractor is Live');
 });
 
-// Setup multer for memory storage (we'll write to disk later)
+// Configure multer (memory storage, we'll write to disk later)
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Main extraction endpoint
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     let tempFilePath = null;
     try {
-        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
 
-        // Save buffer to a temporary file
+        // 1. Save the uploaded buffer to a temporary file
         const tempDir = os.tmpdir();
         const fileExt = path.extname(req.file.originalname) || '.pdf';
         tempFilePath = path.join(tempDir, `invoice_${Date.now()}${fileExt}`);
         fs.writeFileSync(tempFilePath, req.file.buffer);
+        console.log(`Temporary file created: ${tempFilePath}`);
 
-        // Initialize Mindee client
-        const mindeeClient = new mindee.Client({
-            apiKey: process.env.MINDEE_API_KEY || 'md_lPH7RpDY5697-MEGkStodEwXzSSIRpi7EZPKxP_u4No' // replace with env var
-        });
+        // 2. Initialize Mindee client with your API key
+        const apiKey = process.env.MINDEE_API_KEY; 
+        if (!apiKey) {
+            throw new Error('MINDEE_API_KEY environment variable not set');
+        }
+        const mindeeClient = new mindee.Client({ apiKey });
 
-        // Define product parameters (your custom model)
+        // 3. Set up your custom model parameters
         const productParams = {
             modelId: 'b3467dd3-63d2-4914-9791-a2dfadfbfe9a',
-            rag: undefined,
-            rawText: undefined,
-            polygon: undefined,
-            confidence: undefined,
+            // You can enable these if needed:
+            // rag: true,
+            // rawText: true,
+            // polygon: false,
+            // confidence: true,
         };
 
-        // Load file and send to Mindee
+        // 4. Create an input source from the file path
         const inputSource = new mindee.PathInput({ inputPath: tempFilePath });
+
+        // 5. Send to Mindee and wait for the result
+        console.log('Sending to Mindee...');
         const response = await mindeeClient.enqueueAndGetResult(
             mindee.product.Extraction,
             inputSource,
             productParams
         );
+        console.log('Mindee response received');
 
-        // Clean up temp file
-        fs.unlinkSync(tempFilePath);
-        tempFilePath = null;
-
-        // Extract fields from Mindee response
+        // 6. Extract fields from the response
         const fields = response.inference?.result?.fields || {};
 
-        // Helper to safely get field value
-        const getFieldValue = (fieldName) => fields[fieldName]?.value || 'Not Found';
+        // 🔍 DEBUG: Log all available field names to the console
+        console.log('🔥 Available fields from Mindee:');
+        Object.keys(fields).forEach(key => {
+            console.log(` - ${key}: ${fields[key]?.value}`);
+        });
 
-        // Build the exact structure you want
+        // 7. Map Mindee fields to your desired output structure
+        // ⚠️ IMPORTANT: Replace the field names below with the actual ones from your model
         const extractedData = {
-            vendorName: getFieldValue('vendor_name'),
-            vendorAddress: getFieldValue('vendor_address'),
-            invoiceNumber: getFieldValue('invoice_number'),
-            invoiceDate: getFieldValue('invoice_date'),
-            poNumber: getFieldValue('po_number'),
-            dueDate: getFieldValue('due_date'),
-            billTo: getFieldValue('bill_to'),
-            shipTo: getFieldValue('ship_to'),
-            subtotal: parseFloat(getFieldValue('subtotal')) || 0.00,
-            salesTax: parseFloat(getFieldValue('tax')) || 0.00,
-            totalAmount: parseFloat(getFieldValue('total')) || 0.00,
-            terms: getFieldValue('terms'),
-            bankDetails: getFieldValue('bank_details'),
+            vendorName: fields.vendor_name?.value || 'Not Found',
+            vendorAddress: fields.vendor_address?.value || 'Not Found',
+            invoiceNumber: fields.invoice_number?.value || 'Not Found',
+            invoiceDate: fields.invoice_date?.value || 'Not Found',
+            poNumber: fields.po_number?.value || 'Not Found',
+            dueDate: fields.due_date?.value || 'Not Found',
+            billTo: fields.bill_to?.value || 'Not Found',
+            shipTo: fields.ship_to?.value || 'Not Found',
+            subtotal: parseFloat(fields.subtotal?.value) || 0.00,
+            salesTax: parseFloat(fields.tax?.value) || 0.00,
+            totalAmount: parseFloat(fields.total?.value) || 0.00,
+            terms: fields.terms?.value || 'Not Found',
+            bankDetails: fields.bank_details?.value || 'Not Found',
             lineItems: (fields.line_items?.values || []).map(item => ({
                 qty: item.quantity?.value || '',
                 description: item.description?.value || '',
-                unitPrice: `$${item.unit_price?.value || '0.00'}`,
-                amount: `$${item.amount?.value || '0.00'}`
+                unitPrice: item.unit_price?.value ? `$${item.unit_price.value}` : '$0.00',
+                amount: item.amount?.value ? `$${item.amount.value}` : '$0.00'
             }))
         };
 
+        // 8. Send the extracted data back to the client
         res.json({ success: true, extractedData });
 
     } catch (error) {
-        console.error('Mindee error:', error);
-        // Clean up temp file if error occurred
-        if (tempFilePath && fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-        res.status(500).json({ error: 'Mindee processing failed', details: error.message });
+        console.error('❌ Mindee processing error:', error);
+        res.status(500).json({ 
+            error: 'Invoice processing failed', 
+            details: error.message 
+        });
+    } finally {
+        // 9. Clean up the temporary file
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+            fs.unlinkSync(tempFilePath);
+            console.log(`Temporary file deleted: ${tempFilePath}`);
+        }
     }
 });
 
+// Start the server
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Backend live on port ${PORT}`);
+    console.log(`🚀 Server listening on port ${PORT}`);
 });
