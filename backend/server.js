@@ -112,10 +112,10 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 
         // ---- Log the complete Mindee response for debugging ----
         console.log('📦 Full Mindee document:');
-        console.log(JSON.stringify(document, null, 2).substring(0, 2000) + '...'); // truncate for readability
+        console.log(JSON.stringify(document, null, 2).substring(0, 2000) + '...');
 
-        // ---- CRITICAL FIX: Correct path to fields ----
-        const fields = document.inference?.result?.fields || {};
+        // ---- CRITICAL FIX: The correct path to fields is inside rawHttp ----
+        const fields = document.rawHttp?.inference?.result?.fields || {};
         console.log('🔍 Fields keys found:', Object.keys(fields));
 
         // ---- Log each field's value for verification ----
