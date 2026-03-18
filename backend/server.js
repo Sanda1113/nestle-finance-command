@@ -1,147 +1,115 @@
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { DocumentProcessorServiceClient } = require('@google-cloud/documentai').v1;
 
 const app = express();
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 5000;
 
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Gemini Invoice Extractor is Live');
+    res.status(200).send('✅ Nestle Finance Backend is Awake and Ready!');
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Check for API key
-const apiKey = process.env.GEMINI_API_KEY;
-if (!apiKey) {
-    console.error('❌ GEMINI_API_KEY is not set');
-    process.exit(1);
-}
-const genAI = new GoogleGenerativeAI(apiKey);
+// Initialize Document AI client (uses ADC automatically)
+const client = new DocumentProcessorServiceClient({
+    apiEndpoint: 'us-documentai.googleapis.com', // matches the processor region
+});
 
-// List of possible vision models to try (in order of preference)
-const VISION_MODELS = [
-    "gemini-pro-vision",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-1.0-pro-vision-latest"
-];
+// Processor details from your project
+const projectId = 'nestle-finance-command';
+const location = 'us';
+const processorId = '6af1dd384a1381e5';
+const processorName = projects/${projectId}/locations/${location}/processors/${processorId};
 
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
-        }
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        // Convert image to base64
-        const imageBase64 = req.file.buffer.toString('base64');
+        // Prepare the request for Document AI
+        const request = {
+            name: processorName,
+            rawDocument: {
+                content: req.file.buffer.toString('base64'),
+                mimeType: req.file.mimetype,
+            },
+        };
 
-        // Prompt for structured extraction
-        const prompt = `
-You are an expert at extracting structured data from invoices.
-Extract the following fields from this invoice image and return them in **valid JSON only** (no extra text, no markdown):
+        // Call the Document AI API
+        const [result] = await client.processDocument(request);
+        const { document } = result;
 
-{
-  "vendorName": "string",
-  "vendorAddress": "string",
-  "invoiceNumber": "string",
-  "invoiceDate": "string (YYYY-MM-DD)",
-  "poNumber": "string",
-  "dueDate": "string (YYYY-MM-DD)",
-  "billTo": "string (full address)",
-  "shipTo": "string (full address)",
-  "subtotal": number,
-  "salesTax": number,
-  "totalAmount": number,
-  "terms": "string",
-  "bankDetails": "string",
-  "lineItems": [
-    {
-      "qty": "string or number",
-      "description": "string",
-      "unitPrice": number,
-      "amount": number
-    }
-  ]
-}
+        // Helper to get first value of an entity type
+        const getEntity = (type) => {
+            const entity = document.entities.find(e => e.type === type);
+            return entity ? entity.mentionText || entity.normalizedValue?.text || '' : null;
+        };
 
-If a field is not found, use null. Use the exact field names.
-`;
+        // Extract address blocks (can be multi-line)
+        const getAddress = (type) => {
+            const entity = document.entities.find(e => e.type === type);
+            return entity ? entity.mentionText.replace(/\n/g, ' ').trim() : 'Not Found';
+        };
 
-        // Try each model until one works
-        let lastError = null;
-        for (const modelName of VISION_MODELS) {
-            try {
-                console.log(`Trying model: ${modelName}`);
-                const model = genAI.getGenerativeModel({ model: modelName });
-                const result = await model.generateContent([
-                    prompt,
-                    {
-                        inlineData: {
-                            mimeType: req.file.mimetype,
-                            data: imageBase64
-                        }
-                    }
-                ]);
-                const responseText = result.response.text();
+        // Map Document AI entities to our response structure
+        const extractedData = {
+            // Vendor
+            vendorName: getEntity('supplier_name') || 'Unknown Vendor',
+            vendorAddress: getAddress('supplier_address') || 'Not Found',
 
-                // Clean response (remove markdown code fences if present)
-                let jsonStr = responseText.replace(/```json\n?|```/g, '').trim();
-                const extractedData = JSON.parse(jsonStr);
+            // Invoice metadata
+            invoiceNumber: getEntity('invoice_id') || 'Not Found',
+            invoiceDate: getEntity('invoice_date') || 'Not Found',
+            poNumber: getEntity('purchase_order') || 'Not Found',
+            dueDate: getEntity('payment_terms_due_date') || 'Not Found',
 
-                // Ensure numbers are parsed correctly
-                if (extractedData.subtotal) extractedData.subtotal = parseFloat(extractedData.subtotal);
-                if (extractedData.salesTax) extractedData.salesTax = parseFloat(extractedData.salesTax);
-                if (extractedData.totalAmount) extractedData.totalAmount = parseFloat(extractedData.totalAmount);
-                if (extractedData.lineItems) {
-                    extractedData.lineItems = extractedData.lineItems.map(item => ({
-                        ...item,
-                        qty: item.qty?.toString() || '',
-                        unitPrice: parseFloat(item.unitPrice) || 0,
-                        amount: parseFloat(item.amount) || 0
-                    }));
-                }
+            // Customer addresses
+            billTo: getAddress('customer_name') + ' ' + (getAddress('customer_address') || '') || 'Not Found',
+            shipTo: getAddress('ship_to_address') || 'Not Found', // may need concatenation
 
-                // Replace nulls with "Not Found" for string fields
-                const finalData = {
-                    vendorName: extractedData.vendorName || 'Not Found',
-                    vendorAddress: extractedData.vendorAddress || 'Not Found',
-                    invoiceNumber: extractedData.invoiceNumber || 'Not Found',
-                    invoiceDate: extractedData.invoiceDate || 'Not Found',
-                    poNumber: extractedData.poNumber || 'Not Found',
-                    dueDate: extractedData.dueDate || 'Not Found',
-                    billTo: extractedData.billTo || 'Not Found',
-                    shipTo: extractedData.shipTo || 'Not Found',
-                    subtotal: extractedData.subtotal || 0,
-                    salesTax: extractedData.salesTax || 0,
-                    totalAmount: extractedData.totalAmount || 0,
-                    terms: extractedData.terms || 'Not Found',
-                    bankDetails: extractedData.bankDetails || 'Not Found',
-                    lineItems: extractedData.lineItems && extractedData.lineItems.length > 0 ? extractedData.lineItems : null
+            // Line items
+            lineItems: (document.entities.filter(e => e.type === 'line_item') || []).map(item => {
+                const props = item.properties || [];
+                const qty = props.find(p => p.type === 'line_item/quantity')?.mentionText || '1';
+                const desc = props.find(p => p.type === 'line_item/description')?.mentionText || '';
+                const unitPrice = props.find(p => p.type === 'line_item/unit_price')?.mentionText || '0.00';
+                const amount = props.find(p => p.type === 'line_item/amount')?.mentionText || '0.00';
+                return {
+                    qty,
+                    description: desc,
+                    unitPrice: unitPrice.startsWith('$') ? unitPrice : $${unitPrice},
+                    amount: amount.startsWith('$') ? amount : $${amount},
                 };
+            }),
 
-                return res.json({ success: true, extractedData: finalData });
-            } catch (err) {
-                console.log(`Model ${modelName} failed:`, err.message);
-                lastError = err;
-                // Continue to next model
-            }
-        }
+            // Totals
+            subtotal: parseFloat(getEntity('subtotal')?.replace(/[$,]/g, '') || '0'),
+            salesTax: parseFloat(getEntity('tax_amount')?.replace(/[$,]/g, '') || '0'),
+            totalAmount: parseFloat(getEntity('total_amount')?.replace(/[$,]/g, '') || '0'),
 
-        // If all models failed
-        throw lastError || new Error('No working vision model found');
+            // Terms & bank – may not be standard entities; fallback to raw text search if needed
+            terms: getEntity('payment_terms') || 'Not Found',
+            bankDetails: 'Not Found', // Document AI doesn't extract bank details by default; could add custom processor or OCR fallback
+        };
+
+        // Optionally, if you need bank details, you could fallback to raw OCR:
+        // const rawText = document.text;
+        // const bankMatch = rawText.match(/(Name\s*of\s*Bank[\s\S]*)/i);
+        // extractedData.bankDetails = bankMatch ? bankMatch[1].replace(/\s+/g, ' ').trim() : 'Not Found';
+
+        res.json({ success: true, extractedData });
 
     } catch (error) {
-        console.error('❌ Gemini error:', error);
-        res.status(500).json({ error: 'Invoice processing failed', details: error.message });
+        console.error('Document AI error:', error);
+        res.status(500).json({ error: 'Invoice processing failed' });
     }
 });
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server listening on port ${PORT}`);
+    console.log(🚀 Backend is LIVE on port ${PORT});
 });
