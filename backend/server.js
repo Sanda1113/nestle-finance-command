@@ -71,7 +71,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         const pureJson = cleanMindeeObject(rawFields);
 
         // --- 🛡️ THE CRASH PREVENTER ---
-        // This guarantees we NEVER send an object to React. Only Strings or null.
         const getSafeString = (val) => {
             if (val === null || val === undefined) return null;
             if (typeof val === 'string' || typeof val === 'number') return String(val).trim();
@@ -79,21 +78,13 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             if (typeof val === 'object') {
                 if (val.value !== undefined && val.value !== null) return String(val.value).trim();
                 if (val.content !== undefined && val.content !== null) return String(val.content).trim();
-
-                // If Mindee returns { items: [...] } (This caused Error #31!)
                 if (val.items && Array.isArray(val.items)) {
                     if (val.items.length === 0) return null;
                     return getSafeString(val.items[0]);
                 }
-
-                // If it's a standard Array
                 if (Array.isArray(val) && val.length > 0) return getSafeString(val[0]);
-
-                // If Mindee returns { fields: {...} }
                 if (val.fields) return getSafeString(val.fields);
             }
-
-            // If it's an unreadable object, destroy it so React doesn't crash
             return null;
         };
 
@@ -107,15 +98,12 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         const getAddressText = (obj) => {
             if (!obj) return null;
             const str = getSafeString(obj);
-            if (str) return str; // If getSafeString cracked it, use it
-
-            // If it's a deeply nested address object
+            if (str) return str; 
             if (obj.fields && obj.fields.address) return getSafeString(obj.fields.address);
             if (obj.address) return getSafeString(obj.address);
             return null;
         };
 
-        // Line Items are inside line_items.items, and each has a .fields wrapper
         const rawItems = pureJson.line_items?.items || [];
         const mappedLineItems = rawItems.map(item => {
             const f = item.fields || item;
@@ -127,7 +115,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             };
         });
 
-        // Bank Details are inside supplier_payment_details.items
         const rawBank = pureJson.supplier_payment_details?.items || [];
         let bankString = 'Not Found';
         if (rawBank.length > 0) {
@@ -135,7 +122,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             bankString = `Account: ${getSafeString(bFields.account_number) || 'N/A'}, Routing: ${getSafeString(bFields.routing_number) || 'N/A'}`;
         }
 
-        // --- FINAL MAPPING ---
         const extractedData = {
             vendorName: getSafeString(pureJson.supplier_name) || 'Unknown Vendor',
             vendorAddress: getAddressText(pureJson.supplier_address) || 'Not Found',
