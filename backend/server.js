@@ -14,45 +14,28 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Nestle Finance Backend (Universal Decryptor) is Awake!');
+    res.status(200).send('✅ Nestle Finance Backend (Precision Mapper) is Awake!');
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// 🛡️ THE UNIVERSAL DECRYPTOR: Converts Mindee's crazy classes into pure JSON
+// 🛡️ THE UNIVERSAL DECRYPTOR
 function cleanMindeeObject(obj) {
     if (obj === null || obj === undefined) return null;
     if (typeof obj !== 'object') return obj;
-
-    // 1. Strip out Mindee's List Wrappers
-    if (obj.values && Array.isArray(obj.values)) {
-        return obj.values.map(item => cleanMindeeObject(item));
-    }
-
-    // 2. Strip out Field Wrappers holding simple text/numbers
+    if (obj.values && Array.isArray(obj.values)) return obj.values.map(item => cleanMindeeObject(item));
     if (obj.value !== undefined && typeof obj.value !== 'object') return obj.value;
     if (obj.content !== undefined && typeof obj.content !== 'object') return obj.content;
-
-    // 3. Handle standard Arrays
-    if (Array.isArray(obj)) {
-        return obj.map(item => cleanMindeeObject(item));
-    }
-
-    // 4. Extract data from JavaScript Maps (Mindee uses these heavily)
+    if (Array.isArray(obj)) return obj.map(item => cleanMindeeObject(item));
     if (typeof obj.entries === 'function') {
         const cleaned = {};
         for (const [key, val] of obj.entries()) {
-            if (key !== 'polygon' && key !== 'confidence' && key !== 'boundingBox') {
-                cleaned[key] = cleanMindeeObject(val);
-            }
+            if (key !== 'polygon' && key !== 'confidence' && key !== 'boundingBox') cleaned[key] = cleanMindeeObject(val);
         }
         return cleaned;
     }
-
-    // 5. Handle standard Objects
     const cleaned = {};
     let targetObj = obj.value && typeof obj.value === 'object' ? obj.value : obj;
-
     for (const key of Object.keys(targetObj)) {
         if (key !== 'polygon' && key !== 'confidence' && key !== 'boundingBox' && !key.startsWith('_')) {
             cleaned[key] = cleanMindeeObject(targetObj[key]);
@@ -84,58 +67,75 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             productParams
         );
 
-        // Retrieve the raw hidden map
         const rawFields = response.document?.inference?.prediction?.fields || response.inference?.result?.fields || {};
-
-        // 🚀 ACTIVATE DECRYPTOR: We now have pure, easy-to-read JSON!
         const pureJson = cleanMindeeObject(rawFields);
 
-        // Print the pure JSON to Railway logs so we can see EXACTLY what Mindee found
-        console.log("🔥 PURE JSON EXTRACTED:\n", JSON.stringify(pureJson, null, 2));
+        // --- 🎯 PRECISION HELPERS BASED ON YOUR EXACT LOGS ---
 
-        // --- HELPER FUNCTIONS ---
-        const getAddress = (addr) => {
-            if (!addr) return 'Not Found';
-            if (typeof addr === 'string') return addr; // If it's a simple string
-            // If it's a nested object, join all the pieces together (Fixes the Jessie M Horne bug)
-            const parts = [addr.address, addr.street_number, addr.street_name, addr.po_box, addr.city, addr.state, addr.postal_code, addr.country].filter(Boolean);
-            return parts.length > 0 ? parts.join(', ') : 'Not Found';
+        // Addresses are inside { fields: { address: "..." } }
+        const getAddressText = (obj) => {
+            if (!obj) return null;
+            if (typeof obj === 'string') return obj;
+            if (obj.fields && obj.fields.address) return obj.fields.address;
+            if (obj.address) return obj.address;
+            return null;
+        };
+
+        const getVal = (val) => {
+            if (val === null || val === undefined) return null;
+            if (typeof val === 'object' && val.value !== undefined) return val.value;
+            return val;
         };
 
         const getNum = (val) => {
-            if (!val) return 0.00;
-            const cleanVal = val.toString().replace(/[^0-9.-]+/g, "");
+            const v = getVal(val);
+            if (!v) return 0.00;
+            const cleanVal = v.toString().replace(/[^0-9.-]+/g, "");
             return parseFloat(cleanVal) || 0.00;
         };
 
-        // --- MAP LINE ITEMS (Fixes the empty table bug) ---
-        const rawLineItems = pureJson.line_items || pureJson.lineItems || [];
-        const mappedLineItems = Array.isArray(rawLineItems) ? rawLineItems.map(item => ({
-            qty: item.quantity?.toString() || item.qty?.toString() || '1',
-            description: item.description || item.desc || 'Item',
-            unitPrice: `$${parseFloat(item.unit_price || item.unitPrice || 0).toFixed(2)}`,
-            amount: `$${parseFloat(item.total_price || item.amount || item.totalPrice || 0).toFixed(2)}`
-        })) : [];
+        // Line Items are inside line_items.items, and each has a .fields wrapper
+        const rawItems = pureJson.line_items?.items || [];
+        const mappedLineItems = rawItems.map(item => {
+            const f = item.fields || item;
+            return {
+                qty: getVal(f.quantity) || '1',
+                description: getVal(f.description) || 'Item',
+                unitPrice: `$${parseFloat(getVal(f.unit_price) || 0).toFixed(2)}`,
+                amount: `$${parseFloat(getVal(f.total_price) || getVal(f.amount) || 0).toFixed(2)}`
+            };
+        });
+
+        // Bank Details are inside supplier_payment_details.items
+        const rawBank = pureJson.supplier_payment_details?.items || [];
+        let bankString = 'Not Found';
+        if (rawBank.length > 0) {
+            const bFields = rawBank[0].fields || rawBank[0];
+            bankString = `Account: ${getVal(bFields.account_number) || 'N/A'}, Routing: ${getVal(bFields.routing_number) || 'N/A'}`;
+        }
 
         // --- FINAL MAPPING ---
         const extractedData = {
-            vendorName: pureJson.supplier_name || 'Unknown Vendor',
-            vendorAddress: getAddress(pureJson.supplier_address),
-            invoiceNumber: pureJson.invoice_number || 'Not Found',
-            invoiceDate: pureJson.date || pureJson.invoice_date || 'Not Found',
-            poNumber: pureJson.po_number || pureJson.purchase_order || 'Not Found',
-            dueDate: pureJson.due_date || 'Not Found',
-            billTo: getAddress(pureJson.customer_address) || pureJson.customer_name || 'Not Found',
-            shipTo: getAddress(pureJson.shipping_address) || 'Not Found',
-            subtotal: getNum(pureJson.total_net || pureJson.subtotal),
-            salesTax: getNum(pureJson.total_tax || pureJson.tax),
-            totalAmount: getNum(pureJson.total_amount || pureJson.total),
+            vendorName: getVal(pureJson.supplier_name) || 'Unknown Vendor',
+            vendorAddress: getAddressText(pureJson.supplier_address) || 'Not Found',
+            invoiceNumber: getVal(pureJson.invoice_number) || 'Not Found',
+            invoiceDate: getVal(pureJson.date) || getVal(pureJson.invoice_date) || 'Not Found',
+            poNumber: getVal(pureJson.po_number) || getVal(pureJson.reference_numbers) || 'Not Found',
+            dueDate: getVal(pureJson.due_date) || 'Not Found',
+
+            // For Bill To, we check customer_address, then fallback to customer_name
+            billTo: getAddressText(pureJson.customer_address) || getVal(pureJson.customer_name) || 'Not Found',
+            shipTo: getAddressText(pureJson.shipping_address) || 'Not Found',
+
+            subtotal: getNum(pureJson.total_net),
+            salesTax: getNum(pureJson.total_tax),
+            totalAmount: getNum(pureJson.total_amount),
             terms: 'Check Due Date',
-            bankDetails: 'Securely Processed',
+            bankDetails: bankString,
             lineItems: mappedLineItems.length > 0 ? mappedLineItems : null
         };
 
-        console.log('✅ Data successfully sent to frontend!');
+        console.log('✅ Extraction Complete! Sending to frontend.');
         res.json({ success: true, extractedData });
 
     } catch (error) {
