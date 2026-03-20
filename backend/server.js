@@ -1,9 +1,8 @@
-// server.js – uses dynamic import for Mindee (ES module) with Node 20+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 
-// Load dotenv only in development (optional)
+// Load .env in development
 if (process.env.NODE_ENV !== 'production') {
     require('dotenv').config();
 }
@@ -20,25 +19,30 @@ app.get('/', (req, res) => {
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-let mindeeClient;
-let InvoiceV4;
-
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        // Dynamically import Mindee and initialize client once
-        if (!mindeeClient) {
-            const { Client, InvoiceV4: Invoice } = await import('mindee');
-            mindeeClient = new Client({
-                apiKey: process.env.MINDEE_V2_API_KEY,
-            });
-            InvoiceV4 = Invoice;
+        // Build form data for Mindee API
+        const formData = new FormData();
+        formData.append('document', new Blob([req.file.buffer]), req.file.originalname);
+
+        // Call Mindee Invoice API (v4)
+        const response = await fetch('https://api.mindee.net/v2/products/mindee/invoice/v4/predict', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Token ${process.env.MINDEE_V2_API_KEY}`,
+            },
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Mindee API error: ${response.status} - ${errorText}`);
         }
 
-        const input = mindeeClient.docFromBuffer(req.file.buffer, req.file.originalname);
-        const response = await mindeeClient.parse(InvoiceV4, input);
-        const doc = response.document;
+        const result = await response.json();
+        const doc = result.document;
 
         const getField = (field) => field?.value ?? null;
 
