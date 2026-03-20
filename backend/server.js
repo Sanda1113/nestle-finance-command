@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const mindee = require('mindee');
+const supabase = require('./db'); // Import Supabase connection
 
 if (process.env.NODE_ENV !== 'production') {
     require('dotenv').config();
@@ -14,7 +15,7 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Nestle Finance Backend (Crash-Proof Edition) is Awake!');
+    res.status(200).send('✅ Nestle Finance Backend is Awake!');
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -48,8 +49,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        console.log('🚀 Sending to Mindee Custom Model...');
-
         const apiKey = process.env.MINDEE_V2_API_KEY;
         if (!apiKey) throw new Error("Missing MINDEE_V2_API_KEY.");
 
@@ -70,11 +69,9 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         const rawFields = response.document?.inference?.prediction?.fields || response.inference?.result?.fields || {};
         const pureJson = cleanMindeeObject(rawFields);
 
-        // --- 🛡️ THE CRASH PREVENTER ---
         const getSafeString = (val) => {
             if (val === null || val === undefined) return null;
             if (typeof val === 'string' || typeof val === 'number') return String(val).trim();
-
             if (typeof val === 'object') {
                 if (val.value !== undefined && val.value !== null) return String(val.value).trim();
                 if (val.content !== undefined && val.content !== null) return String(val.content).trim();
@@ -139,12 +136,52 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             lineItems: mappedLineItems.length > 0 ? mappedLineItems : null
         };
 
-        console.log('✅ Extraction Complete! Sending safe primitives to frontend.');
         res.json({ success: true, extractedData });
 
     } catch (error) {
         console.error('❌ Data extraction error:', error.message);
         res.status(500).json({ error: 'Invoice processing failed', details: error.message });
+    }
+});
+
+// 🚀 AUTO-SAVE TO SUPABASE ENDPOINT
+app.post('/api/save-reconciliation', async (req, res) => {
+    const { invoiceData, poData, matchStatus } = req.body;
+
+    try {
+        console.log(`💾 Auto-Saving to Database: ${matchStatus}`);
+
+        // 1. Invoices Table (matching your screenshot)
+        const { error: invErr } = await supabase.from('invoices').insert([{ 
+            invoice_number: invoiceData.invoiceNumber, 
+            extracted_amount: invoiceData.totalAmount,
+            status: matchStatus
+        }]);
+        if (invErr) console.error("Invoice Insert Error:", invErr);
+
+        // 2. Purchase Orders Table (matching your screenshot)
+        const { error: poErr } = await supabase.from('purchase_orders').insert([{ 
+            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : poData.invoiceNumber, 
+            total_amount: poData.totalAmount,
+            status: matchStatus
+        }]);
+        if (poErr) console.error("PO Insert Error:", poErr);
+
+        // 3. Reconciliations Table (The main audit log)
+        const { error: reconErr } = await supabase.from('reconciliations').insert([{ 
+            vendor_name: invoiceData.vendorName,
+            invoice_number: invoiceData.invoiceNumber, 
+            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : poData.invoiceNumber,
+            invoice_total: invoiceData.totalAmount,
+            po_total: poData.totalAmount,
+            match_status: matchStatus
+        }]);
+        if (reconErr) throw reconErr;
+
+        res.json({ success: true, message: 'Automatically saved to DB.' });
+    } catch (error) {
+        console.error('❌ DB Save Error:', error.message);
+        res.status(500).json({ error: 'Failed to save to DB', details: error.message });
     }
 });
 
