@@ -2,23 +2,15 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 export default function Upload() {
-  // Theme State
   const [isDarkMode, setIsDarkMode] = useState(false);
-
-  // File States
   const [invoiceFile, setInvoiceFile] = useState(null);
   const [poFile, setPoFile] = useState(null);
-
-  // Extraction States
   const [loading, setLoading] = useState(false);
   const [invoiceResult, setInvoiceResult] = useState(null);
   const [poResult, setPoResult] = useState(null);
   const [error, setError] = useState(null);
+  const [matchStatus, setMatchStatus] = useState('Pending');
 
-  // Match Status State
-  const [matchStatus, setMatchStatus] = useState('Pending'); // Pending, Approved, Rejected, Error
-
-  // Handle Dark Mode Toggle
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -27,7 +19,6 @@ export default function Upload() {
     }
   }, [isDarkMode]);
 
-  // Automatically check for a match when both results arrive
   useEffect(() => {
     if (invoiceResult && poResult) {
       if (invoiceResult.totalAmount === poResult.totalAmount) {
@@ -89,7 +80,6 @@ export default function Upload() {
     }
   };
 
-  // Helper component for identical Document Cards
   const DocumentCard = ({ title, data, borderColor, themeColor, isApproved }) => {
     if (!data) return null;
 
