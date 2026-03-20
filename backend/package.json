@@ -1,11 +1,14 @@
 {
   "name": "nestle-finance-backend",
   "version": "1.0.0",
-  "description": "Invoice processing backend using Google Document AI",
+  "description": "Invoice processing backend using Mindee",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -16,8 +19,5 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }
