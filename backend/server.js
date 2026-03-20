@@ -24,7 +24,8 @@ const client = new DocumentProcessorServiceClient({
 const projectId = 'nestle-finance-command';
 const location = 'us';
 const processorId = '6af1dd384a1381e5';
-const processorName = projects/${projectId}/locations/${location}/processors/${processorId};
+// ✅ FIXED: use backticks for template literal
+const processorName = `projects/${projectId}/locations/${location}/processors/${processorId}`;
 
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
@@ -68,8 +69,8 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             dueDate: getEntity('payment_terms_due_date') || 'Not Found',
 
             // Customer addresses
-            billTo: getAddress('customer_name') + ' ' + (getAddress('customer_address') || '') || 'Not Found',
-            shipTo: getAddress('ship_to_address') || 'Not Found', // may need concatenation
+            billTo: (getAddress('customer_name') + ' ' + (getAddress('customer_address') || '')).trim() || 'Not Found',
+            shipTo: getAddress('ship_to_address') || 'Not Found',
 
             // Line items
             lineItems: (document.entities.filter(e => e.type === 'line_item') || []).map(item => {
@@ -81,8 +82,8 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
                 return {
                     qty,
                     description: desc,
-                    unitPrice: unitPrice.startsWith('$') ? unitPrice : $${unitPrice},
-                    amount: amount.startsWith('$') ? amount : $${amount},
+                    unitPrice: unitPrice.startsWith('$') ? unitPrice : `$${unitPrice}`,
+                    amount: amount.startsWith('$') ? amount : `$${amount}`,
                 };
             }),
 
@@ -91,15 +92,10 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             salesTax: parseFloat(getEntity('tax_amount')?.replace(/[$,]/g, '') || '0'),
             totalAmount: parseFloat(getEntity('total_amount')?.replace(/[$,]/g, '') || '0'),
 
-            // Terms & bank – may not be standard entities; fallback to raw text search if needed
+            // Terms & bank – fallback to raw text if not extracted
             terms: getEntity('payment_terms') || 'Not Found',
-            bankDetails: 'Not Found', // Document AI doesn't extract bank details by default; could add custom processor or OCR fallback
+            bankDetails: 'Not Found', // Can add raw OCR fallback if needed
         };
-
-        // Optionally, if you need bank details, you could fallback to raw OCR:
-        // const rawText = document.text;
-        // const bankMatch = rawText.match(/(Name\s*of\s*Bank[\s\S]*)/i);
-        // extractedData.bankDetails = bankMatch ? bankMatch[1].replace(/\s+/g, ' ').trim() : 'Not Found';
 
         res.json({ success: true, extractedData });
 
@@ -111,5 +107,5 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(🚀 Backend is LIVE on port ${PORT});
+    console.log(`🚀 Backend is LIVE on port ${PORT}`);
 });
