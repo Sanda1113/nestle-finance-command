@@ -27,11 +27,11 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         const formData = new FormData();
         formData.append('document', new Blob([req.file.buffer]), req.file.originalname);
 
-        // Call Mindee Invoice API (v4)
-        const response = await fetch('https://api.mindee.net/v2/products/mindee/invoice/v4/predict', {
+        // Use the new platform endpoint (app.mindee.com)
+        const response = await fetch('https://api.mindee.app/v1/products/mindee/invoice/v4/predict', {
             method: 'POST',
             headers: {
-                'Authorization': `Token ${process.env.MINDEE_V2_API_KEY}`,
+                'Authorization': `Bearer ${process.env.MINDEE_V2_API_KEY}`,
             },
             body: formData,
         });
