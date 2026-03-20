@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+const mindee = require('mindee'); // Using the official V5 SDK
 
 // Load .env in development
 if (process.env.NODE_ENV !== 'production') {
@@ -14,81 +15,96 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Nestle Finance Backend (Mindee REST API) is Awake!');
+    res.status(200).send('✅ Nestle Finance Backend (Mindee Custom SDK) is Awake!');
 });
 
+// Use memory storage so we don't have to deal with fs/disk cleanup
 const upload = multer({ storage: multer.memoryStorage() });
 
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        console.log('🚀 Sending to Mindee API...');
+        console.log('🚀 Sending to Mindee Custom Model...');
 
-        // Build form data for native fetch
-        const formData = new FormData();
-        formData.append('document', new Blob([req.file.buffer]), req.file.originalname);
+        const apiKey = process.env.MINDEE_V2_API_KEY;
+        if (!apiKey) throw new Error("Missing MINDEE_V2_API_KEY in environment variables.");
 
-        // 1. CRITICAL FIX: Corrected URL to .net and /invoices/
-        const response = await fetch('https://api.mindee.net/v1/products/mindee/invoices/v4/predict', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Token ${process.env.MINDEE_V2_API_KEY}`,
-            },
-            body: formData,
+        // 1. Init the new V5 client
+        const mindeeClient = new mindee.Client({ apiKey: apiKey });
+
+        // 2. Load the file from the Multer buffer (bypassing the need for fs.writeFileSync)
+        const inputSource = new mindee.BufferInput({
+            buffer: req.file.buffer,
+            filename: req.file.originalname || 'invoice.pdf'
         });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Mindee API error: ${response.status} - ${errorText}`);
-        }
-
-        const result = await response.json();
-        
-        // 2. CRITICAL FIX: Corrected JSON path to reach the actual data
-        const doc = result.document?.inference?.prediction;
-
-        if (!doc) {
-            throw new Error("Invalid response structure from Mindee");
-        }
-
-        // Helper to extract the 'value' from Mindee's wrapper objects
-        const getField = (field) => field?.value ?? null;
-
-        // 3. CRITICAL FIX: Mapped to Mindee's exact V4 field names
-        const extractedData = {
-            vendorName: getField(doc.supplier_name) || 'Unknown Vendor',
-            vendorAddress: getField(doc.supplier_address) || 'Not Found',
-            invoiceNumber: getField(doc.invoice_number) || 'Not Found',
-            invoiceDate: getField(doc.date) || 'Not Found',
-            poNumber: getField(doc.reference_numbers?.[0]) || 'Not Found',
-            dueDate: getField(doc.due_date) || 'Not Found',
-            billTo: getField(doc.customer_name) || 'Not Found',
-            shipTo: getField(doc.shipping_address) || 'Not Found',
-            
-            // In the native REST API, line items are direct arrays, not wrapped in .value
-            lineItems: (doc.line_items || []).map(item => ({
-                qty: item.quantity?.toString() ?? '1',
-                description: item.description ?? '',
-                unitPrice: `$${item.unit_price ? item.unit_price.toFixed(2) : '0.00'}`,
-                amount: `$${item.total_amount ? item.total_amount.toFixed(2) : '0.00'}`,
-            })),
-            
-            subtotal: getField(doc.total_net) ?? 0,
-            salesTax: getField(doc.total_tax) ?? 0,
-            totalAmount: getField(doc.total_amount) ?? 0,
-            terms: 'Check Due Date',
-            bankDetails: 'Not Found',
+        // 3. Set product parameters using YOUR Custom Model ID
+        const productParams = {
+            modelId: "b3467dd3-63d2-4914-9791-a2dfadfbfe9a"
         };
 
-        console.log('✅ Mindee Extraction Successful!');
+        // 4. Send for processing using the exact async function from the docs
+        const response = await mindeeClient.enqueueAndGetResult(
+            mindee.product.Extraction,
+            inputSource,
+            productParams
+        );
+
+        // 5. Access the result fields as per documentation
+        const fields = response.inference.result.fields;
+
+        // --- HELPER FUNCTIONS FOR CUSTOM SCHEMA ---
+        const getVal = (fieldName) => {
+            const field = fields[fieldName];
+            if (!field) return null;
+            // Custom objects store the main string in .value or .content
+            return field.value || field.content || null;
+        };
+
+        const getNum = (fieldName) => {
+            const val = getVal(fieldName);
+            return parseFloat(val) || 0.00;
+        };
+
+        // Map your Custom Line Items safely
+        let mappedLineItems = [];
+        if (fields.line_items && fields.line_items.values) {
+            mappedLineItems = fields.line_items.values.map(item => ({
+                qty: item.quantity?.toString() || '1',
+                description: item.description || 'Item',
+                unitPrice: `$${parseFloat(item.unit_price || 0).toFixed(2)}`,
+                amount: `$${parseFloat(item.total_price || item.amount || 0).toFixed(2)}`
+            }));
+        }
+
+        // 6. Map to Nehaa's Frontend Dashboard using your exact schema keys
+        const extractedData = {
+            vendorName: getVal('supplier_name') || 'Unknown Vendor',
+            vendorAddress: getVal('supplier_address') || 'Not Found', 
+            invoiceNumber: getVal('invoice_number') || 'Not Found',
+            invoiceDate: getVal('date') || 'Not Found',
+            poNumber: getVal('po_number') || getVal('reference_numbers') || 'Not Found',
+            dueDate: getVal('due_date') || 'Not Found',
+            billTo: getVal('customer_name') || 'Not Found',
+            shipTo: getVal('shipping_address') || 'Not Found',
+            subtotal: getNum('total_net'),
+            salesTax: getNum('total_tax'),
+            totalAmount: getNum('total_amount'),
+            terms: 'Check Due Date',
+            bankDetails: 'Not Found', 
+            lineItems: mappedLineItems.length > 0 ? mappedLineItems : null
+        };
+
+        console.log('✅ Extraction Complete! Sending JSON to frontend.');
         res.json({ success: true, extractedData });
+
     } catch (error) {
-        console.error('❌ Mindee error:', error);
+        console.error('❌ Mindee Custom SDK Error:', error);
         res.status(500).json({ error: 'Invoice processing failed', details: error.message });
     }
 });
 
 app.listen(port, '0.0.0.0', () => {
-    console.log(`🚀 Backend is LIVE on port ${port}`);
+    console.log(`🚀 Backend LIVE on port ${port}`);
 });
