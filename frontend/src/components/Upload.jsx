@@ -8,17 +8,21 @@ export default function Upload() {
   // File States
   const [invoiceFile, setInvoiceFile] = useState(null);
   const [poFile, setPoFile] = useState(null);
-  
+
+  // User Context State
+  const [userRole, setUserRole] = useState('Finance Team');
+
   // Extraction States
   const [loading, setLoading] = useState(false);
   const [invoiceResult, setInvoiceResult] = useState(null);
   const [poResult, setPoResult] = useState(null);
   const [error, setError] = useState(null);
 
-  // Match Status State
+  // Match Status & Audit State
   const [matchStatus, setMatchStatus] = useState('Pending'); // Pending, Approved, Rejected, Error
+  const [auditLogs, setAuditLogs] = useState([]);
 
-  // Handle Dark Mode Toggle
+  // Handle Dark Mode Toggle on the HTML element
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -30,11 +34,24 @@ export default function Upload() {
   // Automatically check for a match when both results arrive
   useEffect(() => {
     if (invoiceResult && poResult) {
-      if (invoiceResult.totalAmount === poResult.totalAmount) {
-        setMatchStatus('Approved');
-      } else {
-        setMatchStatus('Rejected');
-      }
+      // Basic 3-Way Match Logic Demo: Checking if Totals match
+      const isMatch = invoiceResult.totalAmount === poResult.totalAmount;
+      const finalStatus = isMatch ? 'Approved' : 'Rejected';
+
+      setMatchStatus(finalStatus);
+
+      // 🔒 CREATE IMMUTABLE AUDIT LOG ENTRY
+      const newLog = {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toLocaleString(),
+        role: userRole,
+        invoiceName: invoiceFile?.name || 'Unknown Invoice',
+        poName: poFile?.name || 'Unknown PO',
+        status: finalStatus
+      };
+
+      // Prepend the new log so the newest is always at the top
+      setAuditLogs(prevLogs => [newLog, ...prevLogs]);
     }
   }, [invoiceResult, poResult]);
 
@@ -42,7 +59,7 @@ export default function Upload() {
     if (e.target.files && e.target.files[0]) {
       if (type === 'invoice') setInvoiceFile(e.target.files[0]);
       if (type === 'po') setPoFile(e.target.files[0]);
-      
+
       setError(null);
       setInvoiceResult(null);
       setPoResult(null);
@@ -66,9 +83,10 @@ export default function Upload() {
     invoiceFormData.append('invoiceFile', invoiceFile);
 
     const poFormData = new FormData();
-    poFormData.append('invoiceFile', poFile); 
+    poFormData.append('invoiceFile', poFile);
 
     try {
+      // Send BOTH files to the backend in parallel
       const [invoiceRes, poRes] = await Promise.all([
         axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', invoiceFormData, { headers: { 'Content-Type': 'multipart/form-data' } }),
         axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', poFormData, { headers: { 'Content-Type': 'multipart/form-data' } })
@@ -94,7 +112,7 @@ export default function Upload() {
     if (!data) {
       return (
         <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border-t-4 ${borderColor} overflow-hidden h-full flex flex-col transition-colors`}>
-           <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-b border-slate-100 dark:border-slate-800 transition-colors">
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-b border-slate-100 dark:border-slate-800 transition-colors">
             <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">{title}</h3>
           </div>
           <div className="p-6 text-sm text-slate-400 dark:text-slate-500 italic flex-grow">No data available.</div>
@@ -107,9 +125,8 @@ export default function Upload() {
         <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-b border-slate-100 dark:border-slate-800 transition-colors">
           <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">{title}</h3>
         </div>
-        
+
         <div className="p-6 flex-grow flex flex-col">
-          {/* Metadata Grid */}
           <div className="grid grid-cols-2 gap-y-4 gap-x-4 mb-6">
             <div>
               <p className="text-xs uppercase text-slate-400 dark:text-slate-500 font-bold mb-1">Vendor Name</p>
@@ -139,7 +156,6 @@ export default function Upload() {
             </div>
           </div>
 
-          {/* Line Items Table */}
           <div className="mb-6 flex-grow">
             <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Line Items</h4>
             {data.lineItems && data.lineItems.length > 0 ? (
@@ -170,7 +186,6 @@ export default function Upload() {
             )}
           </div>
 
-          {/* Bank & Terms */}
           <div className="space-y-3 mb-6 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800 transition-colors">
             <div>
               <p className="text-xs uppercase text-slate-400 dark:text-slate-500 font-bold">Bank Details</p>
@@ -182,7 +197,6 @@ export default function Upload() {
             </div>
           </div>
 
-          {/* Financial Summary (Bottom pinned) */}
           <div className="mt-auto border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2 transition-colors">
             <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400">
               <span className="font-bold">Subtotal:</span>
@@ -199,7 +213,7 @@ export default function Upload() {
               </span>
             </div>
           </div>
-          
+
         </div>
       </div>
     );
@@ -208,14 +222,14 @@ export default function Upload() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 pb-12">
       <div className="max-w-[1400px] mx-auto p-6">
-        
+
         {/* Header with Dark Mode Toggle */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 pt-4">
           <div>
             <h1 className="text-3xl font-black text-slate-800 dark:text-slate-100 transition-colors">Reconciliation Command Center</h1>
             <p className="text-slate-500 dark:text-slate-400 mt-1 transition-colors">Upload vendor documents for automated 3-way matching and discrepancy detection.</p>
           </div>
-          <button 
+          <button
             onClick={() => setIsDarkMode(!isDarkMode)}
             className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full font-bold text-slate-600 dark:text-slate-300 shadow-sm hover:shadow transition-all"
           >
@@ -224,18 +238,31 @@ export default function Upload() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
+
           {/* ================= LEFT COLUMN: CONTROL PANEL ================= */}
           <div className="lg:col-span-4 xl:col-span-3 space-y-6">
-            
+
+            {/* Identity Selector */}
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+              <h3 className="font-bold text-slate-700 dark:text-slate-200 mb-3 text-xs uppercase tracking-wider">Submitted By</h3>
+              <select
+                value={userRole}
+                onChange={(e) => setUserRole(e.target.value)}
+                className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              >
+                <option value="Finance Team">🏢 Finance Team (Internal)</option>
+                <option value="Supplier">🚚 Supplier (External Vendor)</option>
+              </select>
+            </div>
+
             {/* Invoice Upload */}
             <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
               <h3 className="font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
-                <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 px-2 py-1 rounded text-xs">1</span> 
+                <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 px-2 py-1 rounded text-xs">1</span>
                 Upload Invoice
               </h3>
-              <input 
-                type="file" 
+              <input
+                type="file"
                 onChange={(e) => handleFileChange(e, 'invoice')}
                 className="block w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 dark:file:bg-blue-900/30 file:text-blue-700 dark:file:text-blue-400 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/50 cursor-pointer transition-colors"
               />
@@ -244,23 +271,22 @@ export default function Upload() {
             {/* PO Upload */}
             <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
               <h3 className="font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
-                <span className="bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400 px-2 py-1 rounded text-xs">2</span> 
+                <span className="bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400 px-2 py-1 rounded text-xs">2</span>
                 Upload Purchase Order
               </h3>
-              <input 
-                type="file" 
+              <input
+                type="file"
                 onChange={(e) => handleFileChange(e, 'po')}
                 className="block w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 dark:file:bg-purple-900/30 file:text-purple-700 dark:file:text-purple-400 hover:file:bg-purple-100 dark:hover:file:bg-purple-900/50 cursor-pointer transition-colors"
               />
             </div>
 
             {/* Action Button */}
-            <button 
+            <button
               onClick={handleUpload}
               disabled={loading || !invoiceFile || !poFile}
-              className={`w-full py-4 rounded-xl font-bold text-white transition-all shadow-md ${
-                loading || !invoiceFile || !poFile ? 'bg-slate-300 dark:bg-slate-800 cursor-not-allowed shadow-none text-slate-500 dark:text-slate-500' : 'bg-slate-800 dark:bg-blue-600 hover:bg-black dark:hover:bg-blue-500'
-              }`}
+              className={`w-full py-4 rounded-xl font-bold text-white transition-all shadow-md ${loading || !invoiceFile || !poFile ? 'bg-slate-300 dark:bg-slate-800 cursor-not-allowed shadow-none text-slate-500 dark:text-slate-500' : 'bg-slate-800 dark:bg-blue-600 hover:bg-black dark:hover:bg-blue-500'
+                }`}
             >
               {loading ? "Extracting Data..." : "Extract & Compare Data"}
             </button>
@@ -274,7 +300,7 @@ export default function Upload() {
 
           {/* ================= RIGHT COLUMN: DASHBOARD ================= */}
           <div className="lg:col-span-8 xl:col-span-9 space-y-6">
-            
+
             {/* Status Widget */}
             <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors">
               <div>
@@ -292,22 +318,72 @@ export default function Upload() {
             {/* Comparison View */}
             {(invoiceResult || poResult) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-                <DocumentCard 
-                  title="Invoice Data" 
-                  data={invoiceResult} 
-                  borderColor="border-blue-500" 
+                <DocumentCard
+                  title="Invoice Data"
+                  data={invoiceResult}
+                  borderColor="border-blue-500"
                   themeColor="text-blue-600 dark:text-blue-400"
                   isApproved={matchStatus === 'Approved'}
                 />
-                <DocumentCard 
-                  title="Purchase Order Data" 
-                  data={poResult} 
-                  borderColor="border-purple-500" 
+                <DocumentCard
+                  title="Purchase Order Data"
+                  data={poResult}
+                  borderColor="border-purple-500"
                   themeColor="text-purple-600 dark:text-purple-400"
                   isApproved={matchStatus === 'Approved'}
                 />
               </div>
             )}
+
+            {/* ================= BOTTOM ROW: AUDIT LOG ================= */}
+            <div className="mt-8 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-colors">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-5 border-b border-slate-100 dark:border-slate-800 transition-colors">
+                <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg flex items-center gap-2">
+                  🔒 Immutable System Audit Log
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Tracks all document submissions, originators, and matching outcomes.</p>
+              </div>
+
+              <div className="p-0 overflow-x-auto">
+                {auditLogs.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-slate-400 dark:text-slate-500 italic">
+                    No records found. Run an extraction to generate system logs.
+                  </div>
+                ) : (
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">
+                      <tr>
+                        <th className="p-4 font-bold border-b border-slate-100 dark:border-slate-700">Timestamp</th>
+                        <th className="p-4 font-bold border-b border-slate-100 dark:border-slate-700">Originator</th>
+                        <th className="p-4 font-bold border-b border-slate-100 dark:border-slate-700">Invoice File</th>
+                        <th className="p-4 font-bold border-b border-slate-100 dark:border-slate-700">PO File</th>
+                        <th className="p-4 font-bold border-b border-slate-100 dark:border-slate-700">System Decision</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {auditLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="p-4 text-slate-600 dark:text-slate-400 font-mono text-xs">{log.timestamp}</td>
+                          <td className="p-4 font-medium text-slate-800 dark:text-slate-200">
+                            {log.role === 'Finance Team' ? '🏢 ' : '🚚 '}
+                            {log.role}
+                          </td>
+                          <td className="p-4 text-blue-600 dark:text-blue-400 max-w-[150px] truncate" title={log.invoiceName}>{log.invoiceName}</td>
+                          <td className="p-4 text-purple-600 dark:text-purple-400 max-w-[150px] truncate" title={log.poName}>{log.poName}</td>
+                          <td className="p-4">
+                            <span className={`px-2 py-1 text-xs font-black rounded-md uppercase tracking-wide ${log.status === 'Approved' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400'
+                                : 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
+                              }`}>
+                              {log.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
 
           </div>
         </div>
