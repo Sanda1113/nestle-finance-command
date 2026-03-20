@@ -15,31 +15,8 @@ export default function Upload() {
   const [poResult, setPoResult] = useState(null);
   const [error, setError] = useState(null);
 
-  // Match & Ledger States
+  // Match Status State
   const [matchStatus, setMatchStatus] = useState('Pending'); // Pending, Approved, Rejected, Error
-  const [isLogged, setIsLogged] = useState(false); // Tracks if current match is saved to ledger
-
-  // Mock Database State for the Audit Log
-  const [auditLogs, setAuditLogs] = useState([
-    {
-      id: "LOG-99321",
-      timestamp: "2026-03-20 09:15 AM",
-      invoiceNumber: "INV-44120",
-      poNumber: "2412/2019",
-      amount: 204.75,
-      status: "Approved",
-      submittedBy: "Supplier",
-    },
-    {
-      id: "LOG-99320",
-      timestamp: "2026-03-19 04:30 PM",
-      invoiceNumber: "INV-8891",
-      poNumber: "PO-7761",
-      amount: 1550.00,
-      status: "Rejected",
-      submittedBy: "Finance Team",
-    }
-  ]);
 
   // Handle Dark Mode Toggle
   useEffect(() => {
@@ -70,7 +47,6 @@ export default function Upload() {
       setInvoiceResult(null);
       setPoResult(null);
       setMatchStatus('Pending');
-      setIsLogged(false);
     }
   };
 
@@ -85,7 +61,6 @@ export default function Upload() {
     setPoResult(null);
     setError(null);
     setMatchStatus('Pending');
-    setIsLogged(false);
 
     const invoiceFormData = new FormData();
     invoiceFormData.append('invoiceFile', invoiceFile);
@@ -112,22 +87,6 @@ export default function Upload() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Function to lock the active comparison into the Audit Log
-  const handleCommitToLedger = () => {
-    const newLog = {
-      id: `LOG-${Math.floor(Math.random() * 100000)}`,
-      timestamp: new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' }),
-      invoiceNumber: invoiceResult.invoiceNumber,
-      poNumber: poResult.poNumber !== 'Not Found' ? poResult.poNumber : poResult.invoiceNumber,
-      amount: invoiceResult.totalAmount,
-      status: matchStatus,
-      submittedBy: "Finance Team", // Hardcoded for demo
-    };
-
-    setAuditLogs([newLog, ...auditLogs]); // Add to top of the list
-    setIsLogged(true);
   };
 
   // Helper component for identical Document Cards
@@ -307,21 +266,7 @@ export default function Upload() {
                 {matchStatus === 'Pending' && <span className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black rounded-lg uppercase tracking-wide inline-block transition-colors">Pending</span>}
                 {matchStatus === 'Approved' && <span className="px-4 py-2 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-black rounded-lg uppercase tracking-wide inline-block shadow-sm transition-colors">✅ Approved Match</span>}
                 {matchStatus === 'Rejected' && <span className="px-4 py-2 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 font-black rounded-lg uppercase tracking-wide inline-block shadow-sm transition-colors">❌ Discrepancy</span>}
-
-                {/* Submit to Ledger Button */}
-                {(matchStatus === 'Approved' || matchStatus === 'Rejected') && !isLogged && (
-                  <button
-                    onClick={handleCommitToLedger}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors shadow-sm"
-                  >
-                    Commit to Ledger
-                  </button>
-                )}
-                {isLogged && (
-                  <span className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg shadow-sm">
-                    🔒 Logged
-                  </span>
-                )}
+                {matchStatus === 'Error' && <span className="px-4 py-2 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 font-black rounded-lg uppercase tracking-wide inline-block transition-colors">⚠️ System Error</span>}
               </div>
             </div>
 
@@ -343,75 +288,6 @@ export default function Upload() {
                 />
               </div>
             )}
-          </div>
-        </div>
-
-        {/* ================= IMMUTABLE AUDIT LOG WIDGET ================= */}
-        <div className="mt-12 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-colors">
-          <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 flex justify-between items-center transition-colors">
-            <div>
-              <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                Immutable Audit Log
-              </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Cryptographically secure record of all reconciliation workflows.</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-50/50 dark:bg-slate-900 text-xs uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider">
-                <tr>
-                  <th className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">Timestamp</th>
-                  <th className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">Document Refs (INV / PO)</th>
-                  <th className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">Total Amount</th>
-                  <th className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">Workflow State</th>
-                  <th className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">Submitted By</th>
-                  <th className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 text-right">Audit Proof</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm text-slate-700 dark:text-slate-300">
-                {auditLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="font-mono text-xs">{log.timestamp}</span>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{log.id}</div>
-                    </td>
-                    <td className="px-6 py-4 font-semibold">
-                      <div className="text-blue-600 dark:text-blue-400">{log.invoiceNumber}</div>
-                      <div className="text-purple-600 dark:text-purple-400">{log.poNumber}</div>
-                    </td>
-                    <td className="px-6 py-4 font-black">
-                      ${log.amount?.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4">
-                      {log.status === 'Approved' ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50">
-                          Approved
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800/50">
-                          Rejected
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="flex items-center gap-2">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${log.submittedBy === 'Supplier' ? 'bg-indigo-500' : 'bg-slate-700'}`}>
-                          {log.submittedBy.charAt(0)}
-                        </div>
-                        {log.submittedBy}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-semibold text-xs border border-blue-200 dark:border-blue-800/50 px-3 py-1.5 rounded bg-white dark:bg-slate-800 opacity-70 group-hover:opacity-100 transition-all">
-                        View Documents
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
 
