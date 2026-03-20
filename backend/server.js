@@ -11,7 +11,7 @@ if (process.env.NODE_ENV !== 'production') {
 const app = express();
 const port = process.env.PORT || 8080;
 
-app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
+app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS', 'PATCH'] }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
@@ -151,7 +151,6 @@ app.post('/api/save-reconciliation', async (req, res) => {
     try {
         console.log(`💾 Auto-Saving to Database: ${matchStatus}`);
 
-        // 1. Invoices Table (Exactly matching Image 1: removed vendor_name)
         const { error: invErr } = await supabase.from('invoices').insert([{ 
             invoice_number: invoiceData.invoiceNumber, 
             extracted_amount: invoiceData.totalAmount,
@@ -159,7 +158,6 @@ app.post('/api/save-reconciliation', async (req, res) => {
         }]);
         if (invErr) console.error("Invoice Insert Error:", invErr);
 
-        // 2. Purchase Orders Table (Exactly matching Image 3: removed vendor_name)
         const { error: poErr } = await supabase.from('purchase_orders').insert([{ 
             po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : poData.invoiceNumber, 
             total_amount: poData.totalAmount,
@@ -167,7 +165,6 @@ app.post('/api/save-reconciliation', async (req, res) => {
         }]);
         if (poErr) console.error("PO Insert Error:", poErr);
 
-        // 3. Reconciliations Table (Exactly matching Image 4: keeping vendor_name)
         const { error: reconErr } = await supabase.from('reconciliations').insert([{ 
             vendor_name: invoiceData.vendorName,
             invoice_number: invoiceData.invoiceNumber, 
@@ -182,6 +179,47 @@ app.post('/api/save-reconciliation', async (req, res) => {
     } catch (error) {
         console.error('❌ DB Save Error:', error.message);
         res.status(500).json({ error: 'Failed to save to DB', details: error.message });
+    }
+});
+
+// ==========================================
+// 🚀 FINANCE PORTAL ENDPOINTS
+// ==========================================
+
+// 1. Fetch all reconciliations for the Finance Dashboard
+app.get('/api/reconciliations', async (req, res) => {
+    try {
+        console.log('📊 Fetching all reconciliations for Finance Portal...');
+        const { data, error } = await supabase
+            .from('reconciliations')
+            .select('*')
+            .order('id', { ascending: false }); // Show newest first
+
+        if (error) throw error;
+        res.json({ success: true, data });
+    } catch (error) {
+        console.error('❌ Fetch Error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch data', details: error.message });
+    }
+});
+
+// 2. Finance Team Manual Override (Approve/Reject)
+app.patch('/api/reconciliations/:id', async (req, res) => {
+    const { id } = req.params;
+    const { newStatus } = req.body;
+
+    try {
+        console.log(`✍️ Finance Team manually updating Record ${id} to ${newStatus}`);
+        const { data, error } = await supabase
+            .from('reconciliations')
+            .update({ match_status: newStatus })
+            .eq('id', id);
+
+        if (error) throw error;
+        res.json({ success: true, message: 'Status updated successfully' });
+    } catch (error) {
+        console.error('❌ Update Error:', error.message);
+        res.status(500).json({ error: 'Failed to update status', details: error.message });
     }
 });
 
