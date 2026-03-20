@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const mindee = require('mindee');
-const supabase = require('./db'); // Import Supabase connection
+const supabase = require('./db');
 
 if (process.env.NODE_ENV !== 'production') {
     require('dotenv').config();
@@ -151,7 +151,7 @@ app.post('/api/save-reconciliation', async (req, res) => {
     try {
         console.log(`💾 Auto-Saving to Database: ${matchStatus}`);
 
-        // 1. Invoices Table (matching your screenshot)
+        // 1. Invoices Table (Exactly matching Image 1: removed vendor_name)
         const { error: invErr } = await supabase.from('invoices').insert([{ 
             invoice_number: invoiceData.invoiceNumber, 
             extracted_amount: invoiceData.totalAmount,
@@ -159,7 +159,7 @@ app.post('/api/save-reconciliation', async (req, res) => {
         }]);
         if (invErr) console.error("Invoice Insert Error:", invErr);
 
-        // 2. Purchase Orders Table (matching your screenshot)
+        // 2. Purchase Orders Table (Exactly matching Image 3: removed vendor_name)
         const { error: poErr } = await supabase.from('purchase_orders').insert([{ 
             po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : poData.invoiceNumber, 
             total_amount: poData.totalAmount,
@@ -167,7 +167,7 @@ app.post('/api/save-reconciliation', async (req, res) => {
         }]);
         if (poErr) console.error("PO Insert Error:", poErr);
 
-        // 3. Reconciliations Table (The main audit log)
+        // 3. Reconciliations Table (Exactly matching Image 4: keeping vendor_name)
         const { error: reconErr } = await supabase.from('reconciliations').insert([{ 
             vendor_name: invoiceData.vendorName,
             invoice_number: invoiceData.invoiceNumber, 
