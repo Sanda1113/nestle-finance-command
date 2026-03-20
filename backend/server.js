@@ -1,9 +1,12 @@
-require('dotenv').config();  // Load .env file
-console.log('Loaded key:', process.env.MINDEE_V2_API_KEY);
+// server.js - using dynamic import for Mindee (ES module)
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
-const mindee = require('mindee');
+
+// Load dotenv only in development (optional)
+if (process.env.NODE_ENV !== 'production') {
+    require('dotenv').config();
+}
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -17,14 +20,20 @@ app.get('/', (req, res) => {
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Mindee client – uses MINDEE_V2_API_KEY from environment (or passed directly)
-const mindeeClient = new mindee.Client({
-    apiKey: process.env.MINDEE_V2_API_KEY,
-});
+// Mindee client will be initialized dynamically
+let mindeeClient;
 
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+        // Dynamically import Mindee (ES module) and initialize client if needed
+        if (!mindeeClient) {
+            const mindee = await import('mindee');
+            mindeeClient = new mindee.default.Client({
+                apiKey: process.env.MINDEE_V2_API_KEY,
+            });
+        }
 
         const input = mindeeClient.docFromBuffer(req.file.buffer, req.file.originalname);
         const response = await mindeeClient.parse(mindee.InvoiceV4, input);
