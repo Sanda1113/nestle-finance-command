@@ -14,10 +14,35 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Nestle Finance Backend (Data Hunter Edition) is Awake!');
+    res.status(200).send('✅ Nestle Finance Backend (Precision Mapper) is Awake!');
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
+
+// 🛡️ THE UNIVERSAL DECRYPTOR
+function cleanMindeeObject(obj) {
+    if (obj === null || obj === undefined) return null;
+    if (typeof obj !== 'object') return obj;
+    if (obj.values && Array.isArray(obj.values)) return obj.values.map(item => cleanMindeeObject(item));
+    if (obj.value !== undefined && typeof obj.value !== 'object') return obj.value;
+    if (obj.content !== undefined && typeof obj.content !== 'object') return obj.content;
+    if (Array.isArray(obj)) return obj.map(item => cleanMindeeObject(item));
+    if (typeof obj.entries === 'function') {
+        const cleaned = {};
+        for (const [key, val] of obj.entries()) {
+            if (key !== 'polygon' && key !== 'confidence' && key !== 'boundingBox') cleaned[key] = cleanMindeeObject(val);
+        }
+        return cleaned;
+    }
+    const cleaned = {};
+    let targetObj = obj.value && typeof obj.value === 'object' ? obj.value : obj;
+    for (const key of Object.keys(targetObj)) {
+        if (key !== 'polygon' && key !== 'confidence' && key !== 'boundingBox' && !key.startsWith('_')) {
+            cleaned[key] = cleanMindeeObject(targetObj[key]);
+        }
+    }
+    return cleaned;
+}
 
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
@@ -42,85 +67,75 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             productParams
         );
 
-        // 1. Get the raw fields Map from the Custom Model
-        const fields = response.document?.inference?.prediction?.fields || response.inference?.result?.fields || {};
+        const rawFields = response.document?.inference?.prediction?.fields || response.inference?.result?.fields || {};
+        const pureJson = cleanMindeeObject(rawFields);
 
-        // 2. 🛡️ THE DATA HUNTER: Recursively digs out text from Mindee's custom classes
-        const findValue = (obj) => {
+        // --- 🎯 PRECISION HELPERS BASED ON YOUR EXACT LOGS ---
+
+        // Addresses are inside { fields: { address: "..." } }
+        const getAddressText = (obj) => {
             if (!obj) return null;
-            if (typeof obj === 'string' || typeof obj === 'number') return obj;
-            if (obj.content !== undefined) return obj.content;
-            if (obj.value !== undefined) return obj.value;
-            // For Nested Address Objects in your schema
-            if (obj.address) return findValue(obj.address);
-            // Dig into Arrays
-            if (Array.isArray(obj) && obj.length > 0) return findValue(obj[0]);
-            if (obj.values && Array.isArray(obj.values) && obj.values.length > 0) return findValue(obj.values[0]);
+            if (typeof obj === 'string') return obj;
+            if (obj.fields && obj.fields.address) return obj.fields.address;
+            if (obj.address) return obj.address;
             return null;
         };
 
-        const getVal = (key) => {
-            let field = null;
-            if (fields && typeof fields.get === 'function') field = fields.get(key);
-            else if (fields) field = fields[key];
-            return findValue(field);
+        const getVal = (val) => {
+            if (val === null || val === undefined) return null;
+            if (typeof val === 'object' && val.value !== undefined) return val.value;
+            return val;
         };
 
-        const getNum = (key) => {
-            const val = getVal(key);
-            if (!val) return 0.00;
-            const cleanVal = val.toString().replace(/[^0-9.-]+/g, "");
+        const getNum = (val) => {
+            const v = getVal(val);
+            if (!v) return 0.00;
+            const cleanVal = v.toString().replace(/[^0-9.-]+/g, "");
             return parseFloat(cleanVal) || 0.00;
         };
 
-        // 3. 🚀 EXTRACT LINE ITEMS (Table Rows)
-        let mappedLineItems = [];
-        let rawLineItems = null;
-        if (fields && typeof fields.get === 'function') rawLineItems = fields.get('line_items');
-        else if (fields) rawLineItems = fields['line_items'];
+        // Line Items are inside line_items.items, and each has a .fields wrapper
+        const rawItems = pureJson.line_items?.items || [];
+        const mappedLineItems = rawItems.map(item => {
+            const f = item.fields || item;
+            return {
+                qty: getVal(f.quantity) || '1',
+                description: getVal(f.description) || 'Item',
+                unitPrice: `$${parseFloat(getVal(f.unit_price) || 0).toFixed(2)}`,
+                amount: `$${parseFloat(getVal(f.total_price) || getVal(f.amount) || 0).toFixed(2)}`
+            };
+        });
 
-        if (rawLineItems) {
-            // Find the array holding the table rows
-            let rows = [];
-            if (Array.isArray(rawLineItems)) rows = rawLineItems;
-            else if (Array.isArray(rawLineItems.values)) rows = rawLineItems.values;
-
-            mappedLineItems = rows.map(row => {
-                const getCol = (colKey) => {
-                    let colData = null;
-                    if (row && typeof row.get === 'function') colData = row.get(colKey);
-                    else if (row) colData = row[colKey];
-                    return findValue(colData);
-                };
-
-                return {
-                    qty: getCol('quantity') || '1',
-                    description: getCol('description') || 'Item',
-                    unitPrice: `$${parseFloat(getCol('unit_price') || 0).toFixed(2)}`,
-                    amount: `$${parseFloat(getCol('total_price') || 0).toFixed(2)}`
-                };
-            });
+        // Bank Details are inside supplier_payment_details.items
+        const rawBank = pureJson.supplier_payment_details?.items || [];
+        let bankString = 'Not Found';
+        if (rawBank.length > 0) {
+            const bFields = rawBank[0].fields || rawBank[0];
+            bankString = `Account: ${getVal(bFields.account_number) || 'N/A'}, Routing: ${getVal(bFields.routing_number) || 'N/A'}`;
         }
 
-        // 4. MAP TO NEHAA'S FRONTEND DASHBOARD
+        // --- FINAL MAPPING ---
         const extractedData = {
-            vendorName: getVal('supplier_name') || 'Unknown Vendor',
-            vendorAddress: getVal('supplier_address') || 'Not Found',
-            invoiceNumber: getVal('invoice_number') || 'Not Found',
-            invoiceDate: getVal('date') || 'Not Found',
-            poNumber: getVal('po_number') || 'Not Found',
-            dueDate: getVal('due_date') || 'Not Found',
-            billTo: getVal('customer_name') || 'Not Found',
-            shipTo: getVal('shipping_address') || 'Not Found',
-            subtotal: getNum('total_net'),
-            salesTax: getNum('total_tax'),
-            totalAmount: getNum('total_amount'),
+            vendorName: getVal(pureJson.supplier_name) || 'Unknown Vendor',
+            vendorAddress: getAddressText(pureJson.supplier_address) || 'Not Found',
+            invoiceNumber: getVal(pureJson.invoice_number) || 'Not Found',
+            invoiceDate: getVal(pureJson.date) || getVal(pureJson.invoice_date) || 'Not Found',
+            poNumber: getVal(pureJson.po_number) || getVal(pureJson.reference_numbers) || 'Not Found',
+            dueDate: getVal(pureJson.due_date) || 'Not Found',
+
+            // For Bill To, we check customer_address, then fallback to customer_name
+            billTo: getAddressText(pureJson.customer_address) || getVal(pureJson.customer_name) || 'Not Found',
+            shipTo: getAddressText(pureJson.shipping_address) || 'Not Found',
+
+            subtotal: getNum(pureJson.total_net),
+            salesTax: getNum(pureJson.total_tax),
+            totalAmount: getNum(pureJson.total_amount),
             terms: 'Check Due Date',
-            bankDetails: 'Securely Processed',
+            bankDetails: bankString,
             lineItems: mappedLineItems.length > 0 ? mappedLineItems : null
         };
 
-        console.log('✅ Extraction Complete! Sending to Frontend.');
+        console.log('✅ Extraction Complete! Sending to frontend.');
         res.json({ success: true, extractedData });
 
     } catch (error) {
