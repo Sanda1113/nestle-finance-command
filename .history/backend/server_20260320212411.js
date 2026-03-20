@@ -14,7 +14,7 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Nestle Finance Backend (Crash-Proof Edition) is Awake!');
+    res.status(200).send('✅ Nestle Finance Backend (Precision Mapper) is Awake!');
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -70,49 +70,28 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         const rawFields = response.document?.inference?.prediction?.fields || response.inference?.result?.fields || {};
         const pureJson = cleanMindeeObject(rawFields);
 
-        // --- 🛡️ THE CRASH PREVENTER ---
-        // This guarantees we NEVER send an object to React. Only Strings or null.
-        const getSafeString = (val) => {
-            if (val === null || val === undefined) return null;
-            if (typeof val === 'string' || typeof val === 'number') return String(val).trim();
+        // --- 🎯 PRECISION HELPERS BASED ON YOUR EXACT LOGS ---
 
-            if (typeof val === 'object') {
-                if (val.value !== undefined && val.value !== null) return String(val.value).trim();
-                if (val.content !== undefined && val.content !== null) return String(val.content).trim();
-
-                // If Mindee returns { items: [...] } (This caused Error #31!)
-                if (val.items && Array.isArray(val.items)) {
-                    if (val.items.length === 0) return null;
-                    return getSafeString(val.items[0]);
-                }
-
-                // If it's a standard Array
-                if (Array.isArray(val) && val.length > 0) return getSafeString(val[0]);
-
-                // If Mindee returns { fields: {...} }
-                if (val.fields) return getSafeString(val.fields);
-            }
-
-            // If it's an unreadable object, destroy it so React doesn't crash
+        // Addresses are inside { fields: { address: "..." } }
+        const getAddressText = (obj) => {
+            if (!obj) return null;
+            if (typeof obj === 'string') return obj;
+            if (obj.fields && obj.fields.address) return obj.fields.address;
+            if (obj.address) return obj.address;
             return null;
+        };
+
+        const getVal = (val) => {
+            if (val === null || val === undefined) return null;
+            if (typeof val === 'object' && val.value !== undefined) return val.value;
+            return val;
         };
 
         const getNum = (val) => {
-            const strVal = getSafeString(val);
-            if (!strVal) return 0.00;
-            const cleanVal = strVal.replace(/[^0-9.-]+/g, "");
+            const v = getVal(val);
+            if (!v) return 0.00;
+            const cleanVal = v.toString().replace(/[^0-9.-]+/g, "");
             return parseFloat(cleanVal) || 0.00;
-        };
-
-        const getAddressText = (obj) => {
-            if (!obj) return null;
-            const str = getSafeString(obj);
-            if (str) return str; // If getSafeString cracked it, use it
-
-            // If it's a deeply nested address object
-            if (obj.fields && obj.fields.address) return getSafeString(obj.fields.address);
-            if (obj.address) return getSafeString(obj.address);
-            return null;
         };
 
         // Line Items are inside line_items.items, and each has a .fields wrapper
@@ -120,10 +99,10 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         const mappedLineItems = rawItems.map(item => {
             const f = item.fields || item;
             return {
-                qty: getSafeString(f.quantity) || '1',
-                description: getSafeString(f.description) || 'Item',
-                unitPrice: `$${parseFloat(getSafeString(f.unit_price) || 0).toFixed(2)}`,
-                amount: `$${parseFloat(getSafeString(f.total_price) || getSafeString(f.amount) || 0).toFixed(2)}`
+                qty: getVal(f.quantity) || '1',
+                description: getVal(f.description) || 'Item',
+                unitPrice: `$${parseFloat(getVal(f.unit_price) || 0).toFixed(2)}`,
+                amount: `$${parseFloat(getVal(f.total_price) || getVal(f.amount) || 0).toFixed(2)}`
             };
         });
 
@@ -132,19 +111,22 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         let bankString = 'Not Found';
         if (rawBank.length > 0) {
             const bFields = rawBank[0].fields || rawBank[0];
-            bankString = `Account: ${getSafeString(bFields.account_number) || 'N/A'}, Routing: ${getSafeString(bFields.routing_number) || 'N/A'}`;
+            bankString = `Account: ${getVal(bFields.account_number) || 'N/A'}, Routing: ${getVal(bFields.routing_number) || 'N/A'}`;
         }
 
         // --- FINAL MAPPING ---
         const extractedData = {
-            vendorName: getSafeString(pureJson.supplier_name) || 'Unknown Vendor',
+            vendorName: getVal(pureJson.supplier_name) || 'Unknown Vendor',
             vendorAddress: getAddressText(pureJson.supplier_address) || 'Not Found',
-            invoiceNumber: getSafeString(pureJson.invoice_number) || 'Not Found',
-            invoiceDate: getSafeString(pureJson.date) || getSafeString(pureJson.invoice_date) || 'Not Found',
-            poNumber: getSafeString(pureJson.po_number) || getSafeString(pureJson.reference_numbers) || 'Not Found',
-            dueDate: getSafeString(pureJson.due_date) || 'Not Found',
-            billTo: getAddressText(pureJson.customer_address) || getSafeString(pureJson.customer_name) || 'Not Found',
+            invoiceNumber: getVal(pureJson.invoice_number) || 'Not Found',
+            invoiceDate: getVal(pureJson.date) || getVal(pureJson.invoice_date) || 'Not Found',
+            poNumber: getVal(pureJson.po_number) || getVal(pureJson.reference_numbers) || 'Not Found',
+            dueDate: getVal(pureJson.due_date) || 'Not Found',
+
+            // For Bill To, we check customer_address, then fallback to customer_name
+            billTo: getAddressText(pureJson.customer_address) || getVal(pureJson.customer_name) || 'Not Found',
             shipTo: getAddressText(pureJson.shipping_address) || 'Not Found',
+
             subtotal: getNum(pureJson.total_net),
             salesTax: getNum(pureJson.total_tax),
             totalAmount: getNum(pureJson.total_amount),
@@ -153,7 +135,7 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             lineItems: mappedLineItems.length > 0 ? mappedLineItems : null
         };
 
-        console.log('✅ Extraction Complete! Sending safe primitives to frontend.');
+        console.log('✅ Extraction Complete! Sending to frontend.');
         res.json({ success: true, extractedData });
 
     } catch (error) {
