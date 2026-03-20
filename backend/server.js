@@ -3,7 +3,6 @@ const cors = require('cors');
 const multer = require('multer');
 const mindee = require('mindee');
 
-// Load .env in development
 if (process.env.NODE_ENV !== 'production') {
     require('dotenv').config();
 }
@@ -15,7 +14,7 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'] }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Nestle Finance Backend (Mindee Custom Schema) is Awake!');
+    res.status(200).send('✅ Nestle Finance Backend (Data Hunter Edition) is Awake!');
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -27,16 +26,14 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         console.log('🚀 Sending to Mindee Custom Model...');
 
         const apiKey = process.env.MINDEE_V2_API_KEY;
-        if (!apiKey) throw new Error("Missing MINDEE_V2_API_KEY in environment variables.");
+        if (!apiKey) throw new Error("Missing MINDEE_V2_API_KEY.");
 
         const mindeeClient = new mindee.Client({ apiKey: apiKey });
-
         const inputSource = new mindee.BufferInput({
             buffer: req.file.buffer,
             filename: req.file.originalname || 'invoice.pdf'
         });
 
-        // Your exact Model ID
         const productParams = { modelId: "b3467dd3-63d2-4914-9791-a2dfadfbfe9a" };
 
         const response = await mindeeClient.enqueueAndGetResult(
@@ -45,15 +42,28 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             productParams
         );
 
-        // 1. Get the Custom Model Fields Object
-        const fields = response.inference.result.fields;
+        // 1. Get the raw fields Map from the Custom Model
+        const fields = response.document?.inference?.prediction?.fields || response.inference?.result?.fields || {};
 
-        // 2. 🛡️ SAFELY EXTRACT FROM MINDEE'S CUSTOM CLASS/MAP
+        // 2. 🛡️ THE DATA HUNTER: Recursively digs out text from Mindee's custom classes
+        const findValue = (obj) => {
+            if (!obj) return null;
+            if (typeof obj === 'string' || typeof obj === 'number') return obj;
+            if (obj.content !== undefined) return obj.content;
+            if (obj.value !== undefined) return obj.value;
+            // For Nested Address Objects in your schema
+            if (obj.address) return findValue(obj.address);
+            // Dig into Arrays
+            if (Array.isArray(obj) && obj.length > 0) return findValue(obj[0]);
+            if (obj.values && Array.isArray(obj.values) && obj.values.length > 0) return findValue(obj.values[0]);
+            return null;
+        };
+
         const getVal = (key) => {
-            // Check if it's a Map using .get(), otherwise treat as an object
-            const field = (typeof fields.get === 'function') ? fields.get(key) : fields[key];
-            if (!field) return null;
-            return field.value || field.content || field.text || null;
+            let field = null;
+            if (fields && typeof fields.get === 'function') field = fields.get(key);
+            else if (fields) field = fields[key];
+            return findValue(field);
         };
 
         const getNum = (key) => {
@@ -63,66 +73,58 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             return parseFloat(cleanVal) || 0.00;
         };
 
-        // 3. Map nested addresses and complex objects based on your schema
-        const getAddress = (key) => {
-            const field = (typeof fields.get === 'function') ? fields.get(key) : fields[key];
-            if (!field) return 'Not Found';
-
-            // Sometimes custom models store nested fields in a .values array or .address prop
-            if (field.address) return field.address;
-            if (field.value) return field.value;
-            if (field.content) return field.content;
-
-            // If it's a deeply nested object, just stringify the known text properties
-            if (typeof field === 'object') {
-                return [field.street_name, field.city, field.country].filter(Boolean).join(', ') || 'Not Found';
-            }
-            return 'Not Found';
-        };
-
-        // 4. Map Line Items Array
+        // 3. 🚀 EXTRACT LINE ITEMS (Table Rows)
         let mappedLineItems = [];
-        const rawLineItems = (typeof fields.get === 'function') ? fields.get('line_items') : fields['line_items'];
-        const itemsArray = rawLineItems?.values || rawLineItems?.elements || rawLineItems || [];
+        let rawLineItems = null;
+        if (fields && typeof fields.get === 'function') rawLineItems = fields.get('line_items');
+        else if (fields) rawLineItems = fields['line_items'];
 
-        if (Array.isArray(itemsArray)) {
-            mappedLineItems = itemsArray.map(item => {
-                const getProp = (propKey) => {
-                    const p = item[propKey] || (typeof item.get === 'function' ? item.get(propKey) : null);
-                    return p?.value || p?.content || p || '';
+        if (rawLineItems) {
+            // Find the array holding the table rows
+            let rows = [];
+            if (Array.isArray(rawLineItems)) rows = rawLineItems;
+            else if (Array.isArray(rawLineItems.values)) rows = rawLineItems.values;
+
+            mappedLineItems = rows.map(row => {
+                const getCol = (colKey) => {
+                    let colData = null;
+                    if (row && typeof row.get === 'function') colData = row.get(colKey);
+                    else if (row) colData = row[colKey];
+                    return findValue(colData);
                 };
+
                 return {
-                    qty: getProp('quantity') || '1',
-                    description: getProp('description') || 'Item',
-                    unitPrice: `$${parseFloat(getProp('unit_price') || 0).toFixed(2)}`,
-                    amount: `$${parseFloat(getProp('total_price') || 0).toFixed(2)}`
+                    qty: getCol('quantity') || '1',
+                    description: getCol('description') || 'Item',
+                    unitPrice: `$${parseFloat(getCol('unit_price') || 0).toFixed(2)}`,
+                    amount: `$${parseFloat(getCol('total_price') || 0).toFixed(2)}`
                 };
             });
         }
 
-        // 5. 🚀 EXACT MAPPING TO YOUR DATA-SCHEMA.JSON
+        // 4. MAP TO NEHAA'S FRONTEND DASHBOARD
         const extractedData = {
             vendorName: getVal('supplier_name') || 'Unknown Vendor',
-            vendorAddress: getAddress('supplier_address'),
+            vendorAddress: getVal('supplier_address') || 'Not Found',
             invoiceNumber: getVal('invoice_number') || 'Not Found',
             invoiceDate: getVal('date') || 'Not Found',
-            poNumber: getVal('po_number') || getVal('reference_numbers') || 'Not Found',
+            poNumber: getVal('po_number') || 'Not Found',
             dueDate: getVal('due_date') || 'Not Found',
             billTo: getVal('customer_name') || 'Not Found',
-            shipTo: getAddress('shipping_address') || 'Not Found',
+            shipTo: getVal('shipping_address') || 'Not Found',
             subtotal: getNum('total_net'),
             salesTax: getNum('total_tax'),
             totalAmount: getNum('total_amount'),
             terms: 'Check Due Date',
-            bankDetails: 'Processed Securely',
+            bankDetails: 'Securely Processed',
             lineItems: mappedLineItems.length > 0 ? mappedLineItems : null
         };
 
-        console.log('✅ Extraction Complete! Data:', JSON.stringify(extractedData, null, 2));
+        console.log('✅ Extraction Complete! Sending to Frontend.');
         res.json({ success: true, extractedData });
 
     } catch (error) {
-        console.error('❌ Mindee Custom SDK Error:', error.message);
+        console.error('❌ Data extraction error:', error.message);
         res.status(500).json({ error: 'Invoice processing failed', details: error.message });
     }
 });
