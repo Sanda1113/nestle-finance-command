@@ -1,4 +1,4 @@
-// server.js – uses dynamic import for Mindee (ES module)
+// server.js – uses dynamic import for Mindee (ES module) with Node 20+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -20,19 +20,20 @@ app.get('/', (req, res) => {
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Mindee client will be initialized dynamically
 let mindeeClient;
+let InvoiceV4;
 
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        // Dynamically import Mindee (ES module) and initialize client
+        // Dynamically import Mindee and initialize client once
         if (!mindeeClient) {
-            const { Client, InvoiceV4 } = await import('mindee');
+            const { default: Client, InvoiceV4: Invoice } = await import('mindee');
             mindeeClient = new Client({
                 apiKey: process.env.MINDEE_V2_API_KEY,
             });
+            InvoiceV4 = Invoice;
         }
 
         const input = mindeeClient.docFromBuffer(req.file.buffer, req.file.originalname);
