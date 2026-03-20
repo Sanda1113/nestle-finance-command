@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 export default function Upload() {
+  // Theme State
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
   // File States
   const [invoiceFile, setInvoiceFile] = useState(null);
   const [poFile, setPoFile] = useState(null);
@@ -15,10 +18,18 @@ export default function Upload() {
   // Match Status State
   const [matchStatus, setMatchStatus] = useState('Pending'); // Pending, Approved, Rejected, Error
 
+  // Handle Dark Mode Toggle
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
   // Automatically check for a match when both results arrive
   useEffect(() => {
     if (invoiceResult && poResult) {
-      // Basic 3-Way Match Logic Demo: Checking if Totals match
       if (invoiceResult.totalAmount === poResult.totalAmount) {
         setMatchStatus('Approved');
       } else {
@@ -55,10 +66,9 @@ export default function Upload() {
     invoiceFormData.append('invoiceFile', invoiceFile);
 
     const poFormData = new FormData();
-    poFormData.append('invoiceFile', poFile); // Using the same field name for the current backend endpoint
+    poFormData.append('invoiceFile', poFile); 
 
     try {
-      // Send BOTH files to the backend in parallel
       const [invoiceRes, poRes] = await Promise.all([
         axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', invoiceFormData, { headers: { 'Content-Type': 'multipart/form-data' } }),
         axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', poFormData, { headers: { 'Content-Type': 'multipart/form-data' } })
@@ -83,59 +93,59 @@ export default function Upload() {
   const DocumentCard = ({ title, data, borderColor, themeColor, isApproved }) => {
     if (!data) {
       return (
-        <div className={`bg-white rounded-2xl shadow-sm border-t-4 ${borderColor} overflow-hidden h-full flex flex-col`}>
-           <div className="bg-slate-50 p-4 border-b border-slate-100">
-            <h3 className="font-black text-slate-800 text-lg">{title}</h3>
+        <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border-t-4 ${borderColor} overflow-hidden h-full flex flex-col transition-colors`}>
+           <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-b border-slate-100 dark:border-slate-800 transition-colors">
+            <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">{title}</h3>
           </div>
-          <div className="p-6 text-sm text-slate-400 italic flex-grow">No data available.</div>
+          <div className="p-6 text-sm text-slate-400 dark:text-slate-500 italic flex-grow">No data available.</div>
         </div>
       );
     }
 
     return (
-      <div className={`bg-white rounded-2xl shadow-sm border-t-4 ${borderColor} overflow-hidden h-full flex flex-col`}>
-        <div className="bg-slate-50 p-4 border-b border-slate-100">
-          <h3 className="font-black text-slate-800 text-lg">{title}</h3>
+      <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm border-t-4 ${borderColor} overflow-hidden h-full flex flex-col transition-colors`}>
+        <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-b border-slate-100 dark:border-slate-800 transition-colors">
+          <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">{title}</h3>
         </div>
         
         <div className="p-6 flex-grow flex flex-col">
           {/* Metadata Grid */}
           <div className="grid grid-cols-2 gap-y-4 gap-x-4 mb-6">
             <div>
-              <p className="text-xs uppercase text-slate-400 font-bold mb-1">Vendor Name</p>
-              <p className="font-semibold text-slate-800 truncate" title={data.vendorName}>{data.vendorName}</p>
+              <p className="text-xs uppercase text-slate-400 dark:text-slate-500 font-bold mb-1">Vendor Name</p>
+              <p className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={data.vendorName}>{data.vendorName}</p>
             </div>
             <div>
-              <p className="text-xs uppercase text-slate-400 font-bold mb-1">Document #</p>
-              <p className="font-semibold text-slate-800 truncate" title={data.invoiceNumber}>{data.invoiceNumber}</p>
+              <p className="text-xs uppercase text-slate-400 dark:text-slate-500 font-bold mb-1">Document #</p>
+              <p className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={data.invoiceNumber}>{data.invoiceNumber}</p>
             </div>
             <div>
-              <p className="text-xs uppercase text-slate-400 font-bold mb-1">Date</p>
-              <p className="font-semibold text-slate-800">{data.invoiceDate}</p>
+              <p className="text-xs uppercase text-slate-400 dark:text-slate-500 font-bold mb-1">Date</p>
+              <p className="font-semibold text-slate-800 dark:text-slate-200">{data.invoiceDate}</p>
             </div>
             <div>
-              <p className="text-xs uppercase text-slate-400 font-bold mb-1">PO Reference</p>
-              <p className={`font-semibold truncate ${data.poNumber !== 'Not Found' ? themeColor : 'text-amber-600 italic'}`}>
+              <p className="text-xs uppercase text-slate-400 dark:text-slate-500 font-bold mb-1">PO Reference</p>
+              <p className={`font-semibold truncate ${data.poNumber !== 'Not Found' ? themeColor : 'text-amber-600 dark:text-amber-500 italic'}`}>
                 {data.poNumber}
               </p>
             </div>
             <div className="col-span-2">
-              <p className="text-xs uppercase text-slate-400 font-bold mb-1">Vendor Address</p>
-              <p className="text-sm text-slate-600 whitespace-pre-wrap leading-tight">{data.vendorAddress}</p>
+              <p className="text-xs uppercase text-slate-400 dark:text-slate-500 font-bold mb-1">Vendor Address</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-tight">{data.vendorAddress}</p>
             </div>
             <div className="col-span-2">
-              <p className="text-xs uppercase text-slate-400 font-bold mb-1">Bill To</p>
-              <p className="text-sm text-slate-600 whitespace-pre-wrap leading-tight">{data.billTo}</p>
+              <p className="text-xs uppercase text-slate-400 dark:text-slate-500 font-bold mb-1">Bill To</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-tight">{data.billTo}</p>
             </div>
           </div>
 
           {/* Line Items Table */}
           <div className="mb-6 flex-grow">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Line Items</h4>
+            <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Line Items</h4>
             {data.lineItems && data.lineItems.length > 0 ? (
-              <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                  <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 transition-colors">
                     <tr>
                       <th className="p-2 font-bold w-12">Qty</th>
                       <th className="p-2 font-bold">Description</th>
@@ -145,46 +155,46 @@ export default function Upload() {
                   </thead>
                   <tbody>
                     {data.lineItems.map((item, idx) => (
-                      <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                        <td className="p-2 text-slate-700">{item.qty}</td>
-                        <td className="p-2 font-medium text-slate-800 max-w-[120px] truncate" title={item.description}>{item.description || '-'}</td>
-                        <td className="p-2 text-right text-slate-600">{item.unitPrice}</td>
-                        <td className="p-2 text-right font-bold text-slate-800">{item.amount}</td>
+                      <tr key={idx} className="border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="p-2 text-slate-700 dark:text-slate-400">{item.qty}</td>
+                        <td className="p-2 font-medium text-slate-800 dark:text-slate-300 max-w-[120px] truncate" title={item.description}>{item.description || '-'}</td>
+                        <td className="p-2 text-right text-slate-600 dark:text-slate-400">{item.unitPrice}</td>
+                        <td className="p-2 text-right font-bold text-slate-800 dark:text-slate-200">{item.amount}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-lg border border-slate-100">No line items detected.</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 italic bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800 transition-colors">No line items detected.</p>
             )}
           </div>
 
           {/* Bank & Terms */}
-          <div className="space-y-3 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-100">
+          <div className="space-y-3 mb-6 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800 transition-colors">
             <div>
-              <p className="text-xs uppercase text-slate-400 font-bold">Bank Details</p>
-              <p className="text-xs font-medium text-slate-700 truncate" title={data.bankDetails}>{data.bankDetails}</p>
+              <p className="text-xs uppercase text-slate-400 dark:text-slate-500 font-bold">Bank Details</p>
+              <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate" title={data.bankDetails}>{data.bankDetails}</p>
             </div>
             <div>
-              <p className="text-xs uppercase text-slate-400 font-bold">Terms & Conditions</p>
-              <p className="text-xs font-medium text-slate-700">{data.terms}</p>
+              <p className="text-xs uppercase text-slate-400 dark:text-slate-500 font-bold">Terms & Conditions</p>
+              <p className="text-xs font-medium text-slate-700 dark:text-slate-300">{data.terms}</p>
             </div>
           </div>
 
           {/* Financial Summary (Bottom pinned) */}
-          <div className="mt-auto border-t border-slate-100 pt-4 space-y-2">
-            <div className="flex justify-between text-sm text-slate-600">
+          <div className="mt-auto border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2 transition-colors">
+            <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400">
               <span className="font-bold">Subtotal:</span>
               <span>${data.subtotal?.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-sm text-slate-600">
+            <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400">
               <span className="font-bold">Sales Tax:</span>
               <span>${data.salesTax?.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between font-black text-xl border-t border-slate-200 pt-2 mt-2">
-              <span className="text-slate-800">TOTAL:</span>
-              <span className={isApproved ? 'text-emerald-600' : themeColor}>
+            <div className="flex justify-between font-black text-xl border-t border-slate-200 dark:border-slate-700 pt-2 mt-2 transition-colors">
+              <span className="text-slate-800 dark:text-slate-100">TOTAL:</span>
+              <span className={isApproved ? 'text-emerald-600 dark:text-emerald-400' : themeColor}>
                 ${data.totalAmount?.toFixed(2)}
               </span>
             </div>
@@ -196,99 +206,110 @@ export default function Upload() {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto p-6">
-      
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-slate-800">Reconciliation Command Center</h1>
-        <p className="text-slate-500 mt-1">Upload vendor documents for automated 3-way matching and discrepancy detection.</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 pb-12">
+      <div className="max-w-[1400px] mx-auto p-6">
         
-        {/* ================= LEFT COLUMN: CONTROL PANEL ================= */}
-        <div className="lg:col-span-4 xl:col-span-3 space-y-6">
-          
-          {/* Invoice Upload */}
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-            <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">1</span> 
-              Upload Invoice
-            </h3>
-            <input 
-              type="file" 
-              onChange={(e) => handleFileChange(e, 'invoice')}
-              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-            />
+        {/* Header with Dark Mode Toggle */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 pt-4">
+          <div>
+            <h1 className="text-3xl font-black text-slate-800 dark:text-slate-100 transition-colors">Reconciliation Command Center</h1>
+            <p className="text-slate-500 dark:text-slate-400 mt-1 transition-colors">Upload vendor documents for automated 3-way matching and discrepancy detection.</p>
           </div>
-
-          {/* PO Upload */}
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-            <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-              <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">2</span> 
-              Upload Purchase Order
-            </h3>
-            <input 
-              type="file" 
-              onChange={(e) => handleFileChange(e, 'po')}
-              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer"
-            />
-          </div>
-
-          {/* Action Button */}
           <button 
-            onClick={handleUpload}
-            disabled={loading || !invoiceFile || !poFile}
-            className={`w-full py-4 rounded-xl font-bold text-white transition-all shadow-md ${
-              loading || !invoiceFile || !poFile ? 'bg-slate-300 cursor-not-allowed shadow-none' : 'bg-slate-800 hover:bg-black'
-            }`}
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full font-bold text-slate-600 dark:text-slate-300 shadow-sm hover:shadow transition-all"
           >
-            {loading ? "Extracting Data..." : "Extract & Compare Data"}
+            {isDarkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
           </button>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl text-sm font-medium">
-              {error}
-            </div>
-          )}
         </div>
 
-        {/* ================= RIGHT COLUMN: DASHBOARD ================= */}
-        <div className="lg:col-span-8 xl:col-span-9 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* Status Widget */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">Reconciliation Status</h2>
-              <p className="text-slate-600 text-sm">System comparison of Invoice vs. Purchase Order</p>
+          {/* ================= LEFT COLUMN: CONTROL PANEL ================= */}
+          <div className="lg:col-span-4 xl:col-span-3 space-y-6">
+            
+            {/* Invoice Upload */}
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+              <h3 className="font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
+                <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 px-2 py-1 rounded text-xs">1</span> 
+                Upload Invoice
+              </h3>
+              <input 
+                type="file" 
+                onChange={(e) => handleFileChange(e, 'invoice')}
+                className="block w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 dark:file:bg-blue-900/30 file:text-blue-700 dark:file:text-blue-400 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/50 cursor-pointer transition-colors"
+              />
             </div>
-            <div>
-              {matchStatus === 'Pending' && <span className="px-4 py-2 bg-slate-100 text-slate-600 font-black rounded-lg uppercase tracking-wide inline-block">Pending</span>}
-              {matchStatus === 'Approved' && <span className="px-4 py-2 bg-emerald-100 text-emerald-700 font-black rounded-lg uppercase tracking-wide inline-block shadow-sm">✅ Approved Match</span>}
-              {matchStatus === 'Rejected' && <span className="px-4 py-2 bg-red-100 text-red-700 font-black rounded-lg uppercase tracking-wide inline-block shadow-sm">❌ Discrepancy</span>}
-              {matchStatus === 'Error' && <span className="px-4 py-2 bg-amber-100 text-amber-700 font-black rounded-lg uppercase tracking-wide inline-block">⚠️ System Error</span>}
+
+            {/* PO Upload */}
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+              <h3 className="font-bold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
+                <span className="bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400 px-2 py-1 rounded text-xs">2</span> 
+                Upload Purchase Order
+              </h3>
+              <input 
+                type="file" 
+                onChange={(e) => handleFileChange(e, 'po')}
+                className="block w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 dark:file:bg-purple-900/30 file:text-purple-700 dark:file:text-purple-400 hover:file:bg-purple-100 dark:hover:file:bg-purple-900/50 cursor-pointer transition-colors"
+              />
             </div>
+
+            {/* Action Button */}
+            <button 
+              onClick={handleUpload}
+              disabled={loading || !invoiceFile || !poFile}
+              className={`w-full py-4 rounded-xl font-bold text-white transition-all shadow-md ${
+                loading || !invoiceFile || !poFile ? 'bg-slate-300 dark:bg-slate-800 cursor-not-allowed shadow-none text-slate-500 dark:text-slate-500' : 'bg-slate-800 dark:bg-blue-600 hover:bg-black dark:hover:bg-blue-500'
+              }`}
+            >
+              {loading ? "Extracting Data..." : "Extract & Compare Data"}
+            </button>
+
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm font-medium transition-colors">
+                {error}
+              </div>
+            )}
           </div>
 
-          {/* Comparison View */}
-          {(invoiceResult || poResult) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-              <DocumentCard 
-                title="Invoice Data" 
-                data={invoiceResult} 
-                borderColor="border-blue-500" 
-                themeColor="text-blue-600"
-                isApproved={matchStatus === 'Approved'}
-              />
-              <DocumentCard 
-                title="Purchase Order Data" 
-                data={poResult} 
-                borderColor="border-purple-500" 
-                themeColor="text-purple-600"
-                isApproved={matchStatus === 'Approved'}
-              />
+          {/* ================= RIGHT COLUMN: DASHBOARD ================= */}
+          <div className="lg:col-span-8 xl:col-span-9 space-y-6">
+            
+            {/* Status Widget */}
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors">
+              <div>
+                <h2 className="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Reconciliation Status</h2>
+                <p className="text-slate-600 dark:text-slate-400 text-sm">System comparison of Invoice vs. Purchase Order</p>
+              </div>
+              <div>
+                {matchStatus === 'Pending' && <span className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black rounded-lg uppercase tracking-wide inline-block transition-colors">Pending</span>}
+                {matchStatus === 'Approved' && <span className="px-4 py-2 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-black rounded-lg uppercase tracking-wide inline-block shadow-sm transition-colors">✅ Approved Match</span>}
+                {matchStatus === 'Rejected' && <span className="px-4 py-2 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 font-black rounded-lg uppercase tracking-wide inline-block shadow-sm transition-colors">❌ Discrepancy</span>}
+                {matchStatus === 'Error' && <span className="px-4 py-2 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 font-black rounded-lg uppercase tracking-wide inline-block transition-colors">⚠️ System Error</span>}
+              </div>
             </div>
-          )}
 
+            {/* Comparison View */}
+            {(invoiceResult || poResult) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+                <DocumentCard 
+                  title="Invoice Data" 
+                  data={invoiceResult} 
+                  borderColor="border-blue-500" 
+                  themeColor="text-blue-600 dark:text-blue-400"
+                  isApproved={matchStatus === 'Approved'}
+                />
+                <DocumentCard 
+                  title="Purchase Order Data" 
+                  data={poResult} 
+                  borderColor="border-purple-500" 
+                  themeColor="text-purple-600 dark:text-purple-400"
+                  isApproved={matchStatus === 'Approved'}
+                />
+              </div>
+            )}
+
+          </div>
         </div>
       </div>
     </div>

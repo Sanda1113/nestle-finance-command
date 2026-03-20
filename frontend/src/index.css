@@ -1,1 +1,4 @@
 @import "tailwindcss";
+
+/* Override default OS dark mode to use manual class toggling */
+@custom-variant dark (&:is(.dark *));
