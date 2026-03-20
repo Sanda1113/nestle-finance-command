@@ -29,7 +29,7 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 
         // Dynamically import Mindee and initialize client once
         if (!mindeeClient) {
-            const { default: Client, InvoiceV4: Invoice } = await import('mindee');
+            const { Client, InvoiceV4: Invoice } = await import('mindee');
             mindeeClient = new Client({
                 apiKey: process.env.MINDEE_V2_API_KEY,
             });
