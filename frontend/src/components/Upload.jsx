@@ -5,7 +5,7 @@ export default function Upload() {
   // File States
   const [invoiceFile, setInvoiceFile] = useState(null);
   const [poFile, setPoFile] = useState(null);
-
+  
   // Extraction States
   const [loading, setLoading] = useState(false);
   const [invoiceResult, setInvoiceResult] = useState(null);
@@ -31,7 +31,7 @@ export default function Upload() {
     if (e.target.files && e.target.files[0]) {
       if (type === 'invoice') setInvoiceFile(e.target.files[0]);
       if (type === 'po') setPoFile(e.target.files[0]);
-
+      
       setError(null);
       setInvoiceResult(null);
       setPoResult(null);
@@ -196,36 +196,26 @@ export default function Upload() {
   };
 
   return (
-<<<<<<< HEAD
     <div className="max-w-[1400px] mx-auto p-6">
       
-=======
-    <div className="max-w-7xl mx-auto p-6">
-
->>>>>>> fea5430fcb2fe0c17e585d992b313efb27ed33ee
       <div className="mb-8">
         <h1 className="text-3xl font-black text-slate-800">Reconciliation Command Center</h1>
         <p className="text-slate-500 mt-1">Upload vendor documents for automated 3-way matching and discrepancy detection.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
+        
         {/* ================= LEFT COLUMN: CONTROL PANEL ================= */}
-<<<<<<< HEAD
         <div className="lg:col-span-4 xl:col-span-3 space-y-6">
           
-=======
-        <div className="lg:col-span-4 space-y-6">
-
->>>>>>> fea5430fcb2fe0c17e585d992b313efb27ed33ee
           {/* Invoice Upload */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
             <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">1</span>
+              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">1</span> 
               Upload Invoice
             </h3>
-            <input
-              type="file"
+            <input 
+              type="file" 
               onChange={(e) => handleFileChange(e, 'invoice')}
               className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
             />
@@ -234,22 +224,23 @@ export default function Upload() {
           {/* PO Upload */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
             <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-              <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">2</span>
+              <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">2</span> 
               Upload Purchase Order
             </h3>
-            <input
-              type="file"
+            <input 
+              type="file" 
               onChange={(e) => handleFileChange(e, 'po')}
               className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer"
             />
           </div>
 
           {/* Action Button */}
-          <button
+          <button 
             onClick={handleUpload}
             disabled={loading || !invoiceFile || !poFile}
-            className={`w-full py-4 rounded-xl font-bold text-white transition-all shadow-md ${loading || !invoiceFile || !poFile ? 'bg-slate-300 cursor-not-allowed shadow-none' : 'bg-slate-800 hover:bg-black'
-              }`}
+            className={`w-full py-4 rounded-xl font-bold text-white transition-all shadow-md ${
+              loading || !invoiceFile || !poFile ? 'bg-slate-300 cursor-not-allowed shadow-none' : 'bg-slate-800 hover:bg-black'
+            }`}
           >
             {loading ? "Extracting Data..." : "Extract & Compare Data"}
           </button>
@@ -262,13 +253,8 @@ export default function Upload() {
         </div>
 
         {/* ================= RIGHT COLUMN: DASHBOARD ================= */}
-<<<<<<< HEAD
         <div className="lg:col-span-8 xl:col-span-9 space-y-6">
           
-=======
-        <div className="lg:col-span-8 space-y-6">
-
->>>>>>> fea5430fcb2fe0c17e585d992b313efb27ed33ee
           {/* Status Widget */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -285,7 +271,6 @@ export default function Upload() {
 
           {/* Comparison View */}
           {(invoiceResult || poResult) && (
-<<<<<<< HEAD
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
               <DocumentCard 
                 title="Invoice Data" 
@@ -301,72 +286,6 @@ export default function Upload() {
                 themeColor="text-purple-600"
                 isApproved={matchStatus === 'Approved'}
               />
-=======
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-              {/* Invoice Data Column */}
-              <div className="bg-white rounded-2xl shadow-sm border-t-4 border-blue-500 overflow-hidden">
-                <div className="bg-slate-50 p-4 border-b border-slate-100">
-                  <h3 className="font-black text-slate-800 text-lg">Invoice Details</h3>
-                  <p className="text-xs text-slate-500">Extracted from vendor bill</p>
-                </div>
-                {invoiceResult ? (
-                  <div className="p-6 space-y-6">
-                    <div>
-                      <p className="text-xs uppercase text-slate-400 font-bold">Vendor Name</p>
-                      <p className="font-semibold text-slate-800">{invoiceResult.vendorName}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase text-slate-400 font-bold">Document Number</p>
-                      <p className="font-semibold text-slate-800">{invoiceResult.invoiceNumber}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase text-slate-400 font-bold">Date</p>
-                      <p className="font-semibold text-slate-800">{invoiceResult.invoiceDate}</p>
-                    </div>
-                    <div className="pt-4 border-t border-slate-100">
-                      <p className="text-xs uppercase text-slate-400 font-bold mb-1">Total Amount</p>
-                      <p className="text-2xl font-black text-blue-600">${invoiceResult.totalAmount?.toFixed(2)}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-6 text-sm text-slate-400 italic">No invoice data available.</div>
-                )}
-              </div>
-
-              {/* PO Data Column */}
-              <div className="bg-white rounded-2xl shadow-sm border-t-4 border-purple-500 overflow-hidden">
-                <div className="bg-slate-50 p-4 border-b border-slate-100">
-                  <h3 className="font-black text-slate-800 text-lg">Purchase Order Details</h3>
-                  <p className="text-xs text-slate-500">Extracted from internal system document</p>
-                </div>
-                {poResult ? (
-                  <div className="p-6 space-y-6">
-                    <div>
-                      <p className="text-xs uppercase text-slate-400 font-bold">Vendor Name</p>
-                      <p className="font-semibold text-slate-800">{poResult.vendorName}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase text-slate-400 font-bold">Document Number</p>
-                      <p className="font-semibold text-slate-800">{poResult.poNumber !== 'Not Found' ? poResult.poNumber : poResult.invoiceNumber}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase text-slate-400 font-bold">Date</p>
-                      <p className="font-semibold text-slate-800">{poResult.invoiceDate}</p>
-                    </div>
-                    <div className="pt-4 border-t border-slate-100">
-                      <p className="text-xs uppercase text-slate-400 font-bold mb-1">Total Amount</p>
-                      <p className={`text-2xl font-black ${matchStatus === 'Approved' ? 'text-emerald-600' : 'text-red-600'}`}>
-                        ${poResult.totalAmount?.toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-6 text-sm text-slate-400 italic">No PO data available.</div>
-                )}
-              </div>
-
->>>>>>> fea5430fcb2fe0c17e585d992b313efb27ed33ee
             </div>
           )}
 
