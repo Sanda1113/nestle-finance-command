@@ -11,16 +11,20 @@ if (process.env.NODE_ENV !== 'production') {
 const app = express();
 const port = process.env.PORT || 8080;
 
-app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS', 'PATCH'] }));
+// 🛡️ SECURITY: Full CORS support for manual overrides and multi-portal communication
+app.use(cors({ 
+    origin: '*', 
+    methods: ['GET', 'POST', 'OPTIONS', 'PATCH'] 
+}));
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.status(200).send('✅ Nestle Finance Backend is Awake!');
+    res.status(200).send('✅ Nestle Finance Enterprise API is Online');
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// 🛡️ THE UNIVERSAL DECRYPTOR
+// 🛡️ THE UNIVERSAL DECRYPTOR (Mindee JSON Parser)
 function cleanMindeeObject(obj) {
     if (obj === null || obj === undefined) return null;
     if (typeof obj !== 'object') return obj;
@@ -45,6 +49,10 @@ function cleanMindeeObject(obj) {
     return cleaned;
 }
 
+// ==========================================
+// 🏢 PORTAL 1: SUPPLIER - AI EXTRACTION
+// ==========================================
+
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -58,171 +66,153 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             filename: req.file.originalname || 'invoice.pdf'
         });
 
-        const productParams = { modelId: "b3467dd3-63d2-4914-9791-a2dfadfbfe9a" };
-
         const response = await mindeeClient.enqueueAndGetResult(
             mindee.product.Extraction,
             inputSource,
-            productParams
+            { modelId: "b3467dd3-63d2-4914-9791-a2dfadfbfe9a" }
         );
 
-        const rawFields = response.document?.inference?.prediction?.fields || response.inference?.result?.fields || {};
+        const rawFields = response.document?.inference?.prediction?.fields || {};
         const pureJson = cleanMindeeObject(rawFields);
 
+        // Helper to flatten Mindee values for the UI
         const getSafeString = (val) => {
             if (val === null || val === undefined) return null;
             if (typeof val === 'string' || typeof val === 'number') return String(val).trim();
             if (typeof val === 'object') {
                 if (val.value !== undefined && val.value !== null) return String(val.value).trim();
-                if (val.content !== undefined && val.content !== null) return String(val.content).trim();
-                if (val.items && Array.isArray(val.items)) {
-                    if (val.items.length === 0) return null;
-                    return getSafeString(val.items[0]);
-                }
-                if (Array.isArray(val) && val.length > 0) return getSafeString(val[0]);
+                if (val.items && Array.isArray(val.items) && val.items.length > 0) return getSafeString(val.items[0]);
                 if (val.fields) return getSafeString(val.fields);
             }
             return null;
         };
 
         const getNum = (val) => {
-            const strVal = getSafeString(val);
-            if (!strVal) return 0.00;
-            const cleanVal = strVal.replace(/[^0-9.-]+/g, "");
-            return parseFloat(cleanVal) || 0.00;
+            const str = getSafeString(val);
+            return str ? parseFloat(str.replace(/[^0-9.-]+/g, "")) || 0.00 : 0.00;
         };
 
-        const getAddressText = (obj) => {
-            if (!obj) return null;
-            const str = getSafeString(obj);
-            if (str) return str; 
-            if (obj.fields && obj.fields.address) return getSafeString(obj.fields.address);
-            if (obj.address) return getSafeString(obj.address);
-            return null;
-        };
-
+        // Mapping line items for the products table later
         const rawItems = pureJson.line_items?.items || [];
         const mappedLineItems = rawItems.map(item => {
             const f = item.fields || item;
             return {
                 qty: getSafeString(f.quantity) || '1',
                 description: getSafeString(f.description) || 'Item',
-                unitPrice: `$${parseFloat(getSafeString(f.unit_price) || 0).toFixed(2)}`,
-                amount: `$${parseFloat(getSafeString(f.total_price) || getSafeString(f.amount) || 0).toFixed(2)}`
+                unitPrice: getNum(f.unit_price),
+                amount: getNum(f.total_price) || getNum(f.amount)
             };
         });
 
-        const rawBank = pureJson.supplier_payment_details?.items || [];
-        let bankString = 'Not Found';
-        if (rawBank.length > 0) {
-            const bFields = rawBank[0].fields || rawBank[0];
-            bankString = `Account: ${getSafeString(bFields.account_number) || 'N/A'}, Routing: ${getSafeString(bFields.routing_number) || 'N/A'}`;
-        }
-
         const extractedData = {
             vendorName: getSafeString(pureJson.supplier_name) || 'Unknown Vendor',
-            vendorAddress: getAddressText(pureJson.supplier_address) || 'Not Found',
+            vendorAddress: getSafeString(pureJson.supplier_address) || 'Not Found',
             invoiceNumber: getSafeString(pureJson.invoice_number) || 'Not Found',
-            invoiceDate: getSafeString(pureJson.date) || getSafeString(pureJson.invoice_date) || 'Not Found',
-            poNumber: getSafeString(pureJson.po_number) || getSafeString(pureJson.reference_numbers) || 'Not Found',
-            dueDate: getSafeString(pureJson.due_date) || 'Not Found',
-            billTo: getAddressText(pureJson.customer_address) || getSafeString(pureJson.customer_name) || 'Not Found',
-            shipTo: getAddressText(pureJson.shipping_address) || 'Not Found',
+            invoiceDate: getSafeString(pureJson.date) || 'Not Found',
+            poNumber: getSafeString(pureJson.po_number) || 'Not Found',
             subtotal: getNum(pureJson.total_net),
             salesTax: getNum(pureJson.total_tax),
             totalAmount: getNum(pureJson.total_amount),
-            terms: 'Check Due Date',
-            bankDetails: bankString,
-            lineItems: mappedLineItems.length > 0 ? mappedLineItems : null
+            lineItems: mappedLineItems
         };
 
         res.json({ success: true, extractedData });
-
     } catch (error) {
-        console.error('❌ Data extraction error:', error.message);
-        res.status(500).json({ error: 'Invoice processing failed', details: error.message });
+        console.error('❌ Extraction Error:', error.message);
+        res.status(500).json({ error: 'Invoice processing failed' });
     }
 });
 
-// 🚀 AUTO-SAVE TO SUPABASE ENDPOINT
+// ==========================================
+// 🛡️ DATABASE PIPELINE: AUTOMATED LOGGING
+// ==========================================
+
 app.post('/api/save-reconciliation', async (req, res) => {
     const { invoiceData, poData, matchStatus } = req.body;
 
     try {
-        console.log(`💾 Auto-Saving to Database: ${matchStatus}`);
+        console.log(`💾 Auto-Logging: ${invoiceData.invoiceNumber} - Status: ${matchStatus}`);
 
-        const { error: invErr } = await supabase.from('invoices').insert([{ 
+        // 1. Invoices Table (Matches Image 1)
+        await supabase.from('invoices').insert([{ 
             invoice_number: invoiceData.invoiceNumber, 
             extracted_amount: invoiceData.totalAmount,
             status: matchStatus
         }]);
-        if (invErr) console.error("Invoice Insert Error:", invErr);
 
-        const { error: poErr } = await supabase.from('purchase_orders').insert([{ 
-            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : poData.invoiceNumber, 
+        // 2. Purchase Orders Table (Matches Image 3)
+        await supabase.from('purchase_orders').insert([{ 
+            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber, 
             total_amount: poData.totalAmount,
             status: matchStatus
         }]);
-        if (poErr) console.error("PO Insert Error:", poErr);
 
+        // 3. Reconciliations Table (Matches Image 4)
         const { error: reconErr } = await supabase.from('reconciliations').insert([{ 
             vendor_name: invoiceData.vendorName,
             invoice_number: invoiceData.invoiceNumber, 
-            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : poData.invoiceNumber,
+            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
             invoice_total: invoiceData.totalAmount,
             po_total: poData.totalAmount,
-            match_status: matchStatus
+            match_status: matchStatus,
+            processed_at: new Date().toISOString()
         }]);
-        if (reconErr) throw reconErr;
 
-        res.json({ success: true, message: 'Automatically saved to DB.' });
+        // 4. Products Table (Matches Image 2 - Saving Line Items)
+        if (invoiceData.lineItems && invoiceData.lineItems.length > 0) {
+            const productEntries = invoiceData.lineItems.map(item => ({
+                item_description: item.description,
+                quantity: parseInt(item.qty) || 1,
+                unit_price: parseFloat(item.unitPrice) || 0,
+                total_price: parseFloat(item.amount) || 0
+            }));
+            await supabase.from('products').insert(productEntries);
+        }
+
+        if (reconErr) throw reconErr;
+        res.json({ success: true, message: 'Ledger updated successfully' });
     } catch (error) {
         console.error('❌ DB Save Error:', error.message);
-        res.status(500).json({ error: 'Failed to save to DB', details: error.message });
+        res.status(500).json({ error: 'Database save failed' });
     }
 });
 
 // ==========================================
-// 🚀 FINANCE PORTAL ENDPOINTS
+// 📋 PORTAL 2: FINANCE - MANAGEMENT
 // ==========================================
 
-// 1. Fetch all reconciliations for the Finance Dashboard
+// Fetch history for Review Queue and Analytics
 app.get('/api/reconciliations', async (req, res) => {
     try {
-        console.log('📊 Fetching all reconciliations for Finance Portal...');
         const { data, error } = await supabase
             .from('reconciliations')
             .select('*')
-            .order('id', { ascending: false }); // Show newest first
+            .order('processed_at', { ascending: false });
 
         if (error) throw error;
         res.json({ success: true, data });
     } catch (error) {
-        console.error('❌ Fetch Error:', error.message);
-        res.status(500).json({ error: 'Failed to fetch data', details: error.message });
+        res.status(500).json({ error: 'Failed to fetch ledger' });
     }
 });
 
-// 2. Finance Team Manual Override (Approve/Reject)
+// Manual status override
 app.patch('/api/reconciliations/:id', async (req, res) => {
     const { id } = req.params;
     const { newStatus } = req.body;
-
     try {
-        console.log(`✍️ Finance Team manually updating Record ${id} to ${newStatus}`);
-        const { data, error } = await supabase
+        const { error } = await supabase
             .from('reconciliations')
             .update({ match_status: newStatus })
             .eq('id', id);
 
         if (error) throw error;
-        res.json({ success: true, message: 'Status updated successfully' });
+        res.json({ success: true });
     } catch (error) {
-        console.error('❌ Update Error:', error.message);
-        res.status(500).json({ error: 'Failed to update status', details: error.message });
+        res.status(500).json({ error: 'Status update failed' });
     }
 });
 
 app.listen(port, '0.0.0.0', () => {
-    console.log(`🚀 Backend LIVE on port ${port}`);
+    console.log(`🚀 Nestle Finance ERP Backend LIVE on port ${port}`);
 });
