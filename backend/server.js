@@ -30,6 +30,8 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
+        console.log(`📄 Processing file: ${req.file.originalname}`);
+
         const mindeeClient = new mindee.Client({ apiKey: process.env.MINDEE_V2_API_KEY });
         const inputSource = new mindee.BufferInput({ buffer: req.file.buffer, filename: req.file.originalname || 'invoice.pdf' });
 
@@ -39,16 +41,33 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             { modelId: "b3467dd3-63d2-4914-9791-a2dfadfbfe9a" }
         );
 
-        // 🛡️ SAFELY PARSE MINDEE V5 CUSTOM MODEL PAYLOAD
+        // Access the fields from Mindee's custom prediction object
         const rawFields = response.document?.inference?.prediction?.fields || response.inference?.result?.fields || {};
 
-        // A much safer string extractor that looks for specific Mindee object keys
+        // 🚀 LOGGING FOR RAILWAY: This will show you exactly what fields the AI found
+        console.log("🔍 AI Detected Fields:", Object.keys(rawFields));
+
+        // 🛡️ AGGRESSIVE STRING EXTRACTOR
         const getSafeString = (field) => {
-            if (!field) return null;
+            if (field === null || field === undefined) return null;
             if (typeof field === 'string' || typeof field === 'number') return String(field).trim();
+
+            // Dig into Mindee's primitive wrappers
             if (field.value !== undefined && field.value !== null) return String(field.value).trim();
             if (field.content !== undefined && field.content !== null) return String(field.content).trim();
+            if (field.text !== undefined && field.text !== null) return String(field.text).trim();
+
+            // Dig into Arrays
+            if (Array.isArray(field) && field.length > 0) return getSafeString(field[0]);
             if (field.values && Array.isArray(field.values) && field.values.length > 0) return getSafeString(field.values[0]);
+            if (field.items && Array.isArray(field.items) && field.items.length > 0) return getSafeString(field.items[0]);
+
+            // Dig into Nested Objects (Like your supplier_address schema)
+            if (typeof field === 'object') {
+                if (field.address) return getSafeString(field.address); // Specific to address schema
+                if (field.name) return getSafeString(field.name);
+                if (field.description) return getSafeString(field.description);
+            }
             return null;
         };
 
@@ -59,25 +78,22 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             return parseFloat(cleanVal) || 0.00;
         };
 
-        // Custom logic to handle Mindee's array-based line items safely
+        // Extracting Line Items robustly
         const extractLineItems = (lineItemsObj) => {
             if (!lineItemsObj) return [];
-            // Mindee sometimes puts items in `.items` or `.values`
             const itemsArray = lineItemsObj.items || lineItemsObj.values || lineItemsObj;
             if (!Array.isArray(itemsArray)) return [];
 
             return itemsArray.map(item => {
                 const f = item.fields || item.values || item;
                 return {
-                    qty: getSafeString(f.quantity) || '1',
-                    description: getSafeString(f.description) || getSafeString(f.item_description) || 'Item',
-                    unitPrice: getNum(f.unit_price),
-                    amount: getNum(f.total_price) || getNum(f.amount) || getNum(f.total_amount)
+                    qty: getSafeString(f?.quantity) || '1',
+                    description: getSafeString(f?.description) || getSafeString(f?.item_description) || 'Item',
+                    unitPrice: getNum(f?.unit_price),
+                    amount: getNum(f?.total_price) || getNum(f?.amount) || getNum(f?.total_amount)
                 };
             });
         };
-
-        const mappedLineItems = extractLineItems(rawFields.line_items);
 
         const extractedData = {
             vendorName: getSafeString(rawFields.supplier_name) || getSafeString(rawFields.vendor_name) || 'Unknown Vendor',
@@ -86,14 +102,15 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             invoiceDate: getSafeString(rawFields.date) || getSafeString(rawFields.invoice_date) || 'Not Found',
             poNumber: getSafeString(rawFields.po_number) || getSafeString(rawFields.reference_numbers) || 'Not Found',
             dueDate: getSafeString(rawFields.due_date) || 'Not Found',
-            billTo: getSafeString(rawFields.customer_address) || getSafeString(rawFields.customer_name) || 'Not Found',
+            billTo: getSafeString(rawFields.customer_address) || getSafeString(rawFields.billing_address) || 'Not Found',
             shipTo: getSafeString(rawFields.shipping_address) || 'Not Found',
             subtotal: getNum(rawFields.total_net) || getNum(rawFields.subtotal),
             salesTax: getNum(rawFields.total_tax) || getNum(rawFields.tax),
             totalAmount: getNum(rawFields.total_amount) || getNum(rawFields.total),
-            lineItems: mappedLineItems
+            lineItems: extractLineItems(rawFields.line_items)
         };
 
+        console.log(`✅ Extraction Complete for ${extractedData.vendorName} - Total: $${extractedData.totalAmount}`);
         res.json({ success: true, extractedData });
 
     } catch (error) {
@@ -144,11 +161,10 @@ app.post('/api/save-reconciliation', async (req, res) => {
         if (reconErr) throw reconErr;
         res.json({ success: true });
     } catch (error) {
-        console.error('DB Save Error:', error);
+        console.error('❌ DB Save Error:', error.message);
         res.status(500).json({ error: 'Database save failed' });
     }
 });
-
 
 // ==========================================
 // 📋 FINANCE PORTAL QUEUE & ANALYTICS
