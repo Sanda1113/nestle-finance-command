@@ -54,7 +54,7 @@ function mindeeToObject(obj) {
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-        console.log(`📄 Extracting: ${req.file.originalname}`);
+        console.log(`\n📄 --- Extracting Document: ${req.file.originalname} ---`);
 
         const mindeeClient = new mindee.Client({ apiKey: process.env.MINDEE_V2_API_KEY });
         const inputSource = new mindee.BufferInput({ buffer: req.file.buffer, filename: req.file.originalname || 'invoice.pdf' });
@@ -79,15 +79,9 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 
             if (Array.isArray(field) && field.length > 0) return getSafeString(field[0]);
 
-            // Handle specific array objects Mindee creates
-            if (field.values && Array.isArray(field.values) && field.values.length > 0) {
-                return getSafeString(field.values[0]);
-            }
-            if (field.items && Array.isArray(field.items) && field.items.length > 0) {
-                return getSafeString(field.items[0]);
-            }
+            if (field.values && Array.isArray(field.values) && field.values.length > 0) return getSafeString(field.values[0]);
+            if (field.items && Array.isArray(field.items) && field.items.length > 0) return getSafeString(field.items[0]);
 
-            // Nested simple objects fallback
             if (typeof field === 'object') {
                 if (field.name) return getSafeString(field.name);
                 if (field.description) return getSafeString(field.description);
@@ -97,40 +91,39 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             return null;
         };
 
-        // Specialized Address Stitcher
+        // 🚀 NUCLEAR ADDRESS STITCHER
         const getAddressText = (field) => {
             if (!field) return null;
-
-            // Sometimes it's directly an array
-            const targetObj = Array.isArray(field) ? field[0] : field;
-            if (!targetObj) return null;
-
-            // If it resolved to a clean string early, use it
-            const str = getSafeString(targetObj);
+            const str = getSafeString(field);
             if (str && str !== '[object Object]') return str;
 
-            if (typeof targetObj === 'object') {
+            if (typeof field === 'object') {
+                const target = field.value || field.fields || field;
                 let parts = [];
-                // Unpack any outer wrapper Mindee puts on objects
-                const target = targetObj.value || targetObj.fields || targetObj;
 
-                // Fallback to raw string address if available
-                if (target.address) {
-                    const addrStr = getSafeString(target.address);
-                    if (addrStr) parts.push(addrStr);
-                }
-
-                // If no raw address, stitch the components
-                if (parts.length === 0) {
+                if (target.address) parts.push(getSafeString(target.address));
+                else {
                     if (target.street_number) parts.push(getSafeString(target.street_number));
                     if (target.street_name) parts.push(getSafeString(target.street_name));
-                    if (target.city) parts.push(getSafeString(target.city));
-                    if (target.state) parts.push(getSafeString(target.state));
-                    if (target.postal_code) parts.push(getSafeString(target.postal_code));
-                    if (target.country) parts.push(getSafeString(target.country));
                 }
+                if (target.city) parts.push(getSafeString(target.city));
+                if (target.state) parts.push(getSafeString(target.state));
+                if (target.postal_code) parts.push(getSafeString(target.postal_code));
+                if (target.country) parts.push(getSafeString(target.country));
 
                 if (parts.length > 0) return parts.filter(Boolean).join(', ');
+
+                // ⚠️ Fallback: If no specific keys matched, blindly grab ALL strings in the object!
+                const extractAllStrings = (obj) => {
+                    let strings = [];
+                    for (const key in obj) {
+                        if (typeof obj[key] === 'string') strings.push(obj[key]);
+                        else if (typeof obj[key] === 'object' && obj[key] !== null) strings.push(...extractAllStrings(obj[key]));
+                    }
+                    return strings;
+                };
+                const allStrings = extractAllStrings(target);
+                if (allStrings.length > 0) return allStrings.join(', ');
             }
             return null;
         };
@@ -142,9 +135,12 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             return parseFloat(cleanVal) || 0.00;
         };
 
-        // Specialized Line Item Unpacker
+        // 🚀 NUCLEAR LINE ITEM UNPACKER
         const extractLineItems = (lineItemsObj) => {
             if (!lineItemsObj) return [];
+
+            // Log exactly what Mindee gave us for Line Items so you can see it in Railway!
+            console.log("📦 Raw Line Items Dump:", JSON.stringify(lineItemsObj).substring(0, 200) + "...");
 
             let itemsArray = [];
             if (Array.isArray(lineItemsObj)) {
@@ -153,20 +149,23 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
                 itemsArray = lineItemsObj.items;
             } else if (lineItemsObj.values && Array.isArray(lineItemsObj.values)) {
                 itemsArray = lineItemsObj.values;
+            } else if (typeof lineItemsObj === 'object') {
+                // Catch dictionary-style arrays (e.g. { "0": {...}, "1": {...} })
+                itemsArray = Object.values(lineItemsObj);
             }
 
             if (!Array.isArray(itemsArray)) return [];
 
             return itemsArray.map(item => {
-                // Dig past Mindee's wrapper layers
                 const f = item.value || item.fields || item;
                 return {
                     qty: getSafeString(f?.quantity) || '1',
-                    description: getSafeString(f?.description) || getSafeString(f?.item_description) || 'Item',
+                    // Fallback to grab the entire object as text if 'description' key is missing
+                    description: getSafeString(f?.description) || getSafeString(f?.item_description) || getSafeString(f) || 'Unknown Item',
                     unitPrice: getNum(f?.unit_price),
                     amount: getNum(f?.total_price) || getNum(f?.amount) || getNum(f?.total_amount)
                 };
-            }).filter(item => item.amount > 0 || item.unitPrice > 0);
+            }).filter(item => item.description !== 'Unknown Item' || item.amount > 0); // Much safer filter!
         };
 
         const getRefNumbers = (field) => {
@@ -174,8 +173,9 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             if (Array.isArray(field) && field.length > 0) return getSafeString(field[0]);
             if (field.values && Array.isArray(field.values) && field.values.length > 0) return getSafeString(field.values[0]);
             return getSafeString(field);
-        }
+        };
 
+        // 4. Map the pure JSON to our frontend payload
         const extractedData = {
             vendorName: getSafeString(rawFields.supplier_name) || getSafeString(rawFields.vendor_name) || 'Unknown Vendor',
             vendorAddress: getAddressText(rawFields.supplier_address) || getAddressText(rawFields.vendor_address) || 'Not Found',
@@ -191,7 +191,8 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             lineItems: extractLineItems(rawFields.line_items)
         };
 
-        console.log(`✅ Fully Extracted Payload for ${extractedData.vendorName}:`);
+        console.log(`✅ Success! Formatted Payload for ${extractedData.vendorName} - Total $${extractedData.totalAmount}`);
+        console.log(`   -> Found ${extractedData.lineItems.length} Line Items`);
         res.json({ success: true, extractedData });
 
     } catch (error) {
