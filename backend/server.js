@@ -3,7 +3,7 @@ const cors = require('cors');
 const multer = require('multer');
 const mindee = require('mindee');
 const supabase = require('./db');
-const authRoutes = require('./routes/auth'); // Import Auth Routes
+const authRoutes = require('./routes/auth');
 
 if (process.env.NODE_ENV !== 'production') {
     require('dotenv').config();
@@ -14,8 +14,6 @@ const port = process.env.PORT || 8080;
 
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS', 'PATCH'] }));
 app.use(express.json());
-
-// Mount the authentication routes
 app.use('/api/auth', authRoutes);
 
 app.get('/', (req, res) => {
@@ -23,31 +21,6 @@ app.get('/', (req, res) => {
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
-
-// 🛡️ THE UNIVERSAL DECRYPTOR
-function cleanMindeeObject(obj) {
-    if (obj === null || obj === undefined) return null;
-    if (typeof obj !== 'object') return obj;
-    if (obj.values && Array.isArray(obj.values)) return obj.values.map(item => cleanMindeeObject(item));
-    if (obj.value !== undefined && typeof obj.value !== 'object') return obj.value;
-    if (obj.content !== undefined && typeof obj.content !== 'object') return obj.content;
-    if (Array.isArray(obj)) return obj.map(item => cleanMindeeObject(item));
-    if (typeof obj.entries === 'function') {
-        const cleaned = {};
-        for (const [key, val] of obj.entries()) {
-            if (key !== 'polygon' && key !== 'confidence' && key !== 'boundingBox') cleaned[key] = cleanMindeeObject(val);
-        }
-        return cleaned;
-    }
-    const cleaned = {};
-    let targetObj = obj.value && typeof obj.value === 'object' ? obj.value : obj;
-    for (const key of Object.keys(targetObj)) {
-        if (key !== 'polygon' && key !== 'confidence' && key !== 'boundingBox' && !key.startsWith('_')) {
-            cleaned[key] = cleanMindeeObject(targetObj[key]);
-        }
-    }
-    return cleaned;
-}
 
 // ==========================================
 // 🏢 AI EXTRACTION & AUTO-SAVE
@@ -59,74 +32,111 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 
         const mindeeClient = new mindee.Client({ apiKey: process.env.MINDEE_V2_API_KEY });
         const inputSource = new mindee.BufferInput({ buffer: req.file.buffer, filename: req.file.originalname || 'invoice.pdf' });
-        const response = await mindeeClient.enqueueAndGetResult(mindee.product.Extraction, inputSource, { modelId: "b3467dd3-63d2-4914-9791-a2dfadfbfe9a" });
 
-        const rawFields = response.document?.inference?.prediction?.fields || {};
-        const pureJson = cleanMindeeObject(rawFields);
+        const response = await mindeeClient.enqueueAndGetResult(
+            mindee.product.Extraction,
+            inputSource,
+            { modelId: "b3467dd3-63d2-4914-9791-a2dfadfbfe9a" }
+        );
 
-        const getSafeString = (val) => {
-            if (!val) return null;
-            if (typeof val === 'string' || typeof val === 'number') return String(val).trim();
-            if (typeof val === 'object') {
-                if (val.value !== undefined) return String(val.value).trim();
-                if (val.items && val.items.length > 0) return getSafeString(val.items[0]);
-                if (val.fields) return getSafeString(val.fields);
-            }
+        // 🛡️ SAFELY PARSE MINDEE V5 CUSTOM MODEL PAYLOAD
+        const rawFields = response.document?.inference?.prediction?.fields || response.inference?.result?.fields || {};
+
+        // A much safer string extractor that looks for specific Mindee object keys
+        const getSafeString = (field) => {
+            if (!field) return null;
+            if (typeof field === 'string' || typeof field === 'number') return String(field).trim();
+            if (field.value !== undefined && field.value !== null) return String(field.value).trim();
+            if (field.content !== undefined && field.content !== null) return String(field.content).trim();
+            if (field.values && Array.isArray(field.values) && field.values.length > 0) return getSafeString(field.values[0]);
             return null;
         };
 
-        const getNum = (val) => {
-            const str = getSafeString(val);
-            return str ? parseFloat(str.replace(/[^0-9.-]+/g, "")) || 0.00 : 0.00;
+        const getNum = (field) => {
+            const str = getSafeString(field);
+            if (!str) return 0.00;
+            const cleanVal = str.replace(/[^0-9.-]+/g, "");
+            return parseFloat(cleanVal) || 0.00;
         };
 
-        const rawItems = pureJson.line_items?.items || [];
-        const mappedLineItems = rawItems.map(item => {
-            const f = item.fields || item;
-            return {
-                qty: getSafeString(f.quantity) || '1',
-                description: getSafeString(f.description) || 'Item',
-                unitPrice: getNum(f.unit_price),
-                amount: getNum(f.total_price) || getNum(f.amount)
-            };
-        });
+        // Custom logic to handle Mindee's array-based line items safely
+        const extractLineItems = (lineItemsObj) => {
+            if (!lineItemsObj) return [];
+            // Mindee sometimes puts items in `.items` or `.values`
+            const itemsArray = lineItemsObj.items || lineItemsObj.values || lineItemsObj;
+            if (!Array.isArray(itemsArray)) return [];
+
+            return itemsArray.map(item => {
+                const f = item.fields || item.values || item;
+                return {
+                    qty: getSafeString(f.quantity) || '1',
+                    description: getSafeString(f.description) || getSafeString(f.item_description) || 'Item',
+                    unitPrice: getNum(f.unit_price),
+                    amount: getNum(f.total_price) || getNum(f.amount) || getNum(f.total_amount)
+                };
+            });
+        };
+
+        const mappedLineItems = extractLineItems(rawFields.line_items);
 
         const extractedData = {
-            vendorName: getSafeString(pureJson.supplier_name) || 'Unknown Vendor',
-            vendorAddress: getSafeString(pureJson.supplier_address) || 'Not Found',
-            invoiceNumber: getSafeString(pureJson.invoice_number) || 'Not Found',
-            invoiceDate: getSafeString(pureJson.date) || 'Not Found',
-            poNumber: getSafeString(pureJson.po_number) || 'Not Found',
-            dueDate: getSafeString(pureJson.due_date) || 'Not Found',
-            billTo: getSafeString(pureJson.customer_address) || 'Not Found',
-            shipTo: getSafeString(pureJson.shipping_address) || 'Not Found',
-            subtotal: getNum(pureJson.total_net),
-            salesTax: getNum(pureJson.total_tax),
-            totalAmount: getNum(pureJson.total_amount),
+            vendorName: getSafeString(rawFields.supplier_name) || getSafeString(rawFields.vendor_name) || 'Unknown Vendor',
+            vendorAddress: getSafeString(rawFields.supplier_address) || getSafeString(rawFields.vendor_address) || 'Not Found',
+            invoiceNumber: getSafeString(rawFields.invoice_number) || 'Not Found',
+            invoiceDate: getSafeString(rawFields.date) || getSafeString(rawFields.invoice_date) || 'Not Found',
+            poNumber: getSafeString(rawFields.po_number) || getSafeString(rawFields.reference_numbers) || 'Not Found',
+            dueDate: getSafeString(rawFields.due_date) || 'Not Found',
+            billTo: getSafeString(rawFields.customer_address) || getSafeString(rawFields.customer_name) || 'Not Found',
+            shipTo: getSafeString(rawFields.shipping_address) || 'Not Found',
+            subtotal: getNum(rawFields.total_net) || getNum(rawFields.subtotal),
+            salesTax: getNum(rawFields.total_tax) || getNum(rawFields.tax),
+            totalAmount: getNum(rawFields.total_amount) || getNum(rawFields.total),
             lineItems: mappedLineItems
         };
 
         res.json({ success: true, extractedData });
+
     } catch (error) {
         console.error('❌ Extraction Error:', error.message);
         res.status(500).json({ error: 'Invoice processing failed' });
     }
 });
 
+// ==========================================
+// 🛡️ DATABASE PIPELINE
+// ==========================================
+
 app.post('/api/save-reconciliation', async (req, res) => {
     const { invoiceData, poData, matchStatus } = req.body;
     try {
-        await supabase.from('invoices').insert([{ invoice_number: invoiceData.invoiceNumber, extracted_amount: invoiceData.totalAmount, status: matchStatus }]);
-        await supabase.from('purchase_orders').insert([{ po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber, total_amount: poData.totalAmount, status: matchStatus }]);
+        await supabase.from('invoices').insert([{
+            invoice_number: invoiceData.invoiceNumber,
+            extracted_amount: invoiceData.totalAmount,
+            status: matchStatus
+        }]);
+
+        await supabase.from('purchase_orders').insert([{
+            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
+            total_amount: poData.totalAmount,
+            status: matchStatus
+        }]);
 
         const { error: reconErr } = await supabase.from('reconciliations').insert([{
-            vendor_name: invoiceData.vendorName, invoice_number: invoiceData.invoiceNumber, po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
-            invoice_total: invoiceData.totalAmount, po_total: poData.totalAmount, match_status: matchStatus, processed_at: new Date().toISOString()
+            vendor_name: invoiceData.vendorName,
+            invoice_number: invoiceData.invoiceNumber,
+            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
+            invoice_total: invoiceData.totalAmount,
+            po_total: poData.totalAmount,
+            match_status: matchStatus,
+            processed_at: new Date().toISOString()
         }]);
 
         if (invoiceData.lineItems && invoiceData.lineItems.length > 0) {
             const productEntries = invoiceData.lineItems.map(item => ({
-                item_description: item.description, quantity: parseInt(item.qty) || 1, unit_price: parseFloat(item.unitPrice) || 0, total_price: parseFloat(item.amount) || 0
+                item_description: item.description,
+                quantity: parseInt(item.qty) || 1,
+                unit_price: parseFloat(item.unitPrice) || 0,
+                total_price: parseFloat(item.amount) || 0
             }));
             await supabase.from('products').insert(productEntries);
         }
@@ -134,13 +144,15 @@ app.post('/api/save-reconciliation', async (req, res) => {
         if (reconErr) throw reconErr;
         res.json({ success: true });
     } catch (error) {
+        console.error('DB Save Error:', error);
         res.status(500).json({ error: 'Database save failed' });
     }
 });
 
 
+// ==========================================
 // 📋 FINANCE PORTAL QUEUE & ANALYTICS
-
+// ==========================================
 
 app.get('/api/reconciliations', async (req, res) => {
     try {
