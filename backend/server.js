@@ -68,7 +68,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         const rawPrediction = response.document?.inference?.prediction?.fields || response.inference?.result?.fields || {};
         const rawFields = mindeeToObject(rawPrediction);
 
-        // 🛡️ THE ULTIMATE DEEP-SEARCH EXTRACTOR
         const getSafeString = (field) => {
             if (field === null || field === undefined) return null;
             if (typeof field === 'string' || typeof field === 'number') return String(field).trim();
@@ -91,7 +90,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             return null;
         };
 
-        // 🚀 NUCLEAR ADDRESS STITCHER
         const getAddressText = (field) => {
             if (!field) return null;
             const str = getSafeString(field);
@@ -134,25 +132,28 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             return parseFloat(cleanVal) || 0.00;
         };
 
-        // 🚀 FIXED: LINE ITEM DICTIONARY UNPACKER
+        // 🚀 NEW: Currency Extractor
+        const extractCurrency = (localeField) => {
+            if (!localeField) return 'USD'; // Default fallback
+            const target = localeField.value || localeField.fields || localeField;
+            if (target.currency) return getSafeString(target.currency) || 'USD';
+            return 'USD';
+        };
+
         const extractLineItems = (lineItemsObj) => {
             if (!lineItemsObj) return [];
 
             let itemsArray = [];
 
-            // If Mindee nested it inside `.items` as a dictionary (e.g., {"0": {...}, "1": {...}})
             if (lineItemsObj.items && typeof lineItemsObj.items === 'object') {
                 itemsArray = Array.isArray(lineItemsObj.items) ? lineItemsObj.items : Object.values(lineItemsObj.items);
             }
-            // Fallback for `.values`
             else if (lineItemsObj.values && typeof lineItemsObj.values === 'object') {
                 itemsArray = Array.isArray(lineItemsObj.values) ? lineItemsObj.values : Object.values(lineItemsObj.values);
             }
-            // If it's already an array
             else if (Array.isArray(lineItemsObj)) {
                 itemsArray = lineItemsObj;
             }
-            // If the root object itself is the dictionary {"0": {...}}
             else if (typeof lineItemsObj === 'object') {
                 itemsArray = Object.values(lineItemsObj);
             }
@@ -177,7 +178,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             return getSafeString(field);
         };
 
-        // 4. Map the pure JSON to our frontend payload
         const extractedData = {
             vendorName: getSafeString(rawFields.supplier_name) || getSafeString(rawFields.vendor_name) || 'Unknown Vendor',
             vendorAddress: getAddressText(rawFields.supplier_address) || getAddressText(rawFields.vendor_address) || 'Not Found',
@@ -190,11 +190,11 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             subtotal: getNum(rawFields.total_net) || getNum(rawFields.subtotal),
             salesTax: getNum(rawFields.total_tax) || getNum(rawFields.tax),
             totalAmount: getNum(rawFields.total_amount) || getNum(rawFields.total),
+            currency: extractCurrency(rawFields.locale), // <--- Added Currency Here
             lineItems: extractLineItems(rawFields.line_items)
         };
 
-        console.log(`✅ Success! Formatted Payload for ${extractedData.vendorName} - Total $${extractedData.totalAmount}`);
-        console.log(`   -> Found ${extractedData.lineItems.length} Line Items`);
+        console.log(`✅ Success! Formatted Payload for ${extractedData.vendorName} - Total ${extractedData.currency} ${extractedData.totalAmount}`);
         res.json({ success: true, extractedData });
 
     } catch (error) {
