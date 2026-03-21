@@ -113,7 +113,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 
                 if (parts.length > 0) return parts.filter(Boolean).join(', ');
 
-                // ⚠️ Fallback: If no specific keys matched, blindly grab ALL strings in the object!
                 const extractAllStrings = (obj) => {
                     let strings = [];
                     for (const key in obj) {
@@ -135,22 +134,26 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             return parseFloat(cleanVal) || 0.00;
         };
 
-        // 🚀 NUCLEAR LINE ITEM UNPACKER
+        // 🚀 FIXED: LINE ITEM DICTIONARY UNPACKER
         const extractLineItems = (lineItemsObj) => {
             if (!lineItemsObj) return [];
 
-            // Log exactly what Mindee gave us for Line Items so you can see it in Railway!
-            console.log("📦 Raw Line Items Dump:", JSON.stringify(lineItemsObj).substring(0, 200) + "...");
-
             let itemsArray = [];
-            if (Array.isArray(lineItemsObj)) {
+
+            // If Mindee nested it inside `.items` as a dictionary (e.g., {"0": {...}, "1": {...}})
+            if (lineItemsObj.items && typeof lineItemsObj.items === 'object') {
+                itemsArray = Array.isArray(lineItemsObj.items) ? lineItemsObj.items : Object.values(lineItemsObj.items);
+            }
+            // Fallback for `.values`
+            else if (lineItemsObj.values && typeof lineItemsObj.values === 'object') {
+                itemsArray = Array.isArray(lineItemsObj.values) ? lineItemsObj.values : Object.values(lineItemsObj.values);
+            }
+            // If it's already an array
+            else if (Array.isArray(lineItemsObj)) {
                 itemsArray = lineItemsObj;
-            } else if (lineItemsObj.items && Array.isArray(lineItemsObj.items)) {
-                itemsArray = lineItemsObj.items;
-            } else if (lineItemsObj.values && Array.isArray(lineItemsObj.values)) {
-                itemsArray = lineItemsObj.values;
-            } else if (typeof lineItemsObj === 'object') {
-                // Catch dictionary-style arrays (e.g. { "0": {...}, "1": {...} })
+            }
+            // If the root object itself is the dictionary {"0": {...}}
+            else if (typeof lineItemsObj === 'object') {
                 itemsArray = Object.values(lineItemsObj);
             }
 
@@ -160,12 +163,11 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
                 const f = item.value || item.fields || item;
                 return {
                     qty: getSafeString(f?.quantity) || '1',
-                    // Fallback to grab the entire object as text if 'description' key is missing
                     description: getSafeString(f?.description) || getSafeString(f?.item_description) || getSafeString(f) || 'Unknown Item',
                     unitPrice: getNum(f?.unit_price),
                     amount: getNum(f?.total_price) || getNum(f?.amount) || getNum(f?.total_amount)
                 };
-            }).filter(item => item.description !== 'Unknown Item' || item.amount > 0); // Much safer filter!
+            }).filter(item => item.description !== 'Unknown Item' || item.amount > 0);
         };
 
         const getRefNumbers = (field) => {
