@@ -78,36 +78,59 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             if (field.text !== undefined && field.text !== null) return String(field.text).trim();
 
             if (Array.isArray(field) && field.length > 0) return getSafeString(field[0]);
-            if (field.values && Array.isArray(field.values) && field.values.length > 0) return getSafeString(field.values[0]);
+
+            // Handle specific array objects Mindee creates
+            if (field.values && Array.isArray(field.values) && field.values.length > 0) {
+                return getSafeString(field.values[0]);
+            }
+            if (field.items && Array.isArray(field.items) && field.items.length > 0) {
+                return getSafeString(field.items[0]);
+            }
 
             // Nested simple objects fallback
             if (typeof field === 'object') {
                 if (field.name) return getSafeString(field.name);
                 if (field.description) return getSafeString(field.description);
+                if (field.address) return getSafeString(field.address);
+                if (field.number) return getSafeString(field.number);
             }
             return null;
         };
 
-        // Specialized Address Stitcher (Stitches nested properties together)
+        // Specialized Address Stitcher
         const getAddressText = (field) => {
             if (!field) return null;
-            const str = getSafeString(field);
+
+            // Sometimes it's directly an array
+            const targetObj = Array.isArray(field) ? field[0] : field;
+            if (!targetObj) return null;
+
+            // If it resolved to a clean string early, use it
+            const str = getSafeString(targetObj);
             if (str && str !== '[object Object]') return str;
 
-            if (typeof field === 'object') {
+            if (typeof targetObj === 'object') {
                 let parts = [];
-                const target = field.value || field; // Unpack wrap
-                if (target.address) parts.push(getSafeString(target.address));
-                else {
+                // Unpack any outer wrapper Mindee puts on objects
+                const target = targetObj.value || targetObj.fields || targetObj;
+
+                // Fallback to raw string address if available
+                if (target.address) {
+                    const addrStr = getSafeString(target.address);
+                    if (addrStr) parts.push(addrStr);
+                }
+
+                // If no raw address, stitch the components
+                if (parts.length === 0) {
                     if (target.street_number) parts.push(getSafeString(target.street_number));
                     if (target.street_name) parts.push(getSafeString(target.street_name));
+                    if (target.city) parts.push(getSafeString(target.city));
+                    if (target.state) parts.push(getSafeString(target.state));
+                    if (target.postal_code) parts.push(getSafeString(target.postal_code));
+                    if (target.country) parts.push(getSafeString(target.country));
                 }
-                if (target.city) parts.push(getSafeString(target.city));
-                if (target.state) parts.push(getSafeString(target.state));
-                if (target.postal_code) parts.push(getSafeString(target.postal_code));
-                if (target.country) parts.push(getSafeString(target.country));
 
-                if (parts.length > 0) return parts.join(', ');
+                if (parts.length > 0) return parts.filter(Boolean).join(', ');
             }
             return null;
         };
@@ -122,26 +145,43 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         // Specialized Line Item Unpacker
         const extractLineItems = (lineItemsObj) => {
             if (!lineItemsObj) return [];
-            let itemsArray = Array.isArray(lineItemsObj) ? lineItemsObj : (lineItemsObj.items || lineItemsObj.values || []);
+
+            let itemsArray = [];
+            if (Array.isArray(lineItemsObj)) {
+                itemsArray = lineItemsObj;
+            } else if (lineItemsObj.items && Array.isArray(lineItemsObj.items)) {
+                itemsArray = lineItemsObj.items;
+            } else if (lineItemsObj.values && Array.isArray(lineItemsObj.values)) {
+                itemsArray = lineItemsObj.values;
+            }
+
             if (!Array.isArray(itemsArray)) return [];
 
             return itemsArray.map(item => {
-                const f = item.value || item.fields || item; // Dig past Mindee's wrapper
+                // Dig past Mindee's wrapper layers
+                const f = item.value || item.fields || item;
                 return {
                     qty: getSafeString(f?.quantity) || '1',
                     description: getSafeString(f?.description) || getSafeString(f?.item_description) || 'Item',
                     unitPrice: getNum(f?.unit_price),
                     amount: getNum(f?.total_price) || getNum(f?.amount) || getNum(f?.total_amount)
                 };
-            }).filter(item => item.amount > 0); // Ensure blanks aren't rendered
+            }).filter(item => item.amount > 0 || item.unitPrice > 0);
         };
+
+        const getRefNumbers = (field) => {
+            if (!field) return null;
+            if (Array.isArray(field) && field.length > 0) return getSafeString(field[0]);
+            if (field.values && Array.isArray(field.values) && field.values.length > 0) return getSafeString(field.values[0]);
+            return getSafeString(field);
+        }
 
         const extractedData = {
             vendorName: getSafeString(rawFields.supplier_name) || getSafeString(rawFields.vendor_name) || 'Unknown Vendor',
             vendorAddress: getAddressText(rawFields.supplier_address) || getAddressText(rawFields.vendor_address) || 'Not Found',
             invoiceNumber: getSafeString(rawFields.invoice_number) || 'Not Found',
             invoiceDate: getSafeString(rawFields.date) || getSafeString(rawFields.invoice_date) || 'Not Found',
-            poNumber: getSafeString(rawFields.po_number) || getSafeString(rawFields.reference_numbers) || 'Not Found',
+            poNumber: getRefNumbers(rawFields.po_number) || getRefNumbers(rawFields.reference_numbers) || 'Not Found',
             dueDate: getSafeString(rawFields.due_date) || 'Not Found',
             billTo: getAddressText(rawFields.customer_address) || getAddressText(rawFields.billing_address) || getSafeString(rawFields.customer_name) || 'Not Found',
             shipTo: getAddressText(rawFields.shipping_address) || 'Not Found',
