@@ -22,12 +22,9 @@ app.get('/', (req, res) => {
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// 🛡️ MINDEE MAP TO JSON CONVERTER (The Fix for '_indentLevel')
-// This safely unpacks Mindee's custom Map classes into standard JSON
+// 🛡️ MINDEE MAP TO JSON CONVERTER
 function mindeeToObject(obj) {
     if (obj === null || obj === undefined) return null;
-
-    // If it's a Mindee Map (StringDict), unpack it safely
     if (typeof obj.entries === 'function') {
         const out = {};
         for (const [key, val] of obj.entries()) {
@@ -35,22 +32,18 @@ function mindeeToObject(obj) {
         }
         return out;
     }
-
     if (Array.isArray(obj)) {
         return obj.map(item => mindeeToObject(item));
     }
-
     if (typeof obj === 'object') {
         const out = {};
         for (const key of Object.keys(obj)) {
-            // Ignore internal metadata, keep the actual data
-            if (!key.startsWith('_') && key !== 'polygon' && key !== 'boundingBox') {
+            if (!key.startsWith('_') && key !== 'polygon' && key !== 'boundingBox' && key !== 'bounding_box' && key !== 'confidence') {
                 out[key] = mindeeToObject(obj[key]);
             }
         }
         return out;
     }
-
     return obj;
 }
 
@@ -61,7 +54,6 @@ function mindeeToObject(obj) {
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
         console.log(`📄 Extracting: ${req.file.originalname}`);
 
         const mindeeClient = new mindee.Client({ apiKey: process.env.MINDEE_V2_API_KEY });
@@ -73,16 +65,10 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             { modelId: "b3467dd3-63d2-4914-9791-a2dfadfbfe9a" }
         );
 
-        // 1. Target the raw prediction fields
         const rawPrediction = response.document?.inference?.prediction?.fields || response.inference?.result?.fields || {};
-
-        // 2. Unpack the Mindee Map into pure JSON
         const rawFields = mindeeToObject(rawPrediction);
 
-        // 3. Log the ACTUAL keys found (You will now see real data in Railway)
-        console.log("🔍 AI Successfully Extracted Keys:", Object.keys(rawFields));
-
-        // 🛡️ AGGRESSIVE STRING EXTRACTOR
+        // 🛡️ THE ULTIMATE DEEP-SEARCH EXTRACTOR
         const getSafeString = (field) => {
             if (field === null || field === undefined) return null;
             if (typeof field === 'string' || typeof field === 'number') return String(field).trim();
@@ -93,12 +79,35 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 
             if (Array.isArray(field) && field.length > 0) return getSafeString(field[0]);
             if (field.values && Array.isArray(field.values) && field.values.length > 0) return getSafeString(field.values[0]);
-            if (field.items && Array.isArray(field.items) && field.items.length > 0) return getSafeString(field.items[0]);
 
+            // Nested simple objects fallback
             if (typeof field === 'object') {
-                if (field.address) return getSafeString(field.address);
                 if (field.name) return getSafeString(field.name);
                 if (field.description) return getSafeString(field.description);
+            }
+            return null;
+        };
+
+        // Specialized Address Stitcher (Stitches nested properties together)
+        const getAddressText = (field) => {
+            if (!field) return null;
+            const str = getSafeString(field);
+            if (str && str !== '[object Object]') return str;
+
+            if (typeof field === 'object') {
+                let parts = [];
+                const target = field.value || field; // Unpack wrap
+                if (target.address) parts.push(getSafeString(target.address));
+                else {
+                    if (target.street_number) parts.push(getSafeString(target.street_number));
+                    if (target.street_name) parts.push(getSafeString(target.street_name));
+                }
+                if (target.city) parts.push(getSafeString(target.city));
+                if (target.state) parts.push(getSafeString(target.state));
+                if (target.postal_code) parts.push(getSafeString(target.postal_code));
+                if (target.country) parts.push(getSafeString(target.country));
+
+                if (parts.length > 0) return parts.join(', ');
             }
             return null;
         };
@@ -110,40 +119,39 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             return parseFloat(cleanVal) || 0.00;
         };
 
+        // Specialized Line Item Unpacker
         const extractLineItems = (lineItemsObj) => {
             if (!lineItemsObj) return [];
-            // Catch all array types
-            const itemsArray = Array.isArray(lineItemsObj) ? lineItemsObj : (lineItemsObj.items || lineItemsObj.values || []);
+            let itemsArray = Array.isArray(lineItemsObj) ? lineItemsObj : (lineItemsObj.items || lineItemsObj.values || []);
             if (!Array.isArray(itemsArray)) return [];
 
             return itemsArray.map(item => {
-                const f = item.fields || item.values || item;
+                const f = item.value || item.fields || item; // Dig past Mindee's wrapper
                 return {
                     qty: getSafeString(f?.quantity) || '1',
                     description: getSafeString(f?.description) || getSafeString(f?.item_description) || 'Item',
                     unitPrice: getNum(f?.unit_price),
                     amount: getNum(f?.total_price) || getNum(f?.amount) || getNum(f?.total_amount)
                 };
-            });
+            }).filter(item => item.amount > 0); // Ensure blanks aren't rendered
         };
 
-        // 4. Map the pure JSON to our frontend payload
         const extractedData = {
             vendorName: getSafeString(rawFields.supplier_name) || getSafeString(rawFields.vendor_name) || 'Unknown Vendor',
-            vendorAddress: getSafeString(rawFields.supplier_address) || getSafeString(rawFields.vendor_address) || 'Not Found',
+            vendorAddress: getAddressText(rawFields.supplier_address) || getAddressText(rawFields.vendor_address) || 'Not Found',
             invoiceNumber: getSafeString(rawFields.invoice_number) || 'Not Found',
             invoiceDate: getSafeString(rawFields.date) || getSafeString(rawFields.invoice_date) || 'Not Found',
             poNumber: getSafeString(rawFields.po_number) || getSafeString(rawFields.reference_numbers) || 'Not Found',
             dueDate: getSafeString(rawFields.due_date) || 'Not Found',
-            billTo: getSafeString(rawFields.customer_address) || getSafeString(rawFields.billing_address) || 'Not Found',
-            shipTo: getSafeString(rawFields.shipping_address) || 'Not Found',
+            billTo: getAddressText(rawFields.customer_address) || getAddressText(rawFields.billing_address) || getSafeString(rawFields.customer_name) || 'Not Found',
+            shipTo: getAddressText(rawFields.shipping_address) || 'Not Found',
             subtotal: getNum(rawFields.total_net) || getNum(rawFields.subtotal),
             salesTax: getNum(rawFields.total_tax) || getNum(rawFields.tax),
             totalAmount: getNum(rawFields.total_amount) || getNum(rawFields.total),
             lineItems: extractLineItems(rawFields.line_items)
         };
 
-        console.log(`✅ Formatted Payload for ${extractedData.vendorName}: Total $${extractedData.totalAmount}`);
+        console.log(`✅ Fully Extracted Payload for ${extractedData.vendorName}:`);
         res.json({ success: true, extractedData });
 
     } catch (error) {
