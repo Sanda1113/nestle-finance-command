@@ -192,14 +192,18 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
     }
 });
 
+// ==========================================
+// 🛡️ RECONCILIATION & LOGGING (UPDATED)
+// ==========================================
+
 app.post('/api/save-reconciliation', async (req, res) => {
     const { invoiceData, poData, matchStatus, supplierEmail } = req.body;
     try {
         await supabase.from('invoices').insert([{ invoice_number: invoiceData.invoiceNumber, extracted_amount: invoiceData.totalAmount, status: matchStatus }]);
 
-        // Let's create the timeline status based on the match
         let timeline = matchStatus === 'Approved' ? 'Awaiting Payout' : 'Discrepancy - Manual Review';
 
+        // Saving supplier_email and pure JSON data so Finance can render PDFs!
         const { error: reconErr } = await supabase.from('reconciliations').insert([{
             vendor_name: invoiceData.vendorName,
             invoice_number: invoiceData.invoiceNumber,
@@ -207,7 +211,10 @@ app.post('/api/save-reconciliation', async (req, res) => {
             invoice_total: invoiceData.totalAmount,
             po_total: poData.totalAmount,
             match_status: matchStatus,
-            timeline_status: timeline, // Live tracking update
+            timeline_status: timeline,
+            supplier_email: supplierEmail,
+            invoice_data: invoiceData,
+            po_data: poData,
             processed_at: new Date().toISOString()
         }]);
 
@@ -238,7 +245,7 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
 });
 
 // ==========================================
-// 📦 MVP 1: BOQ TO PO PROCUREMENT PIPELINE
+// 📦 BOQ TO PO PROCUREMENT PIPELINE
 // ==========================================
 
 app.post('/api/save-boq', async (req, res) => {
@@ -252,7 +259,7 @@ app.post('/api/save-boq', async (req, res) => {
             status: 'Pending Review',
             line_items: boqData.lineItems,
             supplier_email: supplierEmail,
-            vendor_id: vendorId // Saved User ID
+            vendor_id: vendorId
         }]);
 
         if (error) throw error;
@@ -273,15 +280,11 @@ app.get('/api/boqs', async (req, res) => {
     }
 });
 
-// NEW: Reject BOQ Endpoint
 app.post('/api/boqs/:id/reject', async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body;
     try {
-        const { error } = await supabase.from('boqs').update({
-            status: 'Rejected',
-            rejection_reason: reason
-        }).eq('id', id);
+        const { error } = await supabase.from('boqs').update({ status: 'Rejected', rejection_reason: reason }).eq('id', id);
         if (error) throw error;
         res.json({ success: true });
     } catch (error) {
@@ -310,7 +313,6 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
             paymentTerms: "Net 30"
         };
 
-        // Mark BOQ as PO_GENERATED
         await supabase.from('boqs').update({ status: `PO Generated: ${generatedPoNumber}` }).eq('id', id);
 
         const { error: poErr } = await supabase.from('purchase_orders').insert([{
@@ -330,7 +332,6 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
     }
 });
 
-// Fetch POs for a specific supplier
 app.get('/api/supplier/pos/:email', async (req, res) => {
     const { email } = req.params;
     try {
@@ -340,7 +341,6 @@ app.get('/api/supplier/pos/:email', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Failed to fetch POs' }); }
 });
 
-// NEW: Mark PO as Downloaded
 app.patch('/api/purchase_orders/:id/downloaded', async (req, res) => {
     const { id } = req.params;
     try {
@@ -349,18 +349,29 @@ app.patch('/api/purchase_orders/:id/downloaded', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Update failed' }); }
 });
 
-// NEW: Aggregated Logs for Supplier
+// ==========================================
+// 🚀 THE UNIFIED SUPPLIER TIMELINE ENGINE
+// ==========================================
 app.get('/api/supplier/logs/:email', async (req, res) => {
     const { email } = req.params;
     try {
-        // Fetch BOQs
         const { data: boqs } = await supabase.from('boqs').select('id, document_number, total_amount, status, created_at, vendor_name').eq('supplier_email', email);
-        // Fetch Reconciliations (Invoices matched to POs)
-        // Since we don't save supplier email explicitly on reconciliations in this DB schema, we fetch by vendor name (or we can just fetch all and filter)
-        // For security, assuming the supplier knows their own data. We'll fetch everything for now and filter by email if possible.
-        // Actually, we'll just fetch BOQs for the timeline in this iteration to be safe.
-        res.json({ success: true, boqs: boqs || [] });
-    } catch (error) { res.status(500).json({ error: 'Failed to fetch logs' }); }
+        const { data: pos } = await supabase.from('purchase_orders').select('id, po_number, total_amount, status, created_at, is_downloaded').eq('supplier_email', email);
+        const { data: recs } = await supabase.from('reconciliations').select('id, invoice_number, match_status, timeline_status, processed_at').eq('supplier_email', email);
+
+        let logs = [];
+        if (boqs) boqs.forEach(b => logs.push({ id: `boq-${b.id}`, date: b.created_at, type: 'BOQ / Quote', ref: b.document_number, status: b.status }));
+        if (pos) pos.forEach(p => logs.push({ id: `po-${p.id}`, date: p.created_at || new Date().toISOString(), type: 'Official PO', ref: p.po_number, status: p.is_downloaded ? 'Downloaded' : 'New / Unread' }));
+        if (recs) recs.forEach(r => logs.push({ id: `rec-${r.id}`, date: r.processed_at, type: 'Invoice Submitted', ref: r.invoice_number, status: r.timeline_status }));
+
+        // Sort dynamically from newest to oldest
+        logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        res.json({ success: true, logs });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Failed to fetch logs' });
+    }
 });
 
 app.listen(port, '0.0.0.0', () => {
