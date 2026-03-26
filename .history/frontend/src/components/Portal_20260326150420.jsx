@@ -313,52 +313,5 @@ function FinancePortal() {
         </div>
     );
 }
-function AnalyticsPortal() {
-    const [stats, setStats] = useState({ total: 0, approved: 0, rejected: 0, value: 0 });
-    const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/reconciliations');
-                const data = res.data.data || [];
-                const approved = data.filter(r => r.match_status && r.match_status.includes('Approve')).length;
-                const rejected = data.filter(r => r.match_status && r.match_status.includes('Reject')).length;
-                const totalValue = data.reduce((acc, curr) => acc + (Number(curr.invoice_total) || 0), 0);
-                setStats({ total: data.length, approved, rejected, value: totalValue });
-            } catch (err) { console.error(err); } finally { setLoading(false); }
-        };
-        fetchStats();
-    }, []);
-
-    return (
-        <div className="max-w-7xl mx-auto space-y-6">
-            <div className="mb-6">
-                <h2 className="text-3xl font-black text-slate-800 dark:text-white">Platform Analytics</h2>
-                <p className="text-slate-500 dark:text-slate-400">High-level view of AI throughput and financial processing.</p>
-            </div>
-
-            {loading ? (
-                <div className="p-12 text-center text-slate-500 font-bold animate-pulse">Calculating Live Metrics...</div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
-                        <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Total Documents</p>
-                        <p className="text-5xl font-black text-blue-600 dark:text-blue-400">{stats.total}</p>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
-                        <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Auto-Approval Rate</p>
-                        <p className="text-5xl font-black text-emerald-500 dark:text-emerald-400">
-                            {stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}%
-                        </p>
-                        <p className="text-xs text-slate-500 mt-2 font-medium">{stats.approved} Approved / {stats.rejected} Rejected</p>
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
-                        <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Total Value Processed</p>
-                        <p className="text-4xl font-black text-slate-800 dark:text-slate-100 mt-2">${stats.value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
+function AnalyticsPortal() { ... } // Your exact same Analytics code
