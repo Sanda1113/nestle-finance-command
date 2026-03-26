@@ -295,7 +295,7 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
         const { error: poErr } = await supabase.from('purchase_orders').insert([{
             po_number: generatedPoNumber,
             total_amount: boqData.total_amount,
-            status: 'Awaiting Invoice',
+            status: 'Pending',
             supplier_email: boqData.supplier_email,
             po_data: formalPoData
         }]);
