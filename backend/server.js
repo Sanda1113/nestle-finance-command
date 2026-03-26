@@ -51,11 +51,63 @@ function mindeeToObject(obj) {
 // 🏢 AI EXTRACTION & AUTO-SAVE (UNTOUCHED)
 // ==========================================
 
+// ==========================================
+// 🏢 AI EXTRACTION & AUTO-SAVE
+// ==========================================
+
 app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
         console.log(`\n📄 --- Extracting Document: ${req.file.originalname} ---`);
 
+        const fileName = req.file.originalname.toLowerCase();
+
+        // 🚀 NATIVE CSV HANDLER (Bypasses Mindee for raw CSV data)
+        if (fileName.endsWith('.csv')) {
+            console.log("📊 CSV Detected. Parsing natively...");
+            const text = req.file.buffer.toString('utf-8');
+            const lines = text.split('\n').filter(line => line.trim().length > 0);
+
+            let lineItems = [];
+            let totalAmount = 0;
+
+            // Simple CSV Parser (Assumes format: Description, Qty, UnitPrice)
+            for (let i = 1; i < lines.length; i++) { // Skip header row
+                const columns = lines[i].split(',');
+                if (columns.length >= 3) {
+                    const desc = columns[0].trim();
+                    const qty = parseFloat(columns[1].replace(/[^0-9.-]+/g, "")) || 1;
+                    const price = parseFloat(columns[2].replace(/[^0-9.-]+/g, "")) || 0;
+                    const amount = qty * price;
+
+                    if (desc && price > 0) {
+                        lineItems.push({ qty: qty.toString(), description: desc, unitPrice: price, amount: amount });
+                        totalAmount += amount;
+                    }
+                }
+            }
+
+            return res.json({
+                success: true,
+                extractedData: {
+                    vendorName: 'CSV Vendor / Data Upload',
+                    vendorAddress: 'Extracted from CSV',
+                    invoiceNumber: `CSV-${Date.now().toString().slice(-5)}`,
+                    invoiceDate: new Date().toISOString().split('T')[0],
+                    poNumber: 'Not Found',
+                    dueDate: new Date().toISOString().split('T')[0],
+                    billTo: 'Nestle Procurement',
+                    shipTo: 'Nestle Warehouse',
+                    subtotal: totalAmount,
+                    salesTax: 0,
+                    totalAmount: totalAmount,
+                    currency: 'USD',
+                    lineItems: lineItems
+                }
+            });
+        }
+
+        // 🛡️ NORMAL MINDEE AI EXTRACTION FOR PDF/IMAGES
         const mindeeClient = new mindee.Client({ apiKey: process.env.MINDEE_V2_API_KEY });
         const inputSource = new mindee.BufferInput({ buffer: req.file.buffer, filename: req.file.originalname || 'invoice.pdf' });
 
@@ -71,16 +123,12 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
         const getSafeString = (field) => {
             if (field === null || field === undefined) return null;
             if (typeof field === 'string' || typeof field === 'number') return String(field).trim();
-
             if (field.value !== undefined && field.value !== null) return String(field.value).trim();
             if (field.content !== undefined && field.content !== null) return String(field.content).trim();
             if (field.text !== undefined && field.text !== null) return String(field.text).trim();
-
             if (Array.isArray(field) && field.length > 0) return getSafeString(field[0]);
-
             if (field.values && Array.isArray(field.values) && field.values.length > 0) return getSafeString(field.values[0]);
             if (field.items && Array.isArray(field.items) && field.items.length > 0) return getSafeString(field.items[0]);
-
             if (typeof field === 'object') {
                 if (field.name) return getSafeString(field.name);
                 if (field.description) return getSafeString(field.description);
@@ -100,12 +148,7 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             if (typeof targetObj === 'object') {
                 let parts = [];
                 const target = targetObj.value || targetObj.fields || targetObj;
-
-                if (target.address) {
-                    const addrStr = getSafeString(target.address);
-                    if (addrStr) parts.push(addrStr);
-                }
-
+                if (target.address) parts.push(getSafeString(target.address));
                 if (parts.length === 0) {
                     if (target.street_number) parts.push(getSafeString(target.street_number));
                     if (target.street_name) parts.push(getSafeString(target.street_name));
@@ -114,7 +157,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
                     if (target.postal_code) parts.push(getSafeString(target.postal_code));
                     if (target.country) parts.push(getSafeString(target.country));
                 }
-
                 if (parts.length > 0) return parts.filter(Boolean).join(', ');
             }
             return null;
@@ -136,7 +178,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 
         const extractLineItems = (lineItemsObj) => {
             if (!lineItemsObj) return [];
-
             let itemsArray = [];
             if (lineItemsObj.items && typeof lineItemsObj.items === 'object') {
                 itemsArray = Array.isArray(lineItemsObj.items) ? lineItemsObj.items : Object.values(lineItemsObj.items);
@@ -147,7 +188,6 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             } else if (typeof lineItemsObj === 'object') {
                 itemsArray = Object.values(lineItemsObj);
             }
-
             if (!Array.isArray(itemsArray)) return [];
 
             return itemsArray.map(item => {
@@ -168,11 +208,12 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             return getSafeString(field);
         }
 
+        // 🚀 EXPANDED FALLBACKS FOR MISSING DATA
         const extractedData = {
-            vendorName: getSafeString(rawFields.supplier_name) || getSafeString(rawFields.vendor_name) || 'Unknown Vendor',
+            vendorName: getSafeString(rawFields.supplier_name) || getSafeString(rawFields.vendor_name) || getSafeString(rawFields.customer_name) || 'Unknown Vendor',
             vendorAddress: getAddressText(rawFields.supplier_address) || getAddressText(rawFields.vendor_address) || 'Not Found',
-            invoiceNumber: getSafeString(rawFields.invoice_number) || 'Not Found',
-            invoiceDate: getSafeString(rawFields.date) || getSafeString(rawFields.invoice_date) || 'Not Found',
+            invoiceNumber: getSafeString(rawFields.invoice_number) || getSafeString(rawFields.document_number) || getSafeString(rawFields.po_number) || 'Not Found',
+            invoiceDate: getSafeString(rawFields.date) || getSafeString(rawFields.invoice_date) || getSafeString(rawFields.issue_date) || new Date().toISOString().split('T')[0],
             poNumber: getRefNumbers(rawFields.po_number) || getRefNumbers(rawFields.reference_numbers) || 'Not Found',
             dueDate: getSafeString(rawFields.due_date) || 'Not Found',
             billTo: getAddressText(rawFields.customer_address) || getAddressText(rawFields.billing_address) || getSafeString(rawFields.customer_name) || 'Not Found',
