@@ -356,3 +356,7 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
 app.listen(port, '0.0.0.0', () => {
     console.log(`🚀 Nestle Finance ERP Backend LIVE on port ${port}`);
 });
+
+app.listen(port, '0.0.0.0', () => {
+    console.log(`🚀 Nestle Finance ERP Backend LIVE on port ${port}`);
+});
