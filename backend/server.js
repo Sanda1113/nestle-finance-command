@@ -193,14 +193,22 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
 });
 
 app.post('/api/save-reconciliation', async (req, res) => {
-    const { invoiceData, poData, matchStatus } = req.body;
+    const { invoiceData, poData, matchStatus, supplierEmail } = req.body;
     try {
         await supabase.from('invoices').insert([{ invoice_number: invoiceData.invoiceNumber, extracted_amount: invoiceData.totalAmount, status: matchStatus }]);
-        await supabase.from('purchase_orders').insert([{ po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber, total_amount: poData.totalAmount, status: matchStatus }]);
+
+        // Let's create the timeline status based on the match
+        let timeline = matchStatus === 'Approved' ? 'Awaiting Payout' : 'Discrepancy - Manual Review';
 
         const { error: reconErr } = await supabase.from('reconciliations').insert([{
-            vendor_name: invoiceData.vendorName, invoice_number: invoiceData.invoiceNumber, po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
-            invoice_total: invoiceData.totalAmount, po_total: poData.totalAmount, match_status: matchStatus, processed_at: new Date().toISOString()
+            vendor_name: invoiceData.vendorName,
+            invoice_number: invoiceData.invoiceNumber,
+            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
+            invoice_total: invoiceData.totalAmount,
+            po_total: poData.totalAmount,
+            match_status: matchStatus,
+            timeline_status: timeline, // Live tracking update
+            processed_at: new Date().toISOString()
         }]);
 
         if (reconErr) throw reconErr;
@@ -222,7 +230,8 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
     const { id } = req.params;
     const { newStatus } = req.body;
     try {
-        const { error } = await supabase.from('reconciliations').update({ match_status: newStatus }).eq('id', id);
+        let newTimeline = newStatus.includes('Approve') ? 'Approved - Awaiting Payout' : 'Rejected by Finance';
+        const { error } = await supabase.from('reconciliations').update({ match_status: newStatus, timeline_status: newTimeline }).eq('id', id);
         if (error) throw error;
         res.json({ success: true });
     } catch (error) { res.status(500).json({ error: 'Status update failed' }); }
@@ -232,9 +241,8 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
 // 📦 MVP 1: BOQ TO PO PROCUREMENT PIPELINE
 // ==========================================
 
-// 1. Save Extracted BOQ to Database
 app.post('/api/save-boq', async (req, res) => {
-    const { boqData, supplierEmail } = req.body;
+    const { boqData, supplierEmail, vendorId } = req.body;
     try {
         const { error } = await supabase.from('boqs').insert([{
             vendor_name: boqData.vendorName,
@@ -243,7 +251,8 @@ app.post('/api/save-boq', async (req, res) => {
             currency: boqData.currency,
             status: 'Pending Review',
             line_items: boqData.lineItems,
-            supplier_email: supplierEmail // Link BOQ to the supplier who uploaded it!
+            supplier_email: supplierEmail,
+            vendor_id: vendorId // Saved User ID
         }]);
 
         if (error) throw error;
@@ -254,7 +263,6 @@ app.post('/api/save-boq', async (req, res) => {
     }
 });
 
-// 2. Fetch BOQs for Procurement Dashboard
 app.get('/api/boqs', async (req, res) => {
     try {
         const { data, error } = await supabase.from('boqs').select('*').order('created_at', { ascending: false });
@@ -265,7 +273,22 @@ app.get('/api/boqs', async (req, res) => {
     }
 });
 
-// 3. 1-Click PO Generator (Constructs the official PO Document)
+// NEW: Reject BOQ Endpoint
+app.post('/api/boqs/:id/reject', async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+    try {
+        const { error } = await supabase.from('boqs').update({
+            status: 'Rejected',
+            rejection_reason: reason
+        }).eq('id', id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to reject BOQ' });
+    }
+});
+
 app.post('/api/boqs/:id/generate-po', async (req, res) => {
     const { id } = req.params;
     try {
@@ -274,7 +297,6 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
 
         const generatedPoNumber = `PO-NESTLE-${Date.now().toString().slice(-5)}`;
 
-        // Construct the formal PO Data Object based on the BOQ
         const formalPoData = {
             poNumber: generatedPoNumber,
             poDate: new Date().toISOString().split('T')[0],
@@ -283,21 +305,21 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
             currency: boqData.currency,
             totalAmount: boqData.total_amount,
             lineItems: boqData.line_items,
-            deliveryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default 14 days
+            deliveryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
             deliveryLocation: "Nestle Main Warehouse, Colombo",
             paymentTerms: "Net 30"
         };
 
-        // Update BOQ status
-        await supabase.from('boqs').update({ status: 'PO Generated' }).eq('id', id);
+        // Mark BOQ as PO_GENERATED
+        await supabase.from('boqs').update({ status: `PO Generated: ${generatedPoNumber}` }).eq('id', id);
 
-        // Inject the Official PO into the purchase_orders table, assigned to the supplier
         const { error: poErr } = await supabase.from('purchase_orders').insert([{
             po_number: generatedPoNumber,
             total_amount: boqData.total_amount,
             status: 'Pending',
             supplier_email: boqData.supplier_email,
-            po_data: formalPoData
+            po_data: formalPoData,
+            is_downloaded: false
         }]);
 
         if (poErr) throw poErr;
@@ -308,49 +330,37 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
     }
 });
 
-// 4. Supplier PO Inbox Fetcher
+// Fetch POs for a specific supplier
 app.get('/api/supplier/pos/:email', async (req, res) => {
     const { email } = req.params;
     try {
-        // Fetch all generated POs that belong to this specific supplier
-        const { data, error } = await supabase
-            .from('purchase_orders')
-            .select('*')
-            .eq('supplier_email', email)
-            .not('po_data', 'is', null)
-            .order('id', { ascending: false });
-
+        const { data, error } = await supabase.from('purchase_orders').select('*').eq('supplier_email', email).not('po_data', 'is', null).order('id', { ascending: false });
         if (error) throw error;
         res.json({ success: true, data });
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch POs' });
-    }
+    } catch (error) { res.status(500).json({ error: 'Failed to fetch POs' }); }
 });
 
-// ==========================================
-// 📋 FINANCE PORTAL QUEUE & ANALYTICS
-// ==========================================
-// ... Keep your existing /api/reconciliations endpoints here exactly as they are ...
-app.get('/api/reconciliations', async (req, res) => {
-    try {
-        const { data, error } = await supabase.from('reconciliations').select('*').order('processed_at', { ascending: false });
-        if (error) throw error;
-        res.json({ success: true, data });
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch ledger' });
-    }
-});
-
-app.patch('/api/reconciliations/:id', async (req, res) => {
+// NEW: Mark PO as Downloaded
+app.patch('/api/purchase_orders/:id/downloaded', async (req, res) => {
     const { id } = req.params;
-    const { newStatus } = req.body;
     try {
-        const { error } = await supabase.from('reconciliations').update({ match_status: newStatus }).eq('id', id);
-        if (error) throw error;
+        await supabase.from('purchase_orders').update({ is_downloaded: true }).eq('id', id);
         res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: 'Status update failed' });
-    }
+    } catch (error) { res.status(500).json({ error: 'Update failed' }); }
+});
+
+// NEW: Aggregated Logs for Supplier
+app.get('/api/supplier/logs/:email', async (req, res) => {
+    const { email } = req.params;
+    try {
+        // Fetch BOQs
+        const { data: boqs } = await supabase.from('boqs').select('id, document_number, total_amount, status, created_at, vendor_name').eq('supplier_email', email);
+        // Fetch Reconciliations (Invoices matched to POs)
+        // Since we don't save supplier email explicitly on reconciliations in this DB schema, we fetch by vendor name (or we can just fetch all and filter)
+        // For security, assuming the supplier knows their own data. We'll fetch everything for now and filter by email if possible.
+        // Actually, we'll just fetch BOQs for the timeline in this iteration to be safe.
+        res.json({ success: true, boqs: boqs || [] });
+    } catch (error) { res.status(500).json({ error: 'Failed to fetch logs' }); }
 });
 
 app.listen(port, '0.0.0.0', () => {
