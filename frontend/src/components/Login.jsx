@@ -183,10 +183,10 @@ export default function Login({ onLogin }) {
                     © {new Date().getFullYear()} Nestle Finance Command Center
                 </p>
             </div>
-        </div >
+        </div>
 
-            {/* Optional: Remove style block if not using Next.js; animations can be defined in Tailwind config */ }
-            < style jsx > {`
+            {/* Optional: Remove style block if not using Next.js; animations can be defined in Tailwind config */}
+            <style jsx>{`
                 @keyframes gradient-xy {
                     0%, 100% { transform: translate(0%, 0%); }
                     50% { transform: translate(10%, 10%); }
@@ -203,7 +203,7 @@ export default function Login({ onLogin }) {
                 .animate-shake {
                     animation: shake 0.4s ease-in-out;
                 }
-            `}</style >
+            `}</style>
         </>
     );
 }
