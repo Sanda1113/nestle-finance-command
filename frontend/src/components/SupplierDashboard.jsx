@@ -183,7 +183,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                 <div className="bg-slate-800/50 p-3.5 border-b border-slate-800">
                     <h3 className="font-bold text-slate-100 text-sm tracking-tight">{title}</h3>
                 </div>
-                <div className="p-4 flex-grow flex flex-col text-sm">
+                <div className="p-4 grow flex flex-col text-sm">
                     <div className="grid grid-cols-2 gap-3 mb-4">
                         <div className="col-span-2">
                             <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Vendor Name</p>
@@ -198,7 +198,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                             <p className="text-slate-300">{data.invoiceDate}</p>
                         </div>
                     </div>
-                    <div className="mb-4 flex-grow">
+                    <div className="mb-4 grow">
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Line Items</h4>
                         {data.lineItems?.length > 0 ? (
                             <div className="overflow-x-auto rounded border border-slate-700 max-h-40">
@@ -237,14 +237,14 @@ export default function SupplierDashboard({ user, onLogout }) {
                 {/* Header */}
                 <div className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-4 px-6 flex flex-wrap justify-between items-center sticky top-0 z-20 shadow-sm">
                     <div className="flex items-center space-x-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-md">
+                        <div className="w-8 h-8 bg-linear-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center shadow-md">
                             <span className="text-white font-bold text-lg">N</span>
                         </div>
-                        <h1 className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Nestle<span className="text-slate-200">Supplier</span></h1>
+                        <h1 className="text-xl font-extrabold tracking-tight bg-linear-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Nestle<span className="text-slate-200">Supplier</span></h1>
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full">
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                            <div className="w-6 h-6 rounded-full bg-linear-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
                                 {user.name?.[0] || user.email[0].toUpperCase()}
                             </div>
                             <span className="text-xs font-medium text-slate-300 hidden sm:block">{user.name || user.email}</span>
@@ -309,7 +309,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                         key={tab.id}
                                         onClick={() => { setMode(tab.id); setMatchStatus('Pending'); setError(null); }}
                                         className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-all ${mode === tab.id
-                                                ? `bg-gradient-to-r from-${tab.color}-600 to-${tab.color}-700 text-white shadow-md`
+                                                ? `bg-linear-to-r from-${tab.color}-600 to-${tab.color}-700 text-white shadow-md`
                                                 : 'text-slate-400 hover:bg-slate-800'
                                             }`}
                                     >
@@ -355,7 +355,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                     <p className="text-lg font-bold text-slate-100 mt-1">{formatCurrency(po.total_amount, po.po_data?.currency)}</p>
                                                     <button onClick={() => handlePrintPO(po)} className={`mt-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${po.is_downloaded
                                                             ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                                                            : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 shadow-sm'
+                                                            : 'bg-linear-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 shadow-sm'
                                                         }`}>
                                                         📄 PDF
                                                     </button>
@@ -378,7 +378,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                 className="block w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-900/50 file:text-blue-300 hover:file:bg-blue-800/50 cursor-pointer" />
                                             <p className="text-xs text-slate-400 mt-2">Supported: PDF, Images, Excel</p>
                                         </div>
-                                        <button onClick={handleBoqUpload} disabled={loading || !boqFile} className="w-full mt-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold rounded-lg disabled:opacity-50 transition-all shadow-sm hover:shadow-md">
+                                        <button onClick={handleBoqUpload} disabled={loading || !boqFile} className="w-full mt-5 py-2.5 bg-linear-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold rounded-lg disabled:opacity-50 transition-all shadow-sm hover:shadow-md">
                                             {loading ? "Digitizing..." : "Submit Quote"}
                                         </button>
                                     </div>
@@ -407,7 +407,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                             <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setPoFile(e.target.files[0])} className="block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-purple-900/50 file:text-purple-300 cursor-pointer border border-slate-700 rounded-md p-1.5" />
                                         </div>
                                     </div>
-                                    <button onClick={handleMatchUpload} disabled={loading || !invoiceFile || !poFile} className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm font-bold rounded-lg mt-4 disabled:opacity-50 transition-all shadow-sm hover:shadow-md">
+                                    <button onClick={handleMatchUpload} disabled={loading || !invoiceFile || !poFile} className="w-full py-2.5 bg-linear-to-r from-emerald-600 to-teal-600 text-white text-sm font-bold rounded-lg mt-4 disabled:opacity-50 transition-all shadow-sm hover:shadow-md">
                                         {loading ? "Matching..." : "Submit Documents"}
                                     </button>
 
@@ -466,8 +466,8 @@ export default function SupplierDashboard({ user, onLogout }) {
                             <div className="bg-slate-900 rounded-xl border border-slate-800 p-5 shadow-sm">
                                 <h3 className="font-bold text-slate-100 flex items-center gap-2 text-lg mb-3">⚡ Quick Actions</h3>
                                 <div className="space-y-2">
-                                    <button onClick={() => { setMode('boq'); setBoqFile(null); }} className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2">📤 Submit Quote</button>
-                                    <button onClick={() => { setMode('match'); setInvoiceFile(null); setPoFile(null); }} className="w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2">🔗 Match Invoice & PO</button>
+                                    <button onClick={() => { setMode('boq'); setBoqFile(null); }} className="w-full py-2 bg-linear-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2">📤 Submit Quote</button>
+                                    <button onClick={() => { setMode('match'); setInvoiceFile(null); setPoFile(null); }} className="w-full py-2 bg-linear-to-r from-emerald-600 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2">🔗 Match Invoice & PO</button>
                                     <button onClick={() => { setMode('logs'); }} className="w-full py-2 bg-slate-800 text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-700 transition-all flex items-center justify-center gap-2">📜 View Timeline</button>
                                 </div>
                             </div>
@@ -496,7 +496,7 @@ export default function SupplierDashboard({ user, onLogout }) {
 
                             {/* Pending POs */}
                             {pendingPOs > 0 && (
-                                <div className="bg-gradient-to-br from-amber-900/30 to-orange-900/30 rounded-xl border border-amber-800 p-5 shadow-sm">
+                                <div className="bg-linear-to-br from-amber-900/30 to-orange-900/30 rounded-xl border border-amber-800 p-5 shadow-sm">
                                     <h3 className="font-bold text-amber-300 flex items-center gap-2 text-lg mb-2">⚠️ Attention Needed</h3>
                                     <p className="text-amber-200">You have {pendingPOs} unread PO(s). Download them to proceed.</p>
                                     <button onClick={() => setMode('inbox')} className="mt-3 text-xs font-bold text-amber-300 underline">View POs →</button>
