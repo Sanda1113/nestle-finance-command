@@ -103,7 +103,7 @@ export default function Portal({ user, onLogout }) {
                     <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-bold">Admin: {user.id?.slice(0, 8) || user.email}</p>
                 </div>
 
-                <div className="grow py-6 flex flex-col gap-2 px-4 overflow-y-auto">
+                <div className="flex-grow py-6 flex flex-col gap-2 px-4 overflow-y-auto">
                     <p className="text-xs font-bold text-slate-500 uppercase px-4 mb-2">Dashboards</p>
                     <button onClick={() => setActiveTab('procurement')} className={`text-left px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'procurement' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
                         🛒 Procurement (BOQ)
@@ -126,7 +126,7 @@ export default function Portal({ user, onLogout }) {
                 </div>
             </div>
 
-            <div className="grow overflow-y-auto p-4 md:p-8">
+            <div className="flex-grow overflow-y-auto p-4 md:p-8">
                 {activeTab === 'procurement' && <ProcurementPortal />}
                 {activeTab === 'finance' && <FinancePortal />}
                 {activeTab === 'analytics' && <AnalyticsPortal />}
@@ -486,7 +486,7 @@ function FinancePortal() {
                                             <tr className="bg-slate-100/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
                                                 <td colSpan="10" className="p-4 px-6">
                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                        <div className="bg-linear-to-br from-blue-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-blue-200 dark:border-blue-900/50 shadow-sm relative overflow-hidden">
+                                                        <div className="bg-gradient-to-br from-blue-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-blue-200 dark:border-blue-900/50 shadow-sm relative overflow-hidden">
                                                             <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
                                                             <div className="flex justify-between items-center mb-2">
                                                                 <h4 className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">1. Original BOQ</h4>
@@ -498,7 +498,7 @@ function FinancePortal() {
                                                             </div>
                                                             <p className="text-xl font-black text-slate-800 dark:text-slate-100">{relatedBoq ? formatCurrency(relatedBoq.total_amount) : 'N/A'}</p>
                                                         </div>
-                                                        <div className="bg-linear-to-br from-purple-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-purple-200 dark:border-purple-900/50 shadow-sm relative overflow-hidden">
+                                                        <div className="bg-gradient-to-br from-purple-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-purple-200 dark:border-purple-900/50 shadow-sm relative overflow-hidden">
                                                             <div className="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
                                                             <div className="flex justify-between items-center mb-2">
                                                                 <h4 className="text-xs font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider">2. Purchase Order</h4>
@@ -506,7 +506,7 @@ function FinancePortal() {
                                                             </div>
                                                             <p className="text-xl font-black text-slate-800 dark:text-slate-100">{formatCurrency(r.po_total)}</p>
                                                         </div>
-                                                        <div className="bg-linear-to-br from-emerald-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-emerald-200 dark:border-emerald-900/50 shadow-sm relative overflow-hidden">
+                                                        <div className="bg-gradient-to-br from-emerald-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-emerald-200 dark:border-emerald-900/50 shadow-sm relative overflow-hidden">
                                                             <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
                                                             <div className="flex justify-between items-center mb-2">
                                                                 <h4 className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">3. Final Invoice</h4>
