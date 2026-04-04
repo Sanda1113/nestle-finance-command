@@ -99,7 +99,12 @@ export default function Portal({ user, onLogout }) {
         <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
             <div className="md:w-64 bg-slate-900 dark:bg-slate-900 text-slate-300 flex flex-col shadow-2xl z-10 shrink-0">
                 <div className="p-6 border-b border-slate-800">
-                    <h1 className="text-xl font-black text-white tracking-tight">Nestle<span className="text-blue-500">Finance</span></h1>
+                    <div className="flex items-center space-x-3 mb-2">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-md p-1.5 border border-slate-700">
+                            <img src="/nestle-logo.svg" alt="Nestle" className="w-full h-full object-contain" />
+                        </div>
+                        <h1 className="text-xl font-black text-white tracking-tight">Nestle<span className="text-blue-500">Finance</span></h1>
+                    </div>
                     <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-bold">Admin: {user.id?.slice(0, 8) || user.email}</p>
                 </div>
 

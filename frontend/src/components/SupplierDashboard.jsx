@@ -238,7 +238,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                 <div className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-4 px-6 flex flex-wrap justify-between items-center sticky top-0 z-20 shadow-sm">
                     <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-md p-1.5 border border-slate-700">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Nestle_logo_2015.svg/512px-Nestle_logo_2015.svg.png" alt="Nestle" className="w-full h-full object-contain" />
+                            <img src="/nestle-logo.svg" alt="Nestle" className="w-full h-full object-contain" />
                         </div>
                         <h1 className="text-xl font-extrabold tracking-tight bg-linear-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Nestle<span className="text-slate-200">Supplier</span></h1>
                     </div>
