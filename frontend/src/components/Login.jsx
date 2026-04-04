@@ -46,8 +46,8 @@ export default function Login({ onLogin }) {
 
                     {/* LOGO & HEADER */}
                     <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-linear-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/30 mb-5 border border-white/10">
-                            <span className="text-2xl font-black text-white tracking-tighter">N</span>
+                        <div className="inline-flex items-center justify-center w-24 h-24 bg-white rounded-3xl shadow-xl shadow-blue-500/20 mb-5 p-4 border-4 border-slate-800">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Nestle_logo_2015.svg/512px-Nestle_logo_2015.svg.png" alt="Nestle Logo" className="w-full h-full object-contain" />
                         </div>
                         <h1 className="text-2xl font-extrabold text-white tracking-tight">
                             Nestle<span className="text-transparent bg-clip-text bg-linear-to-r from-blue-400 to-indigo-400">Finance</span>
