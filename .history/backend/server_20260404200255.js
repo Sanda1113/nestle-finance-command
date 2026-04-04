@@ -16,10 +16,7 @@ const port = process.env.PORT || 8080;
 
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS', 'PATCH'] }));
 app.use(express.json());
-
-//Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/sprint2', sprint2Routes);
 
 app.get('/', (req, res) => {
     res.status(200).send('✅ Nestle Finance Enterprise API is Online');
