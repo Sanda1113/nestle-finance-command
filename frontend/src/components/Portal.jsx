@@ -498,17 +498,19 @@ function FinancePortal({ user }) {
                                         {isExpanded && (
                                             <tr className="bg-slate-100/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
                                                 <td colSpan="10" className="p-4 px-6">
-                                                    <div className="grid grid-cols-1 gap-6">
-                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    {/* NEW: Split Screen Document Viewer */}
+                                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                                                        {/* Left Side: Document Viewer */}
+                                                        <div className="flex flex-col gap-4">
+                                                            <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-2">📑 Document Context</h4>
                                                             <div className="bg-linear-to-br from-blue-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-blue-200 dark:border-blue-900/50 shadow-sm relative overflow-hidden">
                                                                 <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <h4 className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">1. Original BOQ</h4>
                                                                     {relatedBoq ? (
                                                                         <button onClick={() => handlePrintDocument('Original Quote / BOQ', { ...relatedBoq, lineItems: relatedBoq.line_items, invoiceNumber: relatedBoq.document_number, totalAmount: relatedBoq.total_amount })} className="px-3 py-1.5 text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 rounded-md shadow-sm transition-colors">📄 Print PDF</button>
-                                                                    ) : (
-                                                                        <span className="text-[10px] text-slate-400">Not Found</span>
-                                                                    )}
+                                                                    ) : <span className="text-[10px] text-slate-400">Not Found</span>}
                                                                 </div>
                                                                 <p className="text-xl font-black text-slate-800 dark:text-slate-100">{relatedBoq ? formatCurrency(relatedBoq.total_amount) : 'N/A'}</p>
                                                             </div>
@@ -533,12 +535,13 @@ function FinancePortal({ user }) {
                                                             </div>
                                                         </div>
 
-                                                        {/* WIRING UP THE CHAT HERE */}
+                                                        {/* Right Side: The Chat */}
                                                         <div>
                                                             <DisputeChat
                                                                 referenceNumber={r.invoice_number}
                                                                 userRole="Finance"
                                                                 userEmail={user?.email || 'admin@nestle.com'}
+                                                                varianceType={r.invoice_total !== r.po_total ? 'Price Variance' : 'Quantity/Fulfillment Variance'}
                                                             />
                                                         </div>
                                                     </div>
