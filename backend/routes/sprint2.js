@@ -1,5 +1,5 @@
 const express = require('express');
-const supabase = require('../db'); // Your existing db connection
+const supabase = require('../db');
 
 const router = express.Router();
 
@@ -7,11 +7,9 @@ const router = express.Router();
 // 🏭 MVP 3: GRN VAULT (WAREHOUSE PORTAL)
 // ==========================================
 
-// 1. Submit a Goods Receipt Note (GRN)
 router.post('/grn/submit', async (req, res) => {
-    const { poNumber, receivedBy, itemsReceived, totalReceivedAmount } = req.body;
+    const { poNumber, receivedBy, itemsReceived, totalReceivedAmount, isPartial } = req.body;
     try {
-        // Save GRN
         const { error: grnErr } = await supabase.from('grns').insert([{
             po_number: poNumber,
             received_by: receivedBy,
@@ -20,19 +18,20 @@ router.post('/grn/submit', async (req, res) => {
         }]);
         if (grnErr) throw grnErr;
 
-        // Update PO status to indicate goods arrived
+        // NEW: Partial Delivery Logic
+        const newStatus = isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)';
+
         await supabase.from('purchase_orders')
-            .update({ status: 'Goods Received (GRN Logged)' })
+            .update({ status: newStatus })
             .eq('po_number', poNumber);
 
-        res.json({ success: true, message: 'GRN Logged Successfully. 3-Way Match unblocked.' });
+        res.json({ success: true, message: 'GRN Logged Successfully.' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Failed to log GRN' });
     }
 });
 
-// 2. Fetch pending POs for the warehouse to receive
 router.get('/grn/pending-pos', async (req, res) => {
     try {
         const { data, error } = await supabase.from('purchase_orders')
@@ -41,14 +40,13 @@ router.get('/grn/pending-pos', async (req, res) => {
             .order('created_at', { ascending: false });
         if (error) throw error;
         res.json({ success: true, data });
-    } catch (error) { res.status(500).json({ error: 'Failed to fetch POs for warehouse' }); }
+    } catch (error) { res.status(500).json({ error: 'Failed to fetch POs' }); }
 });
 
 // ==========================================
 // 💬 MVP 4: BIDIRECTIONAL COMMUNICATION HUB
 // ==========================================
 
-// 1. Fetch chat history for a specific PO or Invoice
 router.get('/disputes/:reference', async (req, res) => {
     const { reference } = req.params;
     try {
@@ -61,7 +59,6 @@ router.get('/disputes/:reference', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Failed to fetch messages' }); }
 });
 
-// 2. Send a message
 router.post('/disputes/send', async (req, res) => {
     const { referenceNumber, senderEmail, senderRole, message } = req.body;
     try {
@@ -76,11 +73,9 @@ router.post('/disputes/send', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Failed to send message' }); }
 });
 
-// 3. Resubmit/Delete rejected invoice
 router.post('/reconciliations/:id/resubmit', async (req, res) => {
     const { id } = req.params;
     try {
-        // Delete the rejected reconciliation to allow the supplier to try again cleanly
         const { error } = await supabase.from('reconciliations').delete().eq('id', id);
         if (error) throw error;
         res.json({ success: true, message: 'Document removed. Ready for resubmission.' });
