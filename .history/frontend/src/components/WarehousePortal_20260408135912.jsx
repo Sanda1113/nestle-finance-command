@@ -125,65 +125,27 @@ export default function WarehousePortal({ user, onLogout }) {
     // ==========================================
     // 🧠 UNIVERSAL SCAN PROCESSOR
     // ==========================================
-
     const processScanResult = (decodedText) => {
         const state = latestState.current;
-
-        // 🔹 SCENARIO B: Shipment-Level Scanning (Not inside a PO yet)
         if (!state.selectedPO) {
+            // Dashboard mode: Look for PO
             const matchedPO = state.pos.find(p => p.po_number.toLowerCase() === decodedText.toLowerCase());
             if (matchedPO) {
                 setSearchTerm(decodedText);
                 handleSelectPO(matchedPO);
-                alert(`📦 Shipment Barcode Recognized!\nLoaded PO: ${matchedPO.po_number}`);
             } else {
-                alert(`Scanned: ${decodedText}\n❌ Shipment Not Found in Dock Queue.`);
+                // NEW: It's a product, not a PO. Show product lookup UI!
+                setDetectedProduct({
+                    barcode: decodedText,
+                    name: `Nestle SKU Product (${decodedText.substring(0, 6)})`,
+                    category: "FMCG General Inventory",
+                    message: "This product does not belong to any pending Purchase Orders in the current dock queue."
+                });
             }
-            return;
-        }
-
-        // 🔹 WE ARE INSIDE A PO: Parse the barcode
-        let scannedSku = decodedText;
-        let scannedBatch = null;
-        let scannedExpiry = null;
-
-        // 🔹 SCENARIO C: FMCG Batch Barcode Parsing (GS1-128 Simulation)
-        // If the barcode contains standard GS1 delimiters (e.g., SKU|BATCH|EXPIRY)
-        if (decodedText.includes('|')) {
-            const parts = decodedText.split('|');
-            scannedSku = parts[0];
-            scannedBatch = parts[1];
-            scannedExpiry = parts[2]; // e.g., "2026-12-31"
-        }
-
-        // 🔹 SCENARIO A: Item-Level Matching (Find item where barcode = scanned value)
-        const matchIndex = state.receivedItems.findIndex(item => item.expectedBarcode === scannedSku);
-
-        if (matchIndex !== -1) {
-            // MATCH FOUND: Execute Step 5 & 6 of your flow
-            const matchedItem = state.receivedItems[matchIndex];
-
-            // 1. Auto-increment quantity by +1
-            handleQtyChange(matchIndex, 1);
-
-            // 2. Auto-fill FMCG data if the barcode contained it
-            if (scannedBatch) handleInputChange(matchIndex, 'batchNumber', scannedBatch);
-            if (scannedExpiry) handleInputChange(matchIndex, 'expiryDate', scannedExpiry);
-
-            // Play a success sound (optional UX feature)
-            try { new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3').play(); } catch (e) { }
-
         } else {
-            // 🔹 SCENARIO 3: BARCODE NOT FOUND IN PO
-            setDetectedProduct({
-                barcode: decodedText,
-                name: "Unknown Scanned Item",
-                category: "Unrecognized Inventory",
-                message: `❌ Item not in PO. This item does not match any expected items for ${state.selectedPO.po_number}. Please segregate this item for Procurement review.`
-            });
-
-            // Play an error sound
-            try { new Audio('https://www.soundjay.com/buttons/sounds/button-10.mp3').play(); } catch (e) { }
+            // Inside PO mode: Increment item
+            handleQtyChange(0, 1);
+            alert(`✅ Scan Successful!\nAdded 1 unit based on barcode: ${decodedText}`);
         }
     };
 

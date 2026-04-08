@@ -125,7 +125,9 @@ export default function WarehousePortal({ user, onLogout }) {
     // ==========================================
     // 🧠 UNIVERSAL SCAN PROCESSOR
     // ==========================================
-
+    // ==========================================
+    // 🧠 UNIVERSAL SCAN PROCESSOR (YOUR WORKFLOW)
+    // ==========================================
     const processScanResult = (decodedText) => {
         const state = latestState.current;
 
