@@ -204,7 +204,7 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
                                     rows="1" onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                                 />
                                 <button onClick={() => sendMessage(newMessage)} disabled={!newMessage.trim() || isSending} className="p-3 bg-blue-600 text-white rounded-xl disabled:opacity-50 flex items-center justify-center shrink-0 shadow-md">
-                                    <Send className="w-4 h-4 -translate-x-px translate-y-[1px]" />
+                                    <Send className="w-4 h-4 -translate-x-px translate-y-px" />
                                 </button>
                             </div>
                         </div>
