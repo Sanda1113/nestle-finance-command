@@ -28,7 +28,7 @@ function BarcodeScannerUI({ onScanSuccess, onClose }) {
     }, [onScanSuccess]);
 
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-100 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
             <button onClick={onClose} className="absolute top-6 right-6 bg-slate-800 text-white p-3 rounded-full hover:bg-red-500 transition-colors shadow-lg z-50">
                 <X className="w-6 h-6" />
             </button>
