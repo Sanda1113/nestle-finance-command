@@ -28,7 +28,7 @@ function BarcodeScannerUI({ onScanSuccess, onClose }) {
     }, [onScanSuccess]);
 
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-100 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
             <button onClick={onClose} className="absolute top-6 right-6 bg-slate-800 text-white p-3 rounded-full hover:bg-red-500 transition-colors shadow-lg z-50">
                 <X className="w-6 h-6" />
             </button>
@@ -346,7 +346,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
             {/* 📸 AI PROCESSING OVERLAY */}
             {isProcessingImage && (
-                <div className="fixed inset-0 z-[200] bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6">
+                <div className="fixed inset-0 z-200 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6">
                     <Bot className="w-16 h-16 text-blue-500 animate-bounce mb-4" />
                     <div className="w-48 h-2 bg-slate-800 rounded-full overflow-hidden mb-4">
                         <div className="h-full bg-blue-500 w-1/2 animate-[scan_1s_ease-in-out_infinite] rounded-full"></div>
@@ -369,7 +369,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
             {/* 📦 DETECTED PRODUCT OVERLAY */}
             {detectedProduct && (
-                <div className="fixed inset-0 z-[150] bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-150 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-800 relative">
                         <button onClick={() => setDetectedProduct(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                             <X className="w-6 h-6" />
@@ -607,7 +607,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
                                                 <div className="flex items-center justify-between sm:justify-start gap-1 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto">
                                                     <button onClick={() => handleQtyChange(idx, -1)} className="w-12 h-12 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform">-</button>
-                                                    <input type="number" value={item.actualQtyReceived || ''} placeholder="0" onChange={(e) => handleQtyChange(idx, 0, e.target.value)} className={`w-full sm:w-16 min-w-[3rem] text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`} />
+                                                    <input type="number" value={item.actualQtyReceived || ''} placeholder="0" onChange={(e) => handleQtyChange(idx, 0, e.target.value)} className={`w-full sm:w-16 min-w-12 text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`} />
                                                     <button onClick={() => handleQtyChange(idx, 1)} className="w-12 h-12 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform">+</button>
                                                 </div>
                                             </div>
