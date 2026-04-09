@@ -462,6 +462,12 @@ function FinancePortal({ user }) {
                                             <td className="p-4 font-mono text-xs text-slate-400">{new Date(r.processed_at).toLocaleDateString()}</td>
                                             <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{r.vendor_name || 'Unknown'}</td>
                                             <td className="p-4">
+                                                {/* 📦 NEW: Displays Shipment ID along with PO/Invoice */}
+                                                {r.relatedPO?.shipment_id && (
+                                                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 px-2 py-0.5 bg-slate-200 dark:bg-slate-800 rounded inline-block">
+                                                        {r.relatedPO.shipment_id}
+                                                    </div>
+                                                )}
                                                 <div className="text-blue-600 dark:text-blue-400 font-medium text-xs">{r.invoice_number}</div>
                                                 <div className="text-purple-600 dark:text-purple-400 font-medium text-[10px]">{r.po_number}</div>
                                             </td>
