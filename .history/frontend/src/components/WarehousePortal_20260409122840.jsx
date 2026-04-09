@@ -320,19 +320,20 @@ export default function WarehousePortal({ user, onLogout }) {
         setReceivedItems(updated);
     };
 
-    // ==========================================
-    // 🗂️ FILTERING & SORTING LOGIC (FIXED)
-    // ==========================================
+    // 🗂️ TAB & SORTING LOGIC
+    // Extract raw pending list
     const rawPendingList = pos.filter(po => !(po.status && po.status.includes('Received')));
 
-    const pendingList = [...rawPendingList].sort((a, b) => {
+    // Sort Pending List: Items marked as 'Delivered to Dock' physically sitting outside come FIRST.
+    // In-Transit items drop to the bottom.
+    const sortedPendingList = [...rawPendingList].sort((a, b) => {
         const timeA = a.po_data?.delivery_timestamp ? new Date(a.po_data.delivery_timestamp).getTime() : Infinity;
         const timeB = b.po_data?.delivery_timestamp ? new Date(b.po_data.delivery_timestamp).getTime() : Infinity;
-        return timeA - timeB;
+        return timeA - timeB; // Oldest waiting on the dock appears first
     });
 
     const completedList = pos.filter(po => po.status && po.status.includes('Received'));
-    const activeList = viewMode === 'pending' ? pendingList : completedList;
+    const activeList = viewMode === 'pending' ? sortedPendingList : completedList;
     const filteredPOs = activeList.filter(po => po.po_number.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const totalExpected = receivedItems.reduce((sum, item) => sum + parseFloat(item.qty), 0);
@@ -512,7 +513,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                         <div className="flex justify-between items-start mb-2">
                                             <div>
                                                 <h3 className="font-black text-lg md:text-xl text-slate-800 dark:text-white mb-0.5 leading-tight">{getShipmentId(po.po_number)}</h3>
-                                                <p className="text-[10px] text-slate-400 font-mono mb-2">REF: {po.po_number}</p>
+                                                <p className="text-[10px] text-slate-400 font-mono mb-2">PO REF: {po.po_number}</p>
                                             </div>
                                             <span className={`flex items-center gap-1 text-[9px] md:text-[10px] font-black uppercase px-2 py-1 rounded-full shrink-0 ${po.trustScore >= 90 ? 'bg-emerald-100 text-emerald-700' : po.trustScore >= 75 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
                                                 {po.trustScore >= 90 ? <ShieldCheck className="w-3 h-3 shrink-0" /> : <ShieldAlert className="w-3 h-3 shrink-0" />}
@@ -520,6 +521,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                             </span>
                                         </div>
 
+                                        {/* 🚚 DELIVERY TIMESTAMP DISPLAY */}
                                         <div className="mb-4">
                                             {po.po_data?.delivery_timestamp ? (
                                                 <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-md border border-blue-200 dark:border-blue-800/50 text-[10px] font-bold uppercase tracking-wider">
