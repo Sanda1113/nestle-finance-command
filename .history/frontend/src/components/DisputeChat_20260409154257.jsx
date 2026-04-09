@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 // 🤖 ADD YOUR FREE GOOGLE GEMINI API KEY HERE
-const GEMINI_API_KEY = 'AIzaSyD1PJq0X3_-NPF7g9VHdUGOvqGx_flJoUk';
+const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY_HERE';
 
 export default function DisputeChat({ referenceNumber, userEmail, userRole, varianceType, onResubmit, contextData }) {
     // Human Mode State (Tied to DB)
@@ -87,8 +87,8 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
                 const currentStatus = contextData?.status || disputeStatus || 'Processing';
                 const cleanKey = GEMINI_API_KEY.trim();
 
-                if (cleanKey === 'AIzaSyD1PJq0X3_-NPF7g9VHdUGOvqGx_flJoUk' || cleanKey === '') {
-                    aiResponseText = `⚠️ Please configure your \`AIzaSyD1PJq0X3_-NPF7g9VHdUGOvqGx_flJoUk\` in the code to enable live AI responses. \n\nFor now, I can confirm your shipment status is: **${currentStatus}**.`;
+                if (cleanKey === 'YOUR_GEMINI_API_KEY_HERE' || cleanKey === '') {
+                    aiResponseText = `⚠️ Please configure your \`GEMINI_API_KEY\` in the code to enable live AI responses. \n\nFor now, I can confirm your shipment status is: **${currentStatus}**.`;
                 } else {
                     // LIVE API CALL TO GOOGLE GEMINI USING CORRECT SCHEMA
                     const systemPrompt = `You are a helpful, professional AI Supply Chain Assistant for Nestle. You are talking to a supplier about their specific shipment/purchase order. 
