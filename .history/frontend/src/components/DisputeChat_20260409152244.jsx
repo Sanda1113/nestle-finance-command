@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 // 🤖 ADD YOUR FREE GOOGLE GEMINI API KEY HERE
-const GEMINI_API_KEY = 'AIzaSyD1PJq0X3_-NPF7g9VHdUGOvqGx_flJoUk';
+const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY_HERE';
 
 export default function DisputeChat({ referenceNumber, userEmail, userRole, varianceType, onResubmit, contextData }) {
     // Human Mode State (Tied to DB)

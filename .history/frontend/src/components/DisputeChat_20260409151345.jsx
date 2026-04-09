@@ -6,14 +6,11 @@ import {
     AlertCircle, ShieldAlert, User, Cpu
 } from 'lucide-react';
 
-// 🤖 ADD YOUR FREE GOOGLE GEMINI API KEY HERE
-const GEMINI_API_KEY = 'AIzaSyD1PJq0X3_-NPF7g9VHdUGOvqGx_flJoUk';
-
 export default function DisputeChat({ referenceNumber, userEmail, userRole, varianceType, onResubmit, contextData }) {
-    // Human Mode State (Tied to DB)
-    const [messages, setMessages] = useState([]);
+    // 🗄️ STATE 1: Human Mode (Tied to Database)
+    const [humanMessages, setHumanMessages] = useState([]);
 
-    // AI Mode State (Local Only)
+    // 🧠 STATE 2: AI Mode (Local Only - Prevents DB overwrite)
     const [aiMessages, setAiMessages] = useState([{
         id: 'ai-welcome',
         sender_role: 'AI System',
@@ -25,7 +22,7 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
     const [isSending, setIsSending] = useState(false);
     const [disputeStatus, setDisputeStatus] = useState('Open');
 
-    const [chatMode, setChatMode] = useState('human');
+    const [chatMode, setChatMode] = useState('human'); // 'human' | 'ai'
     const [aiThinking, setAiThinking] = useState(false);
 
     const messagesEndRef = useRef(null);
@@ -39,12 +36,9 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
         : ["POD attached below.", "Credit Note generated.", "Will ship backordered items tomorrow."];
 
     const fetchMessages = async () => {
-        // Stop fetching from DB if we are looking at the AI
-        if (chatMode === 'ai') return;
-
         try {
             const res = await axios.get(`https://nestle-finance-command-production.up.railway.app/api/sprint2/disputes/${referenceNumber}`);
-            setMessages(res.data.data);
+            setHumanMessages(res.data.data);
 
             const timeSinceStart = res.data.data.length > 0 ? (new Date() - new Date(res.data.data[0].created_at)) / (1000 * 60 * 60) : 0;
             if (res.data.data.some(m => m.message.includes('[FORMAL DISPUTE LOGGED]'))) {
@@ -57,79 +51,53 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
         } catch (err) { console.error(err); }
     };
 
-    // Poll DB only when in human mode
     useEffect(() => {
         fetchMessages();
         const interval = setInterval(fetchMessages, 3000);
         return () => clearInterval(interval);
-    }, [referenceNumber, chatMode]);
+    }, [referenceNumber]);
 
-    // ONLY scroll down when a new message is actually added to the active array
+    // ONLY scroll down when a new message is added to either array
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages.length, aiMessages.length, aiThinking]);
+    }, [humanMessages.length, aiMessages.length, aiThinking]);
 
     const sendMessage = async (text = newMessage, forceRole = userRole, metadata = null) => {
         if (!text.trim() && !metadata) return;
         setIsSending(true);
 
-        // ==========================================
-        // 🤖 AI MODE LOGIC (LIVE API CALL)
-        // ==========================================
+        // 🤖 AI MODE LOGIC (Local State Only)
         if (chatMode === 'ai') {
             const userMsg = { id: Date.now(), sender_role: userRole, message: text, created_at: new Date().toISOString() };
             setAiMessages(prev => [...prev, userMsg]);
             setNewMessage('');
             setAiThinking(true);
 
-            try {
-                let aiResponseText = "";
-                const currentStatus = contextData?.status || disputeStatus || 'Processing';
+            setTimeout(() => {
+                let aiResponse = "";
+                const lowerText = text.toLowerCase();
+                const currentStatus = contextData?.status || disputeStatus || 'Under Review';
 
-                if (GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
-                    // Safe fallback if you forget to add your API key
-                    aiResponseText = `⚠️ Please configure your \`GEMINI_API_KEY\` in the code to enable live AI responses. \n\nFor now, I can confirm your shipment status is: **${currentStatus}**.`;
+                if (lowerText.includes('status') || lowerText.includes('where is my') || lowerText.includes('update') || lowerText.includes('reject')) {
+                    aiResponse = `According to the system ledger, Shipment/PO ${referenceNumber} is currently marked as: **${currentStatus}**.\n\nIf this requires human intervention, please switch to 'Live Agent' mode at the top.`;
+                } else if (lowerText.includes('pay') || lowerText.includes('money') || lowerText.includes('invoice')) {
+                    aiResponse = `Invoices matched without discrepancies are typically paid on standard Net-30 terms. Please ensure your physical dock delivery has been signed for by the warehouse to unlock payment processing.`;
+                } else if (lowerText.includes('discrepancy') || lowerText.includes('shortage')) {
+                    aiResponse = `Variances detected at the dock must be resolved with a Credit Note or backorder commitment. Switch to 'Live Agent' mode to upload these documents directly to Finance.`;
                 } else {
-                    // LIVE API CALL TO GOOGLE GEMINI
-                    const systemPrompt = `You are a helpful, professional AI Supply Chain Assistant for Nestle. You are talking to a supplier about their specific shipment/purchase order. 
-                    - Reference Number: ${referenceNumber}
-                    - Current Live Status: ${currentStatus}
-                    - Known Variance/Issue: ${varianceType || 'None'}
-                    
-                    Instructions: 
-                    1. Answer the supplier's query concisely (2-3 sentences max). 
-                    2. If they ask about payment, tell them invoices without discrepancies are paid on Net-30 terms once signed for at the dock.
-                    3. If they have a complex dispute, instruct them to click "Live Agent" at the top of the chat to speak with the Finance Team.
-                    
-                    Supplier's Message: "${text}"`;
-
-                    const res = await axios.post(
-                        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-                        { contents: [{ parts: [{ text: systemPrompt }] }] },
-                        { headers: { 'Content-Type': 'application/json' } }
-                    );
-
-                    aiResponseText = res.data.candidates[0].content.parts[0].text;
+                    aiResponse = `I am the AI Tracking Assistant. I can check statuses and payment terms. For specific resolution regarding ${referenceNumber}, please switch to 'Live Agent' mode.`;
                 }
 
-                // Add AI response to the chat window
-                const botMsg = { id: Date.now() + 1, sender_role: 'AI System', message: aiResponseText, created_at: new Date().toISOString() };
+                const botMsg = { id: Date.now() + 1, sender_role: 'AI System', message: aiResponse, created_at: new Date().toISOString() };
                 setAiMessages(prev => [...prev, botMsg]);
-
-            } catch (err) {
-                console.error("AI API Error:", err);
-                const errorMsg = { id: Date.now() + 1, sender_role: 'AI System', message: "⚠️ AI Server is temporarily unreachable. Please check your internet connection or try again later.", created_at: new Date().toISOString() };
-                setAiMessages(prev => [...prev, errorMsg]);
-            } finally {
                 setAiThinking(false);
-                setIsSending(false);
-            }
+            }, 1200);
+
+            setIsSending(false);
             return;
         }
 
-        // ==========================================
         // 👨‍💼 HUMAN MODE LOGIC (Database)
-        // ==========================================
         try {
             await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/disputes/send', {
                 referenceNumber, senderEmail: userEmail, senderRole: forceRole, message: text, metadata
@@ -174,7 +142,7 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
                 <h2>Enterprise Communication Audit Record</h2>
                 <p><strong>Reference:</strong> ${referenceNumber}<br/><strong>Generated:</strong> ${new Date().toLocaleString()}<br/><strong>Category:</strong> ${varianceType || 'General Resolution'}</p>
                 <hr/>
-                ${messages.map(m => `
+                ${humanMessages.map(m => `
                     <div class="msg ${m.sender_role === 'Finance' ? 'finance' : ''}">
                         <div class="meta">${m.sender_role} • ${new Date(m.created_at).toLocaleString()}</div>
                         <div>${m.message}</div>
@@ -189,7 +157,7 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
     };
 
     // Determine which array to render based on current mode
-    const activeMessages = chatMode === 'ai' ? aiMessages : messages;
+    const activeMessages = chatMode === 'ai' ? aiMessages : humanMessages;
 
     return (
         <div className="flex flex-col h-[650px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden font-sans">
