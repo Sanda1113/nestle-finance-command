@@ -84,10 +84,9 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
             try {
                 let aiResponseText = "";
 
-                // STRICT SEPARATION: Grab the exact document status from the parent component
-                const actualDocumentStatus = contextData?.status || 'Awaiting System Update';
-                const docTypeContext = contextData?.type ? `Document Type: ${contextData.type}` : 'Document Type: Standard';
-                const actionContext = contextData?.action ? `Recent Action: ${contextData.action}` : '';
+                // 🛑 STRICT DOCUMENT CONTEXT GATHERING
+                // We MUST know if this is a BOQ, PO, or Invoice, and exactly what its status is.
+                const actualDocumentStatus = contextData?.status || 'Status Unknown';
 
                 const cleanKey = DEEPSEEK_API_KEY.trim();
 
@@ -97,25 +96,26 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
                     // LIVE API CALL TO DEEPSEEK WITH STRICT LIFECYCLE CONTEXT
                     const systemPrompt = `You are a highly intelligent, professional AI Supply Chain Assistant for Nestle. You are talking to a supplier about their specific document/shipment.
                     
-                    CRITICAL REAL-TIME DATA (DO NOT HALLUCINATE STATUSES):
+                    CRITICAL DATA ABOUT THIS SPECIFIC DOCUMENT:
                     - Reference Number: ${referenceNumber}
-                    - Current System Status: **${actualDocumentStatus}**
-                    - ${docTypeContext}
-                    - ${actionContext}
-                    - Known Variance/Issue: ${varianceType || 'None'}
+                    - Current Document Lifecycle Status: ${actualDocumentStatus}
+                    - Known Variance/Issue (If applicable): ${varianceType || 'None'}
+                    - Current Helpdesk Ticket Status: ${disputeStatus}
 
-                    NESTLE SUPPLY CHAIN LIFECYCLE LOGIC:
-                    1. BOQ (Quote) -> Submitted by Supplier. Finance reviews it. Can be "Rejected" or "Approved" (turns into a PO).
-                    2. PO (Purchase Order) -> Dispatched to supplier. Supplier brings goods and marks "Delivered to Dock".
-                    3. Warehouse GRN -> Dock workers physically count goods using scanners. Status becomes "Received".
-                    4. Finance Review Queue -> System does a 3-Way Match (Invoice + PO + GRN). Can be "Approved", "Discrepancy", or "Rejected".
-
+                    NESTLE SUPPLY CHAIN LIFECYCLE LOGIC (Use this to explain their status):
+                    1. BOQ Submitted -> Status: "Pending Review". Awaiting Finance to turn it into a PO.
+                    2. BOQ Rejected -> Status: "Rejected". Finance denied the quote. Supplier must check timeline or chat with Live Agent.
+                    3. PO Dispatched -> Status: "PO Generated". Supplier must deliver goods to dock.
+                    4. Dock Delivery -> Status: "Delivered to Dock". Goods arrived, awaiting Warehouse GRN physical scan.
+                    5. Warehouse Scanned -> Status: "Received".
+                    6. Invoice Reconciled -> Status: "Approved". Money will be paid on Net-30 terms.
+                    
                     INSTRUCTIONS FOR YOUR RESPONSE:
-                    1. Answer the user's query STRICTLY based on the "Current System Status" provided above.
-                    2. IF THE STATUS IS OR CONTAINS "REJECTED", YOU MUST EXPLICITLY TELL THE USER IT IS REJECTED. Do NOT say it is open or on track. Advise them to check the portal for reasons or submit a new document.
-                    3. If they ask about payments, tell them invoices are only paid on Net-30 terms AFTER the Warehouse GRN is complete and Finance gives final Approval.
+                    1. Answer the user's query STRICTLY based on the "Current Document Lifecycle Status" provided above. Do NOT say the shipment is "Open and on track" if the status is "Rejected" or "Pending Review".
+                    2. If the status contains "Reject", explicitly state that the document has been rejected by Procurement/Finance. Tell them to check the timeline reason or submit a new document.
+                    3. Explain where the document currently sits in the Lifecycle Logic above.
                     4. Keep it concise (2-3 sentences max).
-                    5. If they need manual human help, tell them to click "Live Agent" at the top of the chat to speak with the Finance Team.`;
+                    5. If they need manual human help or want to appeal a rejection, tell them to click "Live Agent" at the top of the chat to speak directly with the Finance Team.`;
 
                     const response = await fetch('https://api.deepseek.com/chat/completions', {
                         method: 'POST',
@@ -128,7 +128,8 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
                             messages: [
                                 { role: "system", content: systemPrompt },
                                 { role: "user", content: text }
-                            ]
+                            ],
+                            temperature: 0.3 // Keep it highly factual, less creative
                         })
                     });
 
@@ -142,6 +143,7 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
                     aiResponseText = data.choices[0].message.content;
                 }
 
+                // Add AI response to the chat window
                 const botMsg = { id: Date.now() + 1, sender_role: 'AI System', message: aiResponseText, created_at: new Date().toISOString() };
                 setAiMessages(prev => [...prev, botMsg]);
 
@@ -242,7 +244,7 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
                                 <>
                                     <span>•</span>
                                     <span className={`flex items-center gap-1 ${disputeStatus.includes('SLA') || disputeStatus === 'Escalated' ? 'text-red-500' : 'text-emerald-500'}`}>
-                                        <Clock className="w-3 h-3" /> Ticket: {disputeStatus}
+                                        <Clock className="w-3 h-3" /> Status: {disputeStatus}
                                     </span>
                                 </>
                             )}
