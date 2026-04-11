@@ -249,7 +249,7 @@ export default function WarehousePortal({ user, onLogout }) {
             handleQtyChange(matchIndex, 1);
             if (scannedBatch) handleInputChange(matchIndex, 'batchNumber', scannedBatch);
             if (scannedExpiry) handleInputChange(matchIndex, 'expiryDate', scannedExpiry);
-            safePlayAudio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
+            try { new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3').play().catch(() => { }); } catch (e) { }
         } else {
             setDetectedProduct({
                 barcode: decodedText,
@@ -257,7 +257,7 @@ export default function WarehousePortal({ user, onLogout }) {
                 category: "Unrecognized Inventory",
                 message: `❌ Item not in PO. This item does not match any expected items for Shipment ${getShipmentId(state.selectedPO.po_number)}. Please segregate this item for Procurement review.`
             });
-            safePlayAudio('https://www.soundjay.com/buttons/sounds/button-10.mp3');
+            try { new Audio('https://www.soundjay.com/buttons/sounds/button-10.mp3').play().catch(() => { }); } catch (e) { }
         }
     };
 
