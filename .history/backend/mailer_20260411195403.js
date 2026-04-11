@@ -1,7 +1,7 @@
 // backend/mailer.js
 const { Resend } = require('resend');
 
-// Initialize Resend with your API key from environment variables
+// Initialize Resend with your API key
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendSupplierEmail = async (toEmail, subject, htmlContent) => {
@@ -12,7 +12,7 @@ const sendSupplierEmail = async (toEmail, subject, htmlContent) => {
 
     try {
         const { data, error } = await resend.emails.send({
-            from: 'Nestlé Finance <onboarding@resend.dev>', // Resend's default verified sender
+            from: 'Nestlé Finance <notifications@nestle-supplier.com>', // Use a verified domain in production
             to: [toEmail],
             subject: `Nestlé Portal: ${subject}`,
             html: htmlContent
