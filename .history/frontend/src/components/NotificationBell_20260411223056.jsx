@@ -26,7 +26,7 @@ export default function NotificationBell({ email, role, onNavigate }) {
 
     const markAsRead = async (ids) => {
         try {
-            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/notifications/mark-read', { ids });
+            await axios.post('https://nestle-finance-command-production.up.railway.app/api/notifications/mark-read', { ids });
             fetchNotifications();
         } catch (err) { }
     };

@@ -108,7 +108,7 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
                         }
 
                     GENERAL INSTRUCTIONS:
-                    - Keep responses conversational, highly readable, and concise (3-5 sentences max).`;
+                    - Keep responses conversational, highly readable, and concise (2-4 sentences max).`;
 
                     const response = await fetch('https://api.deepseek.com/chat/completions', {
                         method: 'POST',
