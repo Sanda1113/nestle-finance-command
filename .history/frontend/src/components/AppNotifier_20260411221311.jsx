@@ -1,4 +1,3 @@
-// frontend/src/components/AppNotifier.jsx
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { BellRing, X } from 'lucide-react';
@@ -29,7 +28,7 @@ export default function AppNotifier({ role }) {
                 await axios.post('https://nestle-finance-command-production.up.railway.app/api/notifications/mark-read', { ids: idsToMark });
             }
         } catch (error) {
-            // Ignore background polling errors
+            // Silent background polling
         }
     };
 
@@ -54,7 +53,7 @@ export default function AppNotifier({ role }) {
     if (toasts.length === 0) return null;
 
     return (
-        <div className="fixed bottom-6 right-6 z-999 flex flex-col gap-3 pointer-events-none">
+        <div className="fixed bottom-6 right-6 z-[999] flex flex-col gap-3 pointer-events-none">
             {toasts.map(toast => (
                 <div key={toast.id} className="bg-white dark:bg-slate-900 border-l-4 border-blue-500 rounded-lg shadow-2xl p-4 w-80 flex items-start gap-3 animate-in slide-in-from-right-8 pointer-events-auto">
                     <div className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 p-2 rounded-full shrink-0">
