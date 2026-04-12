@@ -125,6 +125,8 @@ router.post('/supplier/mark-delivered', async (req, res) => {
 router.post('/grn/acknowledge', async (req, res) => {
     const { poNumber, ackedBy } = req.body;
     try {
+        const shipmentId = getShipmentId(poNumber);
+        
         const { error: updateErr } = await supabase
             .from('purchase_orders')
             .update({ status: 'Truck at Bay - Pending Unload' })
@@ -134,28 +136,47 @@ router.post('/grn/acknowledge', async (req, res) => {
 
         const { data: po } = await supabase
             .from('purchase_orders')
-            .select('supplier_email')
+            .select('supplier_email, total_amount')
             .eq('po_number', poNumber)
             .single();
 
         if (po?.supplier_email) {
+            // Notify Supplier
             await supabase.from('notifications').insert([{
                 user_email: po.supplier_email,
                 user_role: 'Supplier',
-                title: '🚚 Truck Acknowledged',
-                message: `Warehouse has acknowledged arrival for ${poNumber}. Unloading will begin shortly.`,
+                title: '🚚 Shipment Acknowledged',
+                message: `Warehouse has acknowledged arrival for Shipment ${shipmentId}.`,
                 link: `/logs?po=${poNumber}`,
                 is_read: false
             }]);
 
+            // Detailed email
+            const detailedEmailBody = `
+                <p>Hello,</p>
+                <p>This is an automated confirmation that the Nestlé Warehouse team has successfully acknowledged the arrival of your transport vehicle at the delivery bay.</p>
+                <p><strong>Shipment Reference:</strong> ${shipmentId}</p>
+                <p><strong>Purchase Order:</strong> ${poNumber}</p>
+                <p>Your goods will now be systematically unloaded and inspected. Our warehouse staff will proceed to rigorously scan the delivered pallets to generate the official <strong>Goods Receipt Note (GRN)</strong>.</p>
+                <p>Once the goods have been fully inspected and the GRN is locked, you will receive another notification detailing the exact quantities received, including any detected shortages or discrepancies. You can monitor the real-time status of this shipment in your Supplier Dashboard.</p>
+            `;
+
             await sendSupplierEmail(
                 po.supplier_email,
-                `Shipment Arrival Acknowledged – ${poNumber}`,
-                `<p>The Nestlé Warehouse team has acknowledged the arrival of your truck at the bay for PO <strong>${poNumber}</strong>.</p>
-                 <p>Goods will now be unloaded and scanned for the Goods Receipt Note (GRN).</p>`,
-                { poNumber }
+                `Shipment Arrival Acknowledged – ${shipmentId}`,
+                detailedEmailBody,
+                { poNumber: poNumber, invoiceNumber: shipmentId, amount: po.total_amount, currency: 'USD' }
             );
         }
+
+        // Notify Finance
+        await supabase.from('notifications').insert([{
+            user_role: 'Finance',
+            title: '🚚 Shipment at Bay',
+            message: `Shipment ${shipmentId} (PO: ${poNumber}) has arrived at the dock and is pending GRN scan.`,
+            link: `/finance?search=${poNumber}`,
+            is_read: false
+        }]);
 
         res.json({ success: true });
     } catch (error) {
