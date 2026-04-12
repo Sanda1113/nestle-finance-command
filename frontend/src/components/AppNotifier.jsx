@@ -7,6 +7,7 @@ import { safePlayAudio } from '../utils/safeAudio';
 export default function AppNotifier({ role }) {
     const [toasts, setToasts] = useState([]);
     const processedIds = useRef(new Set()); // Track IDs already shown
+    const isInitialLoad = useRef(true); // Skip toasts on first fetch to prevent login spam
 
     const fetchNotifications = async () => {
         try {
@@ -19,24 +20,30 @@ export default function AppNotifier({ role }) {
                 // Filter out notifications already processed
                 const trulyNew = newNotifications.filter(n => !processedIds.current.has(n.id));
 
+                // Always mark IDs as processed to avoid showing them later
+                trulyNew.forEach(n => processedIds.current.add(n.id));
+
                 if (trulyNew.length > 0) {
-                    safePlayAudio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
-
-                    // Add to UI state and track IDs
-                    setToasts(prev => [...prev, ...trulyNew]);
-                    trulyNew.forEach(n => processedIds.current.add(n.id));
-
-                    // Mark them as read in the DB
                     const idsToMark = trulyNew.map(n => n.id);
                     await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/notifications/mark-read', { ids: idsToMark });
+
+                    // On initial load, silently consume existing notifications to prevent spam on login
+                    if (!isInitialLoad.current) {
+                        safePlayAudio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
+                        setToasts(prev => [...prev, ...trulyNew]);
+                    }
                 }
             }
         } catch (error) {
             // Ignore background polling errors
+        } finally {
+            isInitialLoad.current = false;
         }
     };
 
     useEffect(() => {
+        isInitialLoad.current = true; // Reset on role change
+        processedIds.current = new Set();
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 5000);
         return () => clearInterval(interval);
