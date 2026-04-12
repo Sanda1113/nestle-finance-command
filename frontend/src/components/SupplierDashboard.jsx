@@ -576,11 +576,10 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleMarkDelivered(po.po_number)}
-                                                                        disabled={!isFinanceApproved}
-                                                                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${isFinanceApproved ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-sm border border-amber-500' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'}`}
-                                                                        title={!isFinanceApproved ? "Awaiting Finance Approval" : "Mark as arriving at Dock"}
+                                                                        className="flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 bg-amber-600 hover:bg-amber-500 text-white shadow-sm border border-amber-500"
+                                                                        title="Mark as arriving at Dock"
                                                                     >
-                                                                        🚚 {isFinanceApproved ? 'Mark Delivered' : 'Awaiting Approval'}
+                                                                        🚚 Mark Delivered
                                                                     </button>
                                                                 ) : (
                                                                     <div className="flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center gap-1 bg-emerald-900/30 text-emerald-400 border border-emerald-800/50">
