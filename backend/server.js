@@ -563,12 +563,28 @@ app.post('/api/save-boq', async (req, res) => {
 
 app.get('/api/boqs', async (req, res) => {
     try {
-        const { data, error } = await supabase.from('boqs').select('*').order('created_at', { ascending: false });
+        const { email } = req.query;
+        let query = supabase.from('boqs').select('*').order('created_at', { ascending: false });
+        if (email) {
+            query = query.eq('supplier_email', email);
+        }
+        const { data, error } = await query;
         if (error) throw error;
         res.json({ success: true, data });
     } catch (error) {
         logError('Fetch BOQs', error);
         res.status(500).json({ error: 'Failed to fetch BOQs' });
+    }
+});
+
+app.delete('/api/boqs/:id', async (req, res) => {
+    try {
+        const { error } = await supabase.from('boqs').delete().eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (error) {
+        logError('Delete BOQ', error);
+        res.status(500).json({ error: 'Failed to delete' });
     }
 });
 

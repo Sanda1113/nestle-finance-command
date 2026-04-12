@@ -42,6 +42,7 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [invoiceResult, setInvoiceResult] = useState(null);
     const [poResult, setPoResult] = useState(null);
     const [myPOs, setMyPOs] = useState([]);
+    const [myBoqs, setMyBoqs] = useState([]);
     const [myLogs, setMyLogs] = useState([]);
     const [myRecons, setMyRecons] = useState([]);
     const [matchStatus, setMatchStatus] = useState('Pending');
@@ -52,10 +53,11 @@ export default function SupplierDashboard({ user, onLogout }) {
 
     const fetchData = async () => {
         try {
-            const [posRes, logsRes, reconsRes] = await Promise.all([
+            const [posRes, logsRes, reconsRes, boqsRes] = await Promise.all([
                 axios.get(`https://nestle-finance-command-production.up.railway.app/api/supplier/pos/${user.email}`),
                 axios.get(`https://nestle-finance-command-production.up.railway.app/api/supplier/logs/${user.email}`),
-                axios.get(`https://nestle-finance-command-production.up.railway.app/api/reconciliations?email=${encodeURIComponent(user.email)}`)
+                axios.get(`https://nestle-finance-command-production.up.railway.app/api/reconciliations?email=${encodeURIComponent(user.email)}`),
+                axios.get(`https://nestle-finance-command-production.up.railway.app/api/boqs?email=${encodeURIComponent(user.email)}`)
             ]);
 
             const sortedPOs = (posRes.data.data || []).sort((a, b) => new Date(b.created_at || b.po_data?.poDate || 0) - new Date(a.created_at || a.po_data?.poDate || 0));
@@ -63,6 +65,7 @@ export default function SupplierDashboard({ user, onLogout }) {
             setMyPOs(sortedPOs);
             setMyLogs(logsRes.data.logs || []);
             setMyRecons(reconsRes.data.data || []);
+            setMyBoqs(boqsRes.data.data || []);
         } catch (err) { console.error("Failed to fetch data"); }
     };
 
@@ -249,14 +252,23 @@ export default function SupplierDashboard({ user, onLogout }) {
         }
     };
 
-    const handleResubmit = async (id) => {
-        const realId = String(id).replace('rec-', '');
-        try {
-            await axios.post(`https://nestle-finance-command-production.up.railway.app/api/sprint2/reconciliations/${realId}/resubmit`);
-            alert('Document removed from review queue. You can now submit a corrected invoice.');
-            setMode('match');
-            fetchData();
-        } catch (e) { alert('Failed to clear for resubmission'); }
+    const handleResubmit = async (id, type) => {
+        if (type === 'boq') {
+            try {
+                await axios.delete(`https://nestle-finance-command-production.up.railway.app/api/boqs/${id}`);
+                alert('Rejected BOQ cleared. You can now submit a corrected quote.');
+                setMode('boq');
+                fetchData();
+            } catch (e) { alert('Failed to clear BOQ for resubmission'); }
+        } else {
+            const realId = String(id).replace('rec-', '');
+            try {
+                await axios.post(`https://nestle-finance-command-production.up.railway.app/api/sprint2/reconciliations/${realId}/resubmit`);
+                alert('Document removed from review queue. You can now submit a corrected invoice.');
+                setMode('match');
+                fetchData();
+            } catch (e) { alert('Failed to clear for resubmission'); }
+        }
     };
 
     const handleMarkDelivered = async (poNumber) => {
@@ -299,40 +311,52 @@ export default function SupplierDashboard({ user, onLogout }) {
     }, [normalizedLogs]);
 
     const transactionTimeline = useMemo(() => {
-        return myPOs.map(po => {
+        // Group everything by a "transaction id" which is either PO Number or BOQ document_number
+        const timelines = [];
+        const processedNumericLocators = new Set(); // Keep track of what we've processed
+        
+        myPOs.forEach(po => {
             const poNumber = po.po_number;
             const poNumeric = String(poNumber).match(/\d+/)?.[0] || poNumber;
+            processedNumericLocators.add(poNumeric);
 
-            // Match recon to this PO — try all available fields for robustness
+            // Find related Recon
             const relatedRecon = myRecons.find(r => {
                 const rPO = String(r.po_number || '').trim();
                 const rInv = String(r.invoice_number || '').trim();
                 const poPO = String(poNumber || '').trim();
-                // Exact match first
                 if (rPO === poPO) return true;
-                // Numeric digit extraction fallback
                 const rPONum = rPO.match(/\d+/)?.[0];
                 const rInvNum = rInv.match(/\d+/)?.[0];
                 return (rPONum && rPONum === poNumeric) || (rInvNum && rInvNum === poNumeric);
             });
 
-            const relatedLogs = myLogs.filter(log =>
-                String(log.ref || '').includes(poNumeric)
-            );
+            // Find related BOQ
+            const relatedBoq = myBoqs.find(b => {
+                const docNum = String(b.document_number || '');
+                return docNum === poNumber || docNum.includes(poNumeric);
+            });
 
+            const relatedLogs = myLogs.filter(log => String(log.ref || '').includes(poNumeric));
             const events = [];
 
-            const boqLog = relatedLogs.find(l =>
-                String(l.type || '').toLowerCase().includes('boq') ||
-                String(l.action || '').toLowerCase().includes('boq')
-            );
-            if (boqLog) {
+            if (relatedBoq) {
                 events.push({
                     label: 'BOQ Submitted',
-                    date: boqLog.created_at || boqLog.date,
+                    date: relatedBoq.created_at,
                     status: 'completed',
                     icon: '📑'
                 });
+                if (relatedBoq.status === 'Approved') {
+                    events.push({ label: '✅ BOQ Approved', date: relatedBoq.updated_at, status: 'completed', icon: '👍' });
+                } else if (relatedBoq.status === 'Rejected') {
+                    events.push({ label: '❌ BOQ Rejected', date: relatedBoq.updated_at, status: 'warning', icon: '❌', resubmitObj: relatedBoq, resubmitType: 'boq' });
+                }
+            } else {
+                const boqLog = relatedLogs.find(l => String(l.type || '').toLowerCase().includes('boq') || String(l.action || '').toLowerCase().includes('boq'));
+                if (boqLog) {
+                    events.push({ label: 'BOQ Submitted', date: boqLog.created_at || boqLog.date, status: 'completed', icon: '📑' });
+                }
             }
 
             events.push({
@@ -343,12 +367,7 @@ export default function SupplierDashboard({ user, onLogout }) {
             });
 
             if (relatedRecon) {
-                events.push({
-                    label: 'Invoice Submitted',
-                    date: relatedRecon.created_at,
-                    status: 'completed',
-                    icon: '🧾'
-                });
+                events.push({ label: 'Invoice Submitted', date: relatedRecon.created_at, status: 'completed', icon: '🧾' });
 
                 const matchStatus = String(relatedRecon.match_status || '').toLowerCase();
                 const isDiscrepancy = matchStatus.includes('discrepancy');
@@ -362,53 +381,77 @@ export default function SupplierDashboard({ user, onLogout }) {
                 });
 
                 if (isApproved) {
-                    events.push({
-                        label: '✅ Finance Approved',
-                        date: relatedRecon.updated_at,
-                        status: 'completed',
-                        icon: '👍'
-                    });
+                    events.push({ label: '✅ Finance Approved', date: relatedRecon.updated_at, status: 'completed', icon: '👍' });
                 } else if (matchStatus.includes('reject')) {
-                    events.push({
-                        label: '❌ Finance Rejected',
-                        date: relatedRecon.updated_at,
-                        status: 'warning',
-                        icon: '❌'
-                    });
+                    events.push({ label: '❌ Finance Rejected', date: relatedRecon.updated_at, status: 'warning', icon: '❌', resubmitObj: relatedRecon, resubmitType: 'invoice' });
                 }
 
                 const isDelivered = po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp;
                 if (isDelivered) {
-                    events.push({
-                        label: 'Delivered to Dock',
-                        date: po.po_data?.delivery_timestamp || po.updated_at,
-                        status: 'completed',
-                        icon: '🚚'
-                    });
+                    events.push({ label: 'Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
                 }
 
                 if (isApproved && isDelivered) {
-                    events.push({
-                        label: 'Payout Initiated',
-                        date: new Date().toISOString(),
-                        status: 'pending',
-                        icon: '💰'
-                    });
+                    events.push({ label: 'Payout Initiated', date: new Date().toISOString(), status: 'pending', icon: '💰' });
+                }
+            } else {
+                // Check if delivery happened without invoice recon (rare but possible)
+                const isDelivered = po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp;
+                if (isDelivered) {
+                    events.push({ label: 'Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
                 }
             }
 
             events.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-            return {
+            timelines.push({
+                transactionId: poNumber,
                 poNumber,
                 poNumeric,
                 totalAmount: po.total_amount,
                 currency: po.po_data?.currency,
                 events,
                 po
-            };
-        }).filter(t => t.events.length > 0);
-    }, [myPOs, myRecons, myLogs]);
+            });
+        });
+
+        // Now process any BOQs that NEVER resulted in a PO (e.g. pending or rejected BOQs)
+        myBoqs.forEach(boq => {
+            const docNum = String(boq.document_number || '');
+            const docNumNumeric = docNum.match(/\d+/)?.[0] || docNum;
+            if (!processedNumericLocators.has(docNumNumeric)) {
+                const events = [];
+                events.push({ label: 'BOQ Submitted', date: boq.created_at, status: 'completed', icon: '📑' });
+                
+                if (boq.status === 'Approved') {
+                    events.push({ label: '✅ BOQ Approved', date: boq.updated_at, status: 'completed', icon: '👍' });
+                } else if (boq.status === 'Rejected') {
+                    events.push({ label: '❌ BOQ Rejected', date: boq.updated_at, status: 'warning', icon: '❌', resubmitObj: boq, resubmitType: 'boq' });
+                } else if (boq.status === 'Pending Review') {
+                    events.push({ label: '⏳ Pending Approval', date: boq.created_at, status: 'pending', icon: '⏳' });
+                }
+                
+                events.sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                timelines.push({
+                    transactionId: docNum,
+                    poNumber: docNum, // use docNum as identifier for timeline header
+                    poNumeric: docNumNumeric,
+                    totalAmount: boq.total_amount,
+                    currency: boq.currency,
+                    events,
+                    po: null // no PO exists
+                });
+            }
+        });
+
+        // Sort timelines with most recent first (based on first event)
+        return timelines.sort((a, b) => {
+            const timeA = new Date(a.events[0]?.date || 0);
+            const timeB = new Date(b.events[0]?.date || 0);
+            return timeB - timeA;
+        });
+    }, [myPOs, myRecons, myLogs, myBoqs]);
 
     const DocumentCard = ({ title, data, borderColor, themeColor }) => {
         if (!data) return null;
@@ -790,6 +833,19 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                                                     {safeDate(event.date)}
                                                                                 </span>
                                                                             </div>
+                                                                            {event.resubmitObj && (
+                                                                                <div className="mt-3 border-t border-slate-700/50 pt-3">
+                                                                                    <p className="text-xs text-slate-300 mb-2">
+                                                                                        This document was rejected by Finance. You must correct the errors and resubmit to continue the process.
+                                                                                    </p>
+                                                                                    <button 
+                                                                                        onClick={() => handleResubmit(event.resubmitObj.id, event.resubmitType)}
+                                                                                        className="px-3 py-1.5 text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500 hover:text-slate-900 rounded transition-colors"
+                                                                                    >
+                                                                                        Start Resubmission
+                                                                                    </button>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 ))}
