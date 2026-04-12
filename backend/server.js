@@ -641,8 +641,12 @@ process.on('unhandledRejection', (reason, promise) => {
     logError('UNHANDLED REJECTION', reason, { promise: String(promise) });
 });
 
-app.listen(port, '0.0.0.0', () => {
-    console.log(`🚀 Nestle Finance ERP Backend LIVE on port ${port}`);
-    console.log(`📧 Email provider: ${process.env.RESEND_API_KEY ? 'Resend configured' : 'NOT CONFIGURED'}`);
-    console.log(`🧠 Mindee API: ${process.env.MINDEE_V2_API_KEY ? 'Configured' : 'MISSING'}`);
-});
+if (require.main === module) {
+    app.listen(port, '0.0.0.0', () => {
+        console.log(`🚀 Nestle Finance ERP Backend LIVE on port ${port}`);
+        console.log(`📧 Email provider: ${process.env.RESEND_API_KEY ? 'Resend configured' : 'NOT CONFIGURED'}`);
+        console.log(`🧠 Mindee API: ${process.env.MINDEE_V2_API_KEY ? 'Configured' : 'MISSING'}`);
+    });
+}
+
+module.exports = app;
