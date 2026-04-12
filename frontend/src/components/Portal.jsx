@@ -139,7 +139,7 @@ export default function Portal({ user, onLogout }) {
                     </div>
                 </div>
                 <div className="flex items-center gap-1 sm:gap-3">
-                    <button type="button" onClick={triggerSync} className="p-2 sm:p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Force Sync">
+                    <button type="button" onClick={triggerSync} className="p-2 sm:p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Force Sync" aria-label="Force Sync">
                         <RefreshCw className="w-5 h-5 sm:w-4 sm:h-4" />
                     </button>
                     <NotificationBell role="Finance" onNavigate={handleNotificationNavigate} />
@@ -150,7 +150,7 @@ export default function Portal({ user, onLogout }) {
                         <span className="text-xs font-medium text-slate-300">{user.email}</span>
                     </div>
                     <div className="w-px h-5 sm:h-6 bg-slate-700 mx-1 sm:mx-2 hidden sm:block"></div>
-                    <button type="button" onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 sm:p-1.5 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors" title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+                    <button type="button" onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 sm:p-1.5 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors" title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'} aria-label={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
                         {isDarkMode ? <Sun className="w-5 h-5 sm:w-4 sm:h-4" /> : <Moon className="w-5 h-5 sm:w-4 sm:h-4" />}
                     </button>
                     <button type="button" onClick={onLogout} className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-red-900/40 hover:bg-red-600 text-white rounded-lg text-xs sm:text-sm font-bold transition-colors">
