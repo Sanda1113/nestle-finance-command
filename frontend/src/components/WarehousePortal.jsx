@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import AppNotifier from './AppNotifier';
 import NotificationBell from './NotificationBell';
+import FloatingChat from './FloatingChat';
 import { safePlayAudio } from '../utils/safeAudio';
 
 const getShipmentId = (poNum) => {
@@ -1140,6 +1141,8 @@ export default function WarehousePortal({ user, onLogout }) {
             </div>
 
             <AppNotifier role="Warehouse" />
+
+            <FloatingChat userEmail={user?.email || 'WarehouseOp'} userRole="Warehouse" />
         </div>
     );
 }

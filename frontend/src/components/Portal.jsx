@@ -5,6 +5,7 @@ import { Truck, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import AppNotifier from './AppNotifier';
 import NotificationBell from './NotificationBell';
+import FloatingChat from './FloatingChat';
 
 const formatCurrency = (amount, currencyCode = 'USD') => {
     if (amount === undefined || amount === null || isNaN(amount)) return '$0.00';
@@ -794,6 +795,8 @@ function AnalyticsPortal() {
                     </div>
                 </>
             )}
+            
+            <FloatingChat userEmail={user?.email || 'FinanceTeam'} userRole="Finance" />
         </div>
     );
 }

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { RefreshCw, Truck, Tag } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import NotificationBell from './NotificationBell';
+import FloatingChat from './FloatingChat';
 
 const formatCurrency = (amount, currencyCode = 'USD') => {
     if (amount === undefined || amount === null || isNaN(amount)) return '$0.00';
@@ -869,6 +870,9 @@ export default function SupplierDashboard({ user, onLogout }) {
                     </div>
                 </div>
             </div>
+            
+            {/* Global Chat Floating Widget */}
+            <FloatingChat userEmail={user.email} userRole="Supplier" />
         </div>
     );
 }
