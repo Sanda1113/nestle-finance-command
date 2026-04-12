@@ -335,7 +335,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
     useEffect(() => {
         fetchPOs();
-        const interval = setInterval(() => fetchPOs(), 500);
+        const interval = setInterval(() => fetchPOs(), 5000);
         return () => clearInterval(interval);
     }, [isOffline]);
 
@@ -629,7 +629,7 @@ export default function WarehousePortal({ user, onLogout }) {
     const pendingList = [...rawPendingList].sort((a, b) => {
         const timeA = a.po_data?.delivery_timestamp ? new Date(a.po_data.delivery_timestamp).getTime() : Infinity;
         const timeB = b.po_data?.delivery_timestamp ? new Date(b.po_data.delivery_timestamp).getTime() : Infinity;
-        return timeA - timeB;
+        return timeB - timeA;
     });
 
     const completedList = pos.filter(po => po.status && po.status.includes('Received'));
@@ -911,7 +911,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                                     <Package className="w-3 h-3 shrink-0" /> {po.po_data?.lineItems?.length || 0} Pallets
                                                 </span>
                                                 {(po.status === 'Delivered to Dock' || po.status === 'Pending Warehouse GRN') && (
-                                                    <button 
+                                                    <button
                                                         onClick={(e) => { e.stopPropagation(); handleAcknowledgeArrival(po); }}
                                                         className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
                                                     >
