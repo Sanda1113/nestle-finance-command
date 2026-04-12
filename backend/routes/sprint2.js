@@ -120,6 +120,51 @@ router.post('/supplier/mark-delivered', async (req, res) => {
 });
 
 // ==========================================
+// 🏭 ACKNOWLEDGE TRUCK ARRIVAL
+// ==========================================
+router.post('/grn/acknowledge', async (req, res) => {
+    const { poNumber, ackedBy } = req.body;
+    try {
+        const { error: updateErr } = await supabase
+            .from('purchase_orders')
+            .update({ status: 'Truck at Bay - Pending Unload' })
+            .eq('po_number', poNumber);
+        
+        if (updateErr) throw updateErr;
+
+        const { data: po } = await supabase
+            .from('purchase_orders')
+            .select('supplier_email')
+            .eq('po_number', poNumber)
+            .single();
+
+        if (po?.supplier_email) {
+            await supabase.from('notifications').insert([{
+                user_email: po.supplier_email,
+                user_role: 'Supplier',
+                title: '🚚 Truck Acknowledged',
+                message: `Warehouse has acknowledged arrival for ${poNumber}. Unloading will begin shortly.`,
+                link: `/logs?po=${poNumber}`,
+                is_read: false
+            }]);
+
+            await sendSupplierEmail(
+                po.supplier_email,
+                `Shipment Arrival Acknowledged – ${poNumber}`,
+                `<p>The Nestlé Warehouse team has acknowledged the arrival of your truck at the bay for PO <strong>${poNumber}</strong>.</p>
+                 <p>Goods will now be unloaded and scanned for the Goods Receipt Note (GRN).</p>`,
+                { poNumber }
+            );
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Failed to acknowledge:', error);
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+// ==========================================
 // 🏭 MVP 3: GRN VAULT (WAREHOUSE PORTAL)
 // ==========================================
 router.post('/grn/submit', async (req, res) => {

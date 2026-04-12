@@ -579,6 +579,20 @@ export default function WarehousePortal({ user, onLogout }) {
         }
     };
 
+    const handleAcknowledgeArrival = async (po) => {
+        if (!window.confirm('Acknowledge that this truck has arrived at the bay?')) return;
+        try {
+            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/acknowledge', {
+                poNumber: po.po_number,
+                ackedBy: user.email
+            });
+            alert('✅ Arrival Acknowledged. Supplier has been notified.');
+            fetchPOs();
+        } catch (err) {
+            alert('Failed to acknowledge arrival.');
+        }
+    };
+
     const handleClearGoods = async () => {
         if (!selectedPO) return;
         if (!window.confirm('Confirm that all goods have been inspected and are ready for payout?')) return;
@@ -891,10 +905,18 @@ export default function WarehousePortal({ user, onLogout }) {
                                                 )}
                                             </div>
                                             <p className="text-xs sm:text-sm text-slate-500 font-medium truncate mb-4">{po.supplier_email}</p>
-                                            <div className="flex justify-between items-center text-[10px] sm:text-xs font-bold">
+                                            <div className="flex justify-between items-center text-[10px] sm:text-xs font-bold mt-4">
                                                 <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg flex items-center gap-1">
                                                     <Package className="w-3 h-3 shrink-0" /> {po.po_data?.lineItems?.length || 0} Pallets
                                                 </span>
+                                                {(po.status === 'Delivered to Dock' || po.status === 'Pending Warehouse GRN') && (
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); handleAcknowledgeArrival(po); }}
+                                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+                                                    >
+                                                        <CheckCircle2 className="w-3 h-3" /> Acknowledge Arrival
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -972,7 +994,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                     onClick={submitGRN}
                                     className="w-full py-4 text-lg sm:text-base bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2"
                                 >
-                                    <CheckCircle2 className="w-6 h-6 sm:w-5 sm:h-5" /> Sign & Lock GRN
+                                    <CheckCircle2 className="w-6 h-6 sm:w-5 sm:h-5" /> Confirm Goods Received (Sign GRN)
                                 </button>
                                 {canClear && (
                                     <button
@@ -1100,7 +1122,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                 onClick={submitGRN}
                                 className="w-full py-4 text-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98]"
                             >
-                                <CheckCircle2 className="w-6 h-6 shrink-0" /> Sign & Lock GRN
+                                <CheckCircle2 className="w-6 h-6 shrink-0" /> Confirm Goods Received (Sign GRN)
                             </button>
                             {canClear && (
                                 <button
