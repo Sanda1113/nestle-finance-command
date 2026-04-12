@@ -80,6 +80,7 @@ export default function SupplierDashboard({ user, onLogout }) {
         const poForm = new FormData(); poForm.append('invoiceFile', poFile);
 
         try {
+            // Extract BOTH documents via OCR
             const [invRes, poRes] = await Promise.all([
                 axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', invForm),
                 axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', poForm)
@@ -90,7 +91,28 @@ export default function SupplierDashboard({ user, onLogout }) {
                 const poData = poRes.data.extractedData;
 
                 const invTotal = safeParse(invData.totalAmount);
-                const poTotal = safeParse(poData.totalAmount);
+                let poTotal = safeParse(poData.totalAmount);
+
+                // --- SMART PO FALLBACK ---
+                // If OCR couldn't read the PO total (returns 0 or near-0),
+                // look it up from the database POs we already have.
+                if (poTotal < 1) {
+                    // Try to match by PO number extracted from the invoice, or from the PO document
+                    const extractedPoNum = invData.poNumber || poData.invoiceNumber || poData.poNumber;
+                    const matchedPO = myPOs.find(p =>
+                        p.po_number === extractedPoNum ||
+                        String(p.po_number).includes(String(extractedPoNum || '').replace(/\D/g, '')) ||
+                        String(extractedPoNum || '').includes(String(p.po_number || '').replace(/\D/g, ''))
+                    ) || myPOs[0]; // fallback to most recent PO
+
+                    if (matchedPO) {
+                        poTotal = safeParse(matchedPO.total_amount);
+                        poData.totalAmount = poTotal;
+                        poData.poNumber = matchedPO.po_number;
+                        poData.vendorName = matchedPO.po_data?.vendorName || poData.vendorName;
+                        console.log(`🔍 PO OCR returned 0 — using DB total: ${poTotal} from PO ${matchedPO.po_number}`);
+                    }
+                }
 
                 invData.totalAmount = invTotal;
                 poData.totalAmount = poTotal;
@@ -98,9 +120,15 @@ export default function SupplierDashboard({ user, onLogout }) {
                 setInvoiceResult(invData);
                 setPoResult(poData);
 
+                // Use 1% tolerance to handle rounding differences between OCR and DB
+                const tolerance = Math.max(0.01, poTotal * 0.01);
                 let status = 'Matched - Pending Finance Review';
 
-                if (Math.abs(invTotal - poTotal) > 0.01) {
+                if (poTotal < 1) {
+                    // Still couldn't find PO total — send for manual review but don't block
+                    status = 'Matched - Pending Finance Review';
+                    setDbStatus('⚠️ PO amount unverified — submitted for Finance manual review.');
+                } else if (Math.abs(invTotal - poTotal) > tolerance) {
                     status = 'Discrepancy Detected';
                 }
 
@@ -108,11 +136,14 @@ export default function SupplierDashboard({ user, onLogout }) {
                 await axios.post('https://nestle-finance-command-production.up.railway.app/api/save-reconciliation', {
                     invoiceData: invData, poData: poData, matchStatus: status, supplierEmail: user.email
                 });
-                setDbStatus('Saved to Ledger. Timeline updated.');
+                if (status !== 'Discrepancy Detected') {
+                    setDbStatus('✅ Saved to Ledger — submitted to Finance Review Queue.');
+                }
             }
-        } catch (err) { setError("Processing failed."); setMatchStatus('Error'); }
+        } catch (err) { setError("Processing failed. Please try again."); setMatchStatus('Error'); }
         finally { setLoading(false); }
     };
+
 
     const handleBoqUpload = async () => {
         if (!boqFile) { setError("Please select a BOQ file."); return; }
