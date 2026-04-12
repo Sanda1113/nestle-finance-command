@@ -1,9 +1,9 @@
 import { jest } from '@jest/globals';
-jest.mock('axios');
-
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import NotificationBell from '../NotificationBell';
 import axios from 'axios';
+
+jest.mock('axios');
 
 describe('NotificationBell', () => {
     beforeEach(() => {
