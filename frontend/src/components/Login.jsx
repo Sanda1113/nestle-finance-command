@@ -57,7 +57,7 @@ export default function Login({ onLogin }) {
                             <img src="/nestle-logo.svg" alt="Nestle Logo" className="w-full h-full object-contain" />
                         </div>
                         <h1 className="text-2xl font-extrabold text-white tracking-tight">
-                            Nestle<span className="text-transparent bg-clip-text bg-linear-to-r from-blue-400 to-indigo-400">Finance</span>
+                            Nestle<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Finance</span>
                         </h1>
                         <p className="text-slate-400 text-xs font-medium mt-2">
                             {isLoginView ? 'Enterprise Access Gateway' : 'Partner Registration Portal'}
@@ -162,7 +162,7 @@ export default function Login({ onLogin }) {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full py-3 mt-4 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-600/25 disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-2 active:scale-[0.98]"
+                            className="w-full py-3 mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-600/25 disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-2 active:scale-[0.98]"
                         >
                             {loading ? (
                                 <>

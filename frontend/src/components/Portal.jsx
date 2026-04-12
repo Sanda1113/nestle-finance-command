@@ -594,7 +594,7 @@ function FinancePortal({ user }) {
                                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                                         <div className="flex flex-col gap-4">
                                                             <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-2">📑 Document Context</h4>
-                                                            <div className="bg-linear-to-br from-blue-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-blue-200 dark:border-blue-900/50 shadow-sm relative overflow-hidden">
+                                                            <div className="bg-gradient-to-br from-blue-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-blue-200 dark:border-blue-900/50 shadow-sm relative overflow-hidden">
                                                                 <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <h4 className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">1. Original BOQ</h4>
@@ -604,7 +604,7 @@ function FinancePortal({ user }) {
                                                                 </div>
                                                                 <p className="text-xl font-black text-slate-800 dark:text-slate-100">{relatedBoq ? formatCurrency(relatedBoq.total_amount) : 'N/A'}</p>
                                                             </div>
-                                                            <div className="bg-linear-to-br from-purple-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-purple-200 dark:border-purple-900/50 shadow-sm relative overflow-hidden">
+                                                            <div className="bg-gradient-to-br from-purple-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-purple-200 dark:border-purple-900/50 shadow-sm relative overflow-hidden">
                                                                 <div className="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <h4 className="text-xs font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider">2. Purchase Order</h4>
@@ -612,7 +612,7 @@ function FinancePortal({ user }) {
                                                                 </div>
                                                                 <p className="text-xl font-black text-slate-800 dark:text-slate-100">{formatCurrency(r.po_total)}</p>
                                                             </div>
-                                                            <div className="bg-linear-to-br from-emerald-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-emerald-200 dark:border-emerald-900/50 shadow-sm relative overflow-hidden">
+                                                            <div className="bg-gradient-to-br from-emerald-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-emerald-200 dark:border-emerald-900/50 shadow-sm relative overflow-hidden">
                                                                 <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <h4 className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">3. Final Invoice</h4>

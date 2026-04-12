@@ -288,7 +288,7 @@ Guidelines:
             </div>
 
             {userRole === 'Finance' && varianceType && disputeStatus === 'Open' && chatMode === 'human' && (
-                <div className="bg-linear-to-r from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 border-b border-red-100 dark:border-red-900/50 p-3 px-5 flex items-start gap-3 shrink-0">
+                <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 border-b border-red-100 dark:border-red-900/50 p-3 px-5 flex items-start gap-3 shrink-0">
                     <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
                     <div>
                         <p className="text-xs font-bold text-red-800 dark:text-red-300">Variance Detected</p>
@@ -329,7 +329,7 @@ Guidelines:
                             <div className={`flex max-w-[85%] gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                                 <div className="w-8 shrink-0 flex flex-col items-center">
                                     {showAvatar ? (
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md ${isMe ? 'bg-linear-to-br from-emerald-500 to-teal-600' : isAi ? 'bg-linear-to-br from-purple-500 to-indigo-600' : 'bg-linear-to-br from-slate-600 to-slate-800'}`}>
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md ${isMe ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : isAi ? 'bg-gradient-to-br from-purple-500 to-indigo-600' : 'bg-gradient-to-br from-slate-600 to-slate-800'}`}>
                                             {isAi ? <Cpu className="w-4 h-4" /> : msg.sender_role[0]}
                                         </div>
                                     ) : <div className="w-8 h-8"></div>}
@@ -352,7 +352,7 @@ Guidelines:
                 {aiThinking && (
                     <div className="flex w-full justify-start">
                         <div className="flex max-w-[85%] gap-3 flex-row">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md bg-linear-to-br from-purple-500 to-indigo-600 shrink-0"><Cpu className="w-4 h-4 animate-pulse" /></div>
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md bg-gradient-to-br from-purple-500 to-indigo-600 shrink-0"><Cpu className="w-4 h-4 animate-pulse" /></div>
                             <div className="flex flex-col items-start">
                                 <div className="px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-tl-sm">
                                     <div className="flex gap-1.5">
