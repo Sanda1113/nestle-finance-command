@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Truck, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import AppNotifier from './AppNotifier';
 import NotificationBell from './NotificationBell';
@@ -127,46 +127,65 @@ export default function Portal({ user, onLogout }) {
 
     return (
         <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-            <div className="md:w-64 bg-slate-900 dark:bg-slate-900 text-slate-300 flex flex-col shadow-2xl z-10 shrink-0">
-                <div className="p-6 border-b border-slate-800">
-                    <div className="flex items-center space-x-3 mb-2">
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-md p-1.5 border border-slate-700">
+            {/* Sidebar */}
+            <div className="md:w-64 bg-slate-900 text-slate-300 flex flex-col shadow-2xl z-10 shrink-0">
+                {/* Logo & User Section */}
+                <div className="p-5 border-b border-slate-800">
+                    <div className="flex items-center space-x-3 mb-4">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-md p-1.5 border border-slate-700 shrink-0">
                             <img src="/nestle-logo.svg" alt="Nestle" className="w-full h-full object-contain" />
                         </div>
-                        <h1 className="text-xl font-black text-white tracking-tight">Nestle<span className="text-blue-500">Finance</span></h1>
+                        <div>
+                            <h1 className="text-lg font-black text-white tracking-tight leading-tight">Nestle<span className="text-blue-500">Finance</span></h1>
+                            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Command Center</p>
+                        </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                        <p className="text-xs text-slate-500 uppercase tracking-wider font-bold">Admin: {user.id?.slice(0, 8) || user.email}</p>
+                    <div className="flex items-center justify-between bg-slate-800/60 rounded-xl px-3 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+                                <User className="w-4 h-4 text-white" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-xs text-white font-semibold truncate">{user.email}</p>
+                                <p className="text-[10px] text-slate-400 capitalize">{user.role} · Admin</p>
+                            </div>
+                        </div>
                         <NotificationBell role="Finance" onNavigate={handleNotificationNavigate} />
                     </div>
                 </div>
 
-                <div className="grow py-6 flex flex-col gap-2 px-4 overflow-y-auto">
-                    <p className="text-xs font-bold text-slate-500 uppercase px-4 mb-2">Dashboards</p>
-                    <button type="button" onClick={() => setActiveTab('procurement')} className={`text-left px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'procurement' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
-                        🛒 Procurement (BOQ)
+                {/* Navigation */}
+                <div className="grow py-5 flex flex-col gap-1 px-3 overflow-y-auto">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase px-3 mb-2 tracking-wider">Dashboards</p>
+                    <button type="button" onClick={() => setActiveTab('procurement')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'procurement' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
+                        <ShoppingCart className="w-4 h-4 shrink-0" /> Procurement (BOQ)
                     </button>
-                    <button type="button" onClick={() => setActiveTab('finance')} className={`text-left px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'finance' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
-                        📋 Review Queue
+                    <button type="button" onClick={() => setActiveTab('finance')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'finance' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
+                        <ClipboardList className="w-4 h-4 shrink-0" /> Review Queue
                     </button>
-                    <button type="button" onClick={() => setActiveTab('analytics')} className={`text-left px-4 py-3 rounded-xl font-medium transition-all ${activeTab === 'analytics' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
-                        📈 Analytics
+                    <button type="button" onClick={() => setActiveTab('analytics')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'analytics' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
+                        <BarChart2 className="w-4 h-4 shrink-0" /> Analytics
                     </button>
                 </div>
 
-                <div className="p-4 border-t border-slate-800 space-y-2">
-                    <button type="button" onClick={triggerSync} className="w-full py-2 mb-2 bg-slate-800 hover:bg-blue-600 rounded-lg text-sm font-bold text-white transition-colors flex items-center justify-center gap-2">
-                        <RefreshCw className="w-4 h-4" /> Force Sync
+                {/* Footer Actions */}
+                <div className="p-3 border-t border-slate-800 space-y-2">
+                    <button type="button" onClick={triggerSync} className="w-full py-2 bg-slate-800 hover:bg-blue-600 rounded-xl text-xs font-bold text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2">
+                        <RefreshCw className="w-3.5 h-3.5" /> Force Sync
                     </button>
-                    <button type="button" onClick={() => setIsDarkMode(!isDarkMode)} className="w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-bold text-white transition-colors">
-                        {isDarkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
-                    </button>
-                    <button type="button" onClick={onLogout} className="w-full py-2 bg-red-900/40 hover:bg-red-600 border border-red-800 rounded-lg text-sm font-bold text-white transition-colors">
-                        🚪 Secure Logout
-                    </button>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => setIsDarkMode(!isDarkMode)} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:text-white transition-all flex items-center justify-center gap-1.5">
+                            {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                            {isDarkMode ? 'Light' : 'Dark'}
+                        </button>
+                        <button type="button" onClick={onLogout} className="flex-1 py-2 bg-red-900/40 hover:bg-red-600 border border-red-800/50 rounded-xl text-xs font-bold text-red-300 hover:text-white transition-all flex items-center justify-center gap-1.5">
+                            <LogOut className="w-3.5 h-3.5" /> Logout
+                        </button>
+                    </div>
                 </div>
             </div>
 
+            {/* Main Content */}
             <div className="grow overflow-y-auto p-4 md:p-8">
                 {activeTab === 'procurement' && <ProcurementPortal user={user} />}
                 {activeTab === 'finance' && <FinancePortal user={user} />}
@@ -174,6 +193,7 @@ export default function Portal({ user, onLogout }) {
             </div>
 
             <AppNotifier role="Finance" />
+            <FloatingChat userEmail={user?.email} userRole="Finance" />
         </div>
     );
 }
@@ -795,8 +815,6 @@ function AnalyticsPortal() {
                     </div>
                 </>
             )}
-
-            <FloatingChat userEmail={user?.email || 'FinanceTeam'} userRole="Finance" />
         </div>
     );
 }

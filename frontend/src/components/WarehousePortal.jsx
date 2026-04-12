@@ -806,6 +806,30 @@ export default function WarehousePortal({ user, onLogout }) {
                     </div>
                 </div>
 
+                {/* Stats Overview */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Pending</p>
+                        <p className="text-2xl font-black text-amber-500">{pendingList.length}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Awaiting GRN</p>
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Completed</p>
+                        <p className="text-2xl font-black text-emerald-500">{completedList.length}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">GRN Logged</p>
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Total</p>
+                        <p className="text-2xl font-black text-blue-500">{pos.length}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Shipments</p>
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Offline Queue</p>
+                        <p className={`text-2xl font-black ${syncQueue.length > 0 ? 'text-red-500' : 'text-slate-400'}`}>{syncQueue.length}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Pending Sync</p>
+                    </div>
+                </div>
+
                 {loading ? (
                     <div className="p-12 flex justify-center">
                         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
