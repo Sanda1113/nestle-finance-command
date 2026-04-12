@@ -4,6 +4,7 @@ import { Send, MessageCircle, Users, ChevronLeft, Bot, User } from 'lucide-react
 
 const API = 'https://nestle-finance-command-production.up.railway.app/api/sprint2';
 const DEEPSEEK_API_KEY = 'sk-782521610545406686bfc54c208e922e';
+const MAX_AI_HISTORY = 8;
 
 // Returns a sorted, canonical channel name for a given pair of roles
 function getChannel(roleA, roleB) {
@@ -115,7 +116,7 @@ export default function LiveChat({ userEmail, userRole }) {
         setAiInput('');
         setAiThinking(true);
         try {
-            const history = aiMessages.slice(-8).map(m => ({ role: m.role, content: m.content }));
+            const history = aiMessages.slice(-MAX_AI_HISTORY).map(m => ({ role: m.role, content: m.content }));
             const systemPrompt = `You are a knowledgeable, conversational AI assistant for Nestlé's supply chain platform, helping a ${userRole} team member. You can freely discuss topics like purchase orders, invoices, payment terms, logistics, reconciliation, warehouse operations, supplier management, and general business questions. Be helpful, natural, and thorough. Adapt your answers to what the user actually asks — do not default to scripted responses. If the question is outside your knowledge, say so honestly.`;
             const response = await fetch('https://api.deepseek.com/chat/completions', {
                 method: 'POST',
@@ -123,7 +124,7 @@ export default function LiveChat({ userEmail, userRole }) {
                 body: JSON.stringify({
                     model: 'deepseek-chat',
                     messages: [{ role: 'system', content: systemPrompt }, ...history, { role: 'user', content: text }],
-                    temperature: 0.9,
+                    temperature: 0.8,
                     max_tokens: 512,
                     presence_penalty: 0.6,
                     frequency_penalty: 0.4,

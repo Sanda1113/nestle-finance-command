@@ -114,7 +114,7 @@ Approach:
                     body: JSON.stringify({
                         model: "deepseek-chat",
                         messages: messagesPayload,
-                        temperature: 0.9,
+                        temperature: 0.8,
                         presence_penalty: 0.6,
                         frequency_penalty: 0.4,
                     })
