@@ -5,7 +5,7 @@ import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
 import {
     Package, Truck, CheckCircle2, AlertCircle, ScanBarcode, ArrowLeft, Camera, Search,
     EyeOff, Eye, CalendarDays, Hash, ShieldAlert, ShieldCheck, WifiOff, MapPin,
-    RefreshCw, LogOut, Moon, Sun, X, Bot, Info, ArchiveRestore, Keyboard
+    RefreshCw, LogOut, Moon, Sun, X, Bot, Info, ArchiveRestore, Keyboard, Clock
 } from 'lucide-react';
 import AppNotifier from './AppNotifier';
 import NotificationBell from './NotificationBell';
@@ -808,23 +808,43 @@ export default function WarehousePortal({ user, onLogout }) {
 
                 {/* Stats Overview */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Pending</p>
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Pending</p>
+                            <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                                <Clock className="w-4 h-4" />
+                            </div>
+                        </div>
                         <p className="text-2xl font-black text-amber-500">{pendingList.length}</p>
                         <p className="text-[10px] text-slate-400 mt-1">Awaiting GRN</p>
                     </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Completed</p>
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Completed</p>
+                            <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                                <CheckCircle2 className="w-4 h-4" />
+                            </div>
+                        </div>
                         <p className="text-2xl font-black text-emerald-500">{completedList.length}</p>
                         <p className="text-[10px] text-slate-400 mt-1">GRN Logged</p>
                     </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Total</p>
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total</p>
+                            <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                                <Truck className="w-4 h-4" />
+                            </div>
+                        </div>
                         <p className="text-2xl font-black text-blue-500">{pos.length}</p>
                         <p className="text-[10px] text-slate-400 mt-1">Shipments</p>
                     </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Offline Queue</p>
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Offline Queue</p>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${syncQueue.length > 0 ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                                <WifiOff className="w-4 h-4" />
+                            </div>
+                        </div>
                         <p className={`text-2xl font-black ${syncQueue.length > 0 ? 'text-red-500' : 'text-slate-400'}`}>{syncQueue.length}</p>
                         <p className="text-[10px] text-slate-400 mt-1">Pending Sync</p>
                     </div>

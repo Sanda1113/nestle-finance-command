@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User } from 'lucide-react';
+import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User, FileText, Clock, DollarSign } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import AppNotifier from './AppNotifier';
 import NotificationBell from './NotificationBell';
@@ -312,7 +312,7 @@ function ProcurementPortal({ user }) {
                             <p className="text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold tracking-wider">Total BOQs</p>
                             <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">{totalBOQs}</p>
                         </div>
-                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400">📄</div>
+                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400"><FileText className="w-5 h-5" /></div>
                     </div>
                 </div>
                 <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-all">
@@ -321,7 +321,7 @@ function ProcurementPortal({ user }) {
                             <p className="text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold tracking-wider">Pending Review</p>
                             <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">{pendingBOQs}</p>
                         </div>
-                        <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center text-amber-600 dark:text-amber-400">⏳</div>
+                        <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center text-amber-600 dark:text-amber-400"><Clock className="w-5 h-5" /></div>
                     </div>
                 </div>
                 <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-all">
@@ -330,7 +330,7 @@ function ProcurementPortal({ user }) {
                             <p className="text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold tracking-wider">Approved (PO Sent)</p>
                             <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">{approvedBOQs}</p>
                         </div>
-                        <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400">✅</div>
+                        <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-5 h-5" /></div>
                     </div>
                 </div>
                 <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-all">
@@ -339,7 +339,7 @@ function ProcurementPortal({ user }) {
                             <p className="text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold tracking-wider">Total Value</p>
                             <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">{formatCurrency(totalValue)}</p>
                         </div>
-                        <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400">💰</div>
+                        <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400"><DollarSign className="w-5 h-5" /></div>
                     </div>
                 </div>
             </div>
@@ -758,18 +758,27 @@ function AnalyticsPortal() {
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-all">
-                            <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Total Documents</p>
+                            <div className="flex items-center justify-between mb-3">
+                                <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">Total Documents</p>
+                                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400"><FileText className="w-5 h-5" /></div>
+                            </div>
                             <p className="text-5xl font-black text-blue-600 dark:text-blue-400">{stats.total}</p>
                         </div>
                         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-all">
-                            <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Auto-Approval Rate</p>
+                            <div className="flex items-center justify-between mb-3">
+                                <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">Auto-Approval Rate</p>
+                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-5 h-5" /></div>
+                            </div>
                             <p className="text-5xl font-black text-emerald-500 dark:text-emerald-400">
                                 {stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}%
                             </p>
                             <p className="text-xs text-slate-500 mt-2 font-medium">{stats.approved} Approved / {stats.rejected} Rejected</p>
                         </div>
                         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-all">
-                            <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Total Value Processed</p>
+                            <div className="flex items-center justify-between mb-3">
+                                <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">Total Value Processed</p>
+                                <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400"><DollarSign className="w-5 h-5" /></div>
+                            </div>
                             <p className="text-4xl font-black text-slate-800 dark:text-slate-100 mt-2">{formatCurrency(stats.value)}</p>
                         </div>
                     </div>
