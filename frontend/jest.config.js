@@ -10,7 +10,7 @@ export default {
     transform: {
         '^.+\\.(js|jsx|mjs|cjs|ts|tsx)$': [
             'babel-jest',
-            { presets: ['@babel/preset-env', '@babel/preset-react'] },
+            { presets: ['@babel/preset-env', ['@babel/preset-react', { runtime: 'automatic' }]] },
         ],
     },
     transformIgnorePatterns: [

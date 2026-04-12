@@ -1,4 +1,5 @@
 import { jest } from '@jest/globals';
+import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import NotificationBell from '../NotificationBell';
 import axios from 'axios';
