@@ -375,16 +375,15 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
         } else if (recon?.supplier_email) {
             const statusText = newStatus === 'Approved' ? 'approved' : 'rejected';
             const emailBody = `
-                <p>Your submitted PO (<strong>${recon.po_number || 'N/A'}</strong>) and Invoice (<strong>${recon.invoice_number}</strong>) have been <strong>${statusText}</strong> by the Finance Review Queue.</p>
+                <p>Your invoice <strong>${recon.invoice_number}</strong> has been <strong>${statusText}</strong> by our finance team.</p>
                 ${newStatus === 'Approved'
-                    ? '<p>This means the 3-way match is now complete. Payment will be automatically processed according to our agreed Net-30 terms.</p>'
-                    : '<p>If you believe this rejection was made in error, please use the Dispute Chat feature in your supplier portal to resolve this discrepancy.</p>'
+                    ? '<p>This means the 3-way match (PO, Invoice, GRN) is now complete. Payment will be processed according to the agreed Net-30 terms from the date of goods receipt.</p>'
+                    : '<p>If you believe this rejection was made in error, please use the chat feature in your supplier portal to dispute this decision.</p>'
                 }
             `;
-            
-            await sendSupplierEmail(
+            sendSupplierEmail(
                 recon.supplier_email,
-                `PO and Invoice ${statusText.charAt(0).toUpperCase() + statusText.slice(1)} – ${recon.invoice_number}`,
+                `Invoice ${statusText} – ${recon.invoice_number}`,
                 emailBody,
                 {
                     invoiceNumber: recon.invoice_number,
@@ -398,8 +397,8 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
                 await supabase.from('notifications').insert([{
                     user_email: recon.supplier_email,
                     user_role: 'Supplier',
-                    title: `PO & Invoice ${statusText.charAt(0).toUpperCase() + statusText.slice(1)}`,
-                    message: `Your submitted PO and Invoice ${recon.invoice_number} have been ${statusText} by Finance.`,
+                    title: `Invoice ${statusText}`,
+                    message: `Your invoice ${recon.invoice_number} has been ${statusText} by Finance.`,
                     link: `/logs?po=${recon.invoice_number}`,
                     is_read: false
                 }]);
