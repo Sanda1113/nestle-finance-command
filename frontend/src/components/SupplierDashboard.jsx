@@ -54,7 +54,7 @@ export default function SupplierDashboard({ user, onLogout }) {
             const [posRes, logsRes, reconsRes] = await Promise.all([
                 axios.get(`https://nestle-finance-command-production.up.railway.app/api/supplier/pos/${user.email}`),
                 axios.get(`https://nestle-finance-command-production.up.railway.app/api/supplier/logs/${user.email}`),
-                axios.get('https://nestle-finance-command-production.up.railway.app/api/reconciliations')
+                axios.get(`https://nestle-finance-command-production.up.railway.app/api/reconciliations?email=${encodeURIComponent(user.email)}`)
             ]);
 
             const sortedPOs = (posRes.data.data || []).sort((a, b) => new Date(b.created_at || b.po_data?.poDate || 0) - new Date(a.created_at || a.po_data?.poDate || 0));
@@ -302,10 +302,18 @@ export default function SupplierDashboard({ user, onLogout }) {
             const poNumber = po.po_number;
             const poNumeric = String(poNumber).match(/\d+/)?.[0] || poNumber;
 
-            const relatedRecon = myRecons.find(r =>
-                String(r.po_number || '').includes(poNumeric) ||
-                String(r.invoice_number || '').includes(poNumeric)
-            );
+            // Match recon to this PO — try all available fields for robustness
+            const relatedRecon = myRecons.find(r => {
+                const rPO = String(r.po_number || '').trim();
+                const rInv = String(r.invoice_number || '').trim();
+                const poPO = String(poNumber || '').trim();
+                // Exact match first
+                if (rPO === poPO) return true;
+                // Numeric digit extraction fallback
+                const rPONum = rPO.match(/\d+/)?.[0];
+                const rInvNum = rInv.match(/\d+/)?.[0];
+                return (rPONum && rPONum === poNumeric) || (rInvNum && rInvNum === poNumeric);
+            });
 
             const relatedLogs = myLogs.filter(log =>
                 String(log.ref || '').includes(poNumeric)
@@ -354,10 +362,17 @@ export default function SupplierDashboard({ user, onLogout }) {
 
                 if (isApproved) {
                     events.push({
-                        label: 'Finance Approved',
+                        label: '✅ Finance Approved',
                         date: relatedRecon.updated_at,
                         status: 'completed',
                         icon: '👍'
+                    });
+                } else if (matchStatus.includes('reject')) {
+                    events.push({
+                        label: '❌ Finance Rejected',
+                        date: relatedRecon.updated_at,
+                        status: 'warning',
+                        icon: '❌'
                     });
                 }
 

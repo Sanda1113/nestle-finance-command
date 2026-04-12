@@ -351,7 +351,13 @@ app.post('/api/save-reconciliation', async (req, res) => {
 
 app.get('/api/reconciliations', async (req, res) => {
     try {
-        const { data, error } = await supabase.from('reconciliations').select('*').order('processed_at', { ascending: false });
+        const { email } = req.query;
+        let query = supabase.from('reconciliations').select('*').order('processed_at', { ascending: false });
+        // If a supplier email is passed, filter to only their records
+        if (email) {
+            query = query.eq('supplier_email', email);
+        }
+        const { data, error } = await query;
         if (error) throw error;
         res.json({ success: true, data });
     } catch (error) {
