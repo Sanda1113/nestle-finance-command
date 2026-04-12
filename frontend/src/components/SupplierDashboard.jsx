@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { RefreshCw, Truck, Tag } from 'lucide-react';
+import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2 } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import NotificationBell from './NotificationBell';
 import FloatingChat from './FloatingChat';
@@ -50,6 +50,12 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [error, setError] = useState(null);
 
     const [expandedLog, setExpandedLog] = useState(null);
+
+    const [isDarkMode, setIsDarkMode] = useState(true);
+    useEffect(() => {
+        if (isDarkMode) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+    }, [isDarkMode]);
 
     const fetchData = async () => {
         try {
@@ -525,27 +531,36 @@ export default function SupplierDashboard({ user, onLogout }) {
     };
 
     return (
-        <div className="dark">
+        <div className={isDarkMode ? 'dark' : ''}>
             <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
-                <div className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-4 px-6 flex flex-wrap justify-between items-center sticky top-0 z-20 shadow-sm">
-                    <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-md p-1.5 border border-slate-700">
+                <div className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center sticky top-0 z-20 shadow-sm">
+                    <div className="flex items-center space-x-2 sm:space-x-3">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-xl flex items-center justify-center shadow-md p-1.5 border border-slate-700 shrink-0">
                             <img src="/nestle-logo.svg" alt="Nestle" className="w-full h-full object-contain" />
                         </div>
-                        <h1 className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Nestle<span className="text-slate-200">Supplier</span></h1>
+                        <div>
+                            <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-white leading-tight">Nestle<span className="text-blue-500">Supplier</span></h1>
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-wider hidden sm:block">Partner Portal</p>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                        <button type="button" onClick={fetchData} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Force Refresh Data">
-                            <RefreshCw className="w-4 h-4" />
+                    <div className="flex items-center gap-1 sm:gap-3">
+                        <button type="button" onClick={fetchData} className="p-2 sm:p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Force Refresh Data">
+                            <RefreshCw className="w-5 h-5 sm:w-4 sm:h-4" />
                         </button>
                         <NotificationBell email={user.email} role="Supplier" onNavigate={handleNotificationNavigate} />
-                        <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full">
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                                {user.name?.[0] || user.email[0].toUpperCase()}
+                        <div className="hidden sm:flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full">
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shrink-0">
+                                <User className="w-3.5 h-3.5 text-white" />
                             </div>
-                            <span className="text-xs font-medium text-slate-300 hidden sm:block">{user.name || user.email}</span>
+                            <span className="text-xs font-medium text-slate-300">{user.name || user.email}</span>
                         </div>
-                        <button type="button" onClick={onLogout} className="px-3 py-1.5 bg-slate-800 hover:bg-red-900/30 hover:text-red-400 text-slate-300 rounded-full text-xs font-semibold transition-all flex items-center gap-1">🚪 Logout</button>
+                        <div className="w-px h-5 sm:h-6 bg-slate-700 mx-1 sm:mx-2 hidden sm:block"></div>
+                        <button type="button" onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 sm:p-1.5 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors" title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+                            {isDarkMode ? <Sun className="w-5 h-5 sm:w-4 sm:h-4" /> : <Moon className="w-5 h-5 sm:w-4 sm:h-4" />}
+                        </button>
+                        <button type="button" onClick={onLogout} className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-red-900/40 hover:bg-red-600 text-white rounded-lg text-xs sm:text-sm font-bold transition-colors">
+                            <LogOut className="w-4 h-4 shrink-0" /> <span className="hidden sm:block">Logout</span>
+                        </button>
                     </div>
                 </div>
 
@@ -557,7 +572,9 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Total Shipments</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{totalPOs}</p>
                                 </div>
-                                <div className="w-10 h-10 bg-blue-900/30 rounded-full flex items-center justify-center text-blue-400">📦</div>
+                                <div className="w-10 h-10 bg-blue-900/30 rounded-full flex items-center justify-center text-blue-400">
+                                    <Package className="w-5 h-5" />
+                                </div>
                             </div>
                         </div>
                         <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all">
@@ -566,7 +583,9 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Total Value</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{formatCurrency(totalPOValue)}</p>
                                 </div>
-                                <div className="w-10 h-10 bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-400">💰</div>
+                                <div className="w-10 h-10 bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-400">
+                                    <DollarSign className="w-5 h-5" />
+                                </div>
                             </div>
                         </div>
                         <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all">
@@ -575,7 +594,9 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Pending</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{pendingPOs}</p>
                                 </div>
-                                <div className="w-10 h-10 bg-amber-900/30 rounded-full flex items-center justify-center text-amber-400">⏳</div>
+                                <div className="w-10 h-10 bg-amber-900/30 rounded-full flex items-center justify-center text-amber-400">
+                                    <Clock className="w-5 h-5" />
+                                </div>
                             </div>
                         </div>
                         <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all">
@@ -584,7 +605,9 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Matched Invoices</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{totalMatched}</p>
                                 </div>
-                                <div className="w-10 h-10 bg-purple-900/30 rounded-full flex items-center justify-center text-purple-400">✅</div>
+                                <div className="w-10 h-10 bg-purple-900/30 rounded-full flex items-center justify-center text-purple-400">
+                                    <CheckCircle2 className="w-5 h-5" />
+                                </div>
                             </div>
                         </div>
                     </div>

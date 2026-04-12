@@ -47,9 +47,15 @@ export default function Login({ onLogin }) {
             <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] rounded-full bg-indigo-600/20 blur-[120px] mix-blend-screen animate-blob animation-delay-2000"></div>
             <div className="absolute top-[20%] left-[20%] w-[30vw] h-[30vw] rounded-full bg-purple-600/20 blur-[100px] mix-blend-screen animate-blob animation-delay-4000"></div>
 
+            {/* 🔲 SUBTLE ANIMATED GRID PATTERN */}
+            <div className="absolute inset-0 opacity-[0.04]" style={{
+                backgroundImage: 'linear-gradient(rgba(148,163,184,1) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,1) 1px, transparent 1px)',
+                backgroundSize: '40px 40px'
+            }}></div>
+
             {/* 🎛️ GLASSMORPHISM CARD */}
             <div className="relative z-10 w-full max-w-sm animate-fade-in-up">
-                <div className="bg-slate-900/60 backdrop-blur-2xl p-8 rounded-3xl shadow-2xl border border-slate-700/50">
+                <div className="bg-slate-900/70 backdrop-blur-2xl p-8 rounded-3xl shadow-2xl border border-slate-600/60 shadow-blue-900/20">
 
                     {/* LOGO & HEADER */}
                     <div className="text-center mb-8">
@@ -62,6 +68,20 @@ export default function Login({ onLogin }) {
                         <p className="text-slate-400 text-xs font-medium mt-2">
                             {isLoginView ? 'Enterprise Access Gateway' : 'Partner Registration Portal'}
                         </p>
+                        <div className="flex items-center justify-center gap-3 mt-4">
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full">
+                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
+                                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Supplier</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
+                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
+                                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Finance</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full">
+                                <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
+                                <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Warehouse</span>
+                            </div>
+                        </div>
                     </div>
 
                     {/* ALERTS */}
@@ -197,7 +217,7 @@ export default function Login({ onLogin }) {
 
                 {/* FOOTER */}
                 <p className="text-center text-slate-600 text-[10px] font-bold uppercase tracking-widest mt-8">
-                    © {new Date().getFullYear()} Nestle Command Center
+                    © {new Date().getFullYear()} Nestlé Command Center · Secure Enterprise Platform
                 </p>
             </div>
 
