@@ -181,7 +181,7 @@ router.post('/grn/submit', async (req, res) => {
                 <p>Payment will be processed according to Net-30 terms from the date of receipt. You can track the full lifecycle in your Supplier Dashboard.</p>
             `;
 
-            sendSupplierEmail(
+            await sendSupplierEmail(
                 poContext.supplier_email,
                 `Goods Received – ${getShipmentId(poNumber)}`,
                 emailBody,
@@ -264,7 +264,7 @@ router.post('/grn/clear', async (req, res) => {
             }]);
 
             // 📧 Email Supplier
-            sendSupplierEmail(
+            await sendSupplierEmail(
                 po.supplier_email,
                 `Goods Cleared – ${shipmentId}`,
                 `<p>Your shipment <strong>${shipmentId}</strong> (PO: ${poNumber}) has been <strong>cleared</strong> by the warehouse after inspection.</p>
@@ -346,7 +346,7 @@ router.post('/disputes/send', async (req, res) => {
                     }
                 ]);
 
-                sendSupplierEmail(
+                await sendSupplierEmail(
                     supplierEmail,
                     `New Message regarding ${referenceNumber}`,
                     `<p>The Nestlé Finance team has sent you a new message regarding <strong>${referenceNumber}</strong>:</p>

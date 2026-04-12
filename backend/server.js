@@ -471,7 +471,7 @@ app.post('/api/boqs/:id/reject', async (req, res) => {
                 <p><strong>Reason provided:</strong> ${reason}</p>
                 <p>You may submit a revised quotation through the supplier portal. If you have any questions, please use the chat feature to contact our procurement department.</p>
             `;
-            sendSupplierEmail(
+            await sendSupplierEmail(
                 boq.supplier_email,
                 `BOQ Rejected`,
                 emailBody,
@@ -551,7 +551,7 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
                     <li>Mark the shipment as "Delivered" once it arrives at our dock.</li>
                 </ol>
             `;
-            sendSupplierEmail(
+            await sendSupplierEmail(
                 boqData.supplier_email,
                 `Purchase Order Generated – ${generatedPoNumber}`,
                 emailBody,
