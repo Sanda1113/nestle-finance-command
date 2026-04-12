@@ -430,7 +430,7 @@ function FinancePortal({ user }) {
 
     useEffect(() => {
         fetchData(true);
-        const interval = setInterval(() => fetchData(false), 5000);
+        const interval = setInterval(() => fetchData(false), 500);
 
         const handleSync = () => fetchData(false);
         window.addEventListener('force-sync', handleSync);
