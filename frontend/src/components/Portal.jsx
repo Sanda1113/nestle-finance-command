@@ -627,7 +627,7 @@ function FinancePortal({ user }) {
 
                                                         <div>
                                                             <DisputeChat
-                                                                referenceNumber={r.invoice_number}
+                                                                referenceNumber={r.po_number || r.invoice_number}
                                                                 userRole="Finance"
                                                                 userEmail={user?.email || 'admin@nestle.com'}
                                                                 varianceType={r.invoice_total !== r.po_total ? 'Price Variance' : 'Quantity/Fulfillment Variance'}
