@@ -227,7 +227,7 @@ VITE_API_URL=your_backend_railway_url
 
 ## 📝 License & Credits
 
-**Group 01** — Nestle Finance Command Center Development Team
+**Group 01B** — Nestle Finance Command Center Development Team - Commercial Computing
 
 ---
 
