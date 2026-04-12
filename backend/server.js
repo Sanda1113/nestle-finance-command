@@ -377,10 +377,10 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
             .eq('id', id);
         if (error) throw error;
 
-        // Fetch full row including invoice_data JSON for ultimate fallback
+        // Fetch full row — use SELECT * so the query never fails due to a missing column
         const { data: recon, error: fetchErr } = await supabase
             .from('reconciliations')
-            .select('supplier_email, invoice_number, po_number, invoice_total, currency, vendor_name, invoice_data')
+            .select('*')
             .eq('id', id)
             .single();
 
@@ -494,6 +494,43 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
     } catch (error) {
         logError('Update Reconciliation', error, { id, newStatus });
         res.status(500).json({ error: 'Status update failed' });
+    }
+});
+
+// ==========================================
+// 📧 EXPLICIT NOTIFY ENDPOINT (Finance → Supplier)
+// Accepts supplierEmail in the request body — no DB column dependency
+// ==========================================
+app.post('/api/reconciliations/:id/notify', async (req, res) => {
+    const { id } = req.params;
+    const { supplierEmail, newStatus, invoiceNumber, poNumber } = req.body;
+    if (!supplierEmail) return res.status(400).json({ error: 'supplierEmail required' });
+    try {
+        const statusText = newStatus === 'Approved' ? 'approved' : 'rejected';
+        const statusLabel = statusText.charAt(0).toUpperCase() + statusText.slice(1);
+        const emailBody = `
+            <p>Hello,</p>
+            <p>Your submitted Purchase Order (<strong>${poNumber || 'N/A'}</strong>) and Invoice (<strong>${invoiceNumber || id}</strong>) have been <strong>${statusText}</strong> by the Nestlé Finance Review Queue.</p>
+            ${newStatus === 'Approved'
+                ? `<p>✅ The 3-way match is now complete. Payment will be processed on <strong>Net-30</strong> terms.</p><p>Track payment progress in your Supplier Dashboard.</p>`
+                : `<p>❌ If you believe this rejection was in error, use the <strong>Dispute Chat</strong> in your Supplier Dashboard.</p>`
+            }
+        `;
+        await sendSupplierEmail(supplierEmail, `PO & Invoice ${statusLabel} – ${invoiceNumber || id}`, emailBody, { invoiceNumber, poNumber })
+            .catch(err => logError('Explicit Notify Email', err, { supplierEmail }));
+        await supabase.from('notifications').insert([{
+            user_email: supplierEmail,
+            user_role: 'Supplier',
+            title: `${newStatus === 'Approved' ? '✅' : '❌'} PO & Invoice ${statusLabel}`,
+            message: `Your PO (${poNumber || invoiceNumber}) and Invoice (${invoiceNumber}) have been ${statusText} by the Finance team.`,
+            link: `/logs?po=${poNumber || invoiceNumber}`,
+            is_read: false
+        }]).catch(err => logError('Explicit Notify Notif', err, { supplierEmail }));
+        console.log(`📬 Explicit notify sent to ${supplierEmail} — ${newStatus}`);
+        res.json({ success: true });
+    } catch (err) {
+        logError('Explicit Notify', err, { id, supplierEmail });
+        res.status(500).json({ error: 'Notification failed' });
     }
 });
 
