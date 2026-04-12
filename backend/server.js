@@ -366,34 +366,82 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
     try {
         console.log(`📝 Updating reconciliation ${id} to ${newStatus}`);
         let newTimeline = newStatus === 'Approved' ? 'Approved - Awaiting Payout' : 'Rejected by Finance';
-        const { error } = await supabase.from('reconciliations').update({ match_status: newStatus, timeline_status: newTimeline }).eq('id', id);
+        const { error } = await supabase.from('reconciliations')
+            .update({ match_status: newStatus, timeline_status: newTimeline })
+            .eq('id', id);
         if (error) throw error;
 
+        // Fetch full row including invoice_data JSON for ultimate fallback
         const { data: recon, error: fetchErr } = await supabase
             .from('reconciliations')
-            .select('supplier_email, invoice_number, po_number, invoice_total, currency')
+            .select('supplier_email, invoice_number, po_number, invoice_total, currency, vendor_name, invoice_data')
             .eq('id', id)
             .single();
 
         if (fetchErr) {
             logError('Fetch Recon for Email', fetchErr, { id });
         } else {
-            console.log(`📧 Recon email target: supplier_email="${recon?.supplier_email}", po_number="${recon?.po_number}", invoice_number="${recon?.invoice_number}"`);
+            // ── FALLBACK CHAIN ──────────────────────────────────────────────
+            // 1) Direct supplier_email on reconciliation row
+            let supplierEmail = recon?.supplier_email || null;
+            let fallbackUsed = supplierEmail ? 'direct' : null;
 
-            // Fallback: look up supplier email from purchase_orders if missing on reconciliation
-            let supplierEmail = recon?.supplier_email;
-            if (!supplierEmail && recon?.po_number) {
+            // 2) Look up from purchase_orders via po_number
+            if (!supplierEmail && recon?.po_number && recon.po_number !== 'Not Found') {
                 const { data: poRow } = await supabase
                     .from('purchase_orders')
                     .select('supplier_email')
                     .eq('po_number', recon.po_number)
                     .single();
-                supplierEmail = poRow?.supplier_email;
-                console.log(`🔍 Fallback PO lookup: found email="${supplierEmail}"`);
+                supplierEmail = poRow?.supplier_email || null;
+                if (supplierEmail) fallbackUsed = 'purchase_orders';
+            }
+
+            // 3) Extract from invoice_data JSON blob (stored at submission time)
+            if (!supplierEmail && recon?.invoice_data) {
+                const idata = typeof recon.invoice_data === 'string'
+                    ? JSON.parse(recon.invoice_data)
+                    : recon.invoice_data;
+                supplierEmail = idata?.supplierEmail || idata?.supplier_email || null;
+                if (supplierEmail) fallbackUsed = 'invoice_data_json';
+            }
+
+            // 4) Look up from app_users — find any Supplier whose email appears
+            //    in vendor_name OR who is the only Supplier registered
+            if (!supplierEmail) {
+                const { data: suppliers } = await supabase
+                    .from('app_users')
+                    .select('email')
+                    .eq('role', 'Supplier');
+
+                if (suppliers && suppliers.length === 1) {
+                    supplierEmail = suppliers[0].email;
+                    fallbackUsed = 'app_users_single';
+                } else if (suppliers && suppliers.length > 1 && recon?.vendor_name) {
+                    // Try to fuzzy match vendor_name against email prefix
+                    const nameSlug = String(recon.vendor_name).toLowerCase().replace(/\s+/g, '');
+                    const matched = suppliers.find(s =>
+                        String(s.email).toLowerCase().replace(/[@.]/g, '').includes(nameSlug.substring(0, 5))
+                    );
+                    if (matched) {
+                        supplierEmail = matched.email;
+                        fallbackUsed = 'app_users_fuzzy';
+                    }
+                }
+            }
+
+            console.log(`📧 Recon #${id} — email resolved via [${fallbackUsed || 'NONE'}]: "${supplierEmail}"`);
+
+            // Backfill the email on this row so future lookups are instant
+            if (supplierEmail && !recon?.supplier_email) {
+                await supabase.from('reconciliations')
+                    .update({ supplier_email: supplierEmail })
+                    .eq('id', id);
+                console.log(`💾 Backfilled supplier_email on reconciliation ${id}`);
             }
 
             if (!supplierEmail) {
-                console.warn(`⚠️  No supplier_email found for reconciliation ${id} — skipping email/notification`);
+                console.warn(`⚠️  All fallbacks exhausted — no email for reconciliation ${id}. Notification skipped.`);
             } else {
                 const statusText = newStatus === 'Approved' ? 'approved' : 'rejected';
                 const statusLabel = statusText.charAt(0).toUpperCase() + statusText.slice(1);
@@ -425,7 +473,7 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
                         user_email: supplierEmail,
                         user_role: 'Supplier',
                         title: `${newStatus === 'Approved' ? '✅' : '❌'} PO & Invoice ${statusLabel}`,
-                        message: `Your PO (${recon.po_number || recon.invoice_number}) and Invoice (${recon.invoice_number}) have been ${statusText} by Finance.`,
+                        message: `Your PO (${recon.po_number || recon.invoice_number}) and Invoice (${recon.invoice_number}) have been ${statusText} by the Finance team.`,
                         link: `/logs?po=${recon.po_number || recon.invoice_number}`,
                         is_read: false
                     }]);
