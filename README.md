@@ -105,7 +105,7 @@ The platform serves **three key stakeholder portals**:
     │   │   ├── FloatingChat.jsx         # Independent live chat icon (all portals)
     │   │   ├── LiveChat.jsx             # Chat window with recipient selection
     │   │   ├── DisputeChat.jsx          # Dispute resolution messaging
-    │   │   ├── NotificationBell.jsx     # In-app notification centre
+    │   │   ├── NotificationBell.jsx     # In-app notification center
     │   │   ├── AppNotifier.jsx          # Toast alert system
     │   │   ├── Scanner.jsx              # Barcode/QR scanner for GRN
     │   │   └── Upload.jsx               # Document upload component
@@ -189,7 +189,7 @@ The platform serves **three key stakeholder portals**:
 Deploy to **Vercel** by connecting the `frontend/` directory. Set the required environment variables in the Vercel project settings.
 
 ### Backend
-Deploy to **Railway.app** by connecting the `backend/` directory. A `Dockerfile` and `railway.json` are included for containerised deployment.
+Deploy to **Railway.app** by connecting the `backend/` directory. A `Dockerfile` and `railway.json` are included for containerized deployment.
 
 ### Environment Variables Required
 
