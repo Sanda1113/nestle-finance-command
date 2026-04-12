@@ -451,4 +451,59 @@ router.post('/reconciliations/:id/resubmit', async (req, res) => {
     }
 });
 
+// ==========================================
+// 💬 LIVE CHAT - BIDIRECTIONAL PORTAL MESSAGING
+// ==========================================
+
+// GET messages for a live chat channel (e.g., "LIVECHAT-Finance-Supplier")
+router.get('/livechat/:channel', async (req, res) => {
+    const { channel } = req.params;
+    try {
+        const { data, error } = await supabase
+            .from('disputes')
+            .select('*')
+            .eq('reference_number', channel)
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+        res.json({ success: true, data });
+    } catch (error) {
+        console.error('Failed to fetch live chat messages:', error);
+        res.status(500).json({ error: 'Failed to fetch messages' });
+    }
+});
+
+// POST a message to a live chat channel
+router.post('/livechat/send', async (req, res) => {
+    const { channel, senderEmail, senderRole, recipientRole, message } = req.body;
+    if (!channel || !senderRole || !recipientRole || !message) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    try {
+        const { error } = await supabase.from('disputes').insert([
+            {
+                reference_number: channel,
+                sender_email: senderEmail || null,
+                sender_role: senderRole,
+                message
+            }
+        ]);
+        if (error) throw error;
+
+        // Notify the recipient portal
+        await supabase.from('notifications').insert([
+            {
+                user_role: recipientRole,
+                title: `💬 New Message from ${senderRole}`,
+                message: `${senderRole} sent you a message in the live chat.`,
+                is_read: false
+            }
+        ]);
+
+        res.json({ success: true, message: 'Message sent' });
+    } catch (error) {
+        console.error('Failed to send live chat message:', error);
+        res.status(500).json({ error: 'Failed to send message' });
+    }
+});
+
 module.exports = router;
