@@ -1,15 +1,24 @@
 const request = require('supertest');
 const app = require('../server');
 
-// Mock external services that are called during tests
-jest.mock('../db', () => ({
-    from: jest.fn().mockReturnThis(),
-    select: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    order: jest.fn().mockResolvedValue({ data: [], error: null }),
-    insert: jest.fn().mockResolvedValue({ error: null }),
-    update: jest.fn().mockResolvedValue({ error: null }),
-}));
+jest.mock('../db', () => {
+    const mockQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+        single: jest.fn().mockResolvedValue({ data: { po_data: {}, supplier_email: 'test@example.com' }, error: null }),
+        insert: jest.fn().mockResolvedValue({ error: null }),
+        update: jest.fn().mockResolvedValue({ error: null }),
+        in: jest.fn().mockResolvedValue({ error: null }),
+        not: jest.fn().mockReturnThis(),
+        then: jest.fn((resolve) => resolve({ data: [], error: null })),
+    };
+
+    return {
+        from: jest.fn().mockReturnValue(mockQuery),
+    };
+});
 
 jest.mock('../mailer', () => ({
     sendSupplierEmail: jest.fn().mockResolvedValue(true),

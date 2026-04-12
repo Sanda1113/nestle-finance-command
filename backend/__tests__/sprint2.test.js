@@ -1,15 +1,25 @@
 const request = require('supertest');
 const app = require('../server');
 
-// Mock Supabase
-jest.mock('../db', () => ({
-    from: jest.fn().mockReturnThis(),
-    select: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    order: jest.fn().mockResolvedValue({ data: [], error: null }),
-    insert: jest.fn().mockResolvedValue({ error: null }),
-    update: jest.fn().mockResolvedValue({ error: null }),
-}));
+// Mock Supabase with proper method chaining
+jest.mock('../db', () => {
+    const mockQuery = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+        single: jest.fn().mockResolvedValue({ data: { po_data: {}, supplier_email: 'test@example.com' }, error: null }),
+        insert: jest.fn().mockResolvedValue({ error: null }),
+        update: jest.fn().mockResolvedValue({ error: null }),
+        in: jest.fn().mockResolvedValue({ error: null }),
+        not: jest.fn().mockReturnThis(),
+        then: jest.fn((resolve) => resolve({ data: [], error: null })),
+    };
+
+    return {
+        from: jest.fn().mockReturnValue(mockQuery),
+    };
+});
 
 jest.mock('../mailer', () => ({
     sendSupplierEmail: jest.fn().mockResolvedValue(true),
@@ -28,10 +38,11 @@ describe('Sprint2 Routes', () => {
         expect(res.body).toHaveProperty('success', true);
     });
 
-    test('POST /api/sprint2/supplier/mark-delivered with missing poNumber fails', async () => {
+    test('POST /api/sprint2/supplier/mark-delivered with valid poNumber succeeds', async () => {
         const res = await request(app)
             .post('/api/sprint2/supplier/mark-delivered')
-            .send({});
-        expect(res.statusCode).toBe(500);
+            .send({ poNumber: 'PO-12345' });
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
     });
 });
