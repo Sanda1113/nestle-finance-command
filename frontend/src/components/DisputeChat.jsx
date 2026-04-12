@@ -75,8 +75,8 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
                     throw new Error('API key missing');
                 }
 
-                // Build conversation history (last 5 messages for context)
-                const recentMessages = aiMessages.slice(-5).map(m => ({
+                // Build conversation history (last 10 messages for context)
+                const recentMessages = aiMessages.slice(-10).map(m => ({
                     role: m.sender_role === 'AI System' ? 'assistant' : 'user',
                     content: m.message
                 }));
@@ -84,23 +84,20 @@ export default function DisputeChat({ referenceNumber, userEmail, userRole, vari
                 const actualStatus = contextData?.status || 'Pending Review';
                 const poNumber = referenceNumber;
 
-                const systemPrompt = `You are an intelligent, helpful supply chain assistant for Nestlé, speaking with a ${userRole === 'Finance' ? 'Nestlé Finance Agent' : 'Nestlé Supplier'}.
+                const systemPrompt = `You are a knowledgeable, conversational supply chain assistant for Nestlé, speaking with a ${userRole === 'Finance' ? 'Nestlé Finance Agent' : 'Nestlé Supplier'}.
 
-Document Information:
+Document context:
 - Reference Number: ${poNumber}
-- Current System Status: ${actualStatus}
-- Variance/Issue: ${varianceType || 'None'}
+- Current Status: ${actualStatus}
+- Issue / Variance: ${varianceType || 'None'}
 
-Guidelines:
-- Be conversational and concise (2–4 sentences).
-- Base your answers strictly on the system status above and the conversation history.
-- If the status is "Matched - Pending Finance Review", explain that the invoice matches the PO and is awaiting finance approval. Delivery may proceed after approval.
-- If the status includes "Approved", note that delivery can proceed and payment follows Net-30 after warehouse receipt.
-- If the status includes "Rejected", explain the possible reasons (if known from history) or suggest using the chat to dispute.
-- If the status is "Delivered to Dock", the shipment is at the warehouse awaiting GRN scan.
-- If the status is "Goods Received (GRN Logged)", payment will be processed according to terms.
-- Never invent information. If unsure, suggest switching to the Live Agent tab.
-- Keep your tone professional yet friendly.`;
+Approach:
+- Respond naturally and directly to what the user actually asks — do not give generic scripted responses.
+- Use the document context above to ground your answers where relevant, but also draw on general supply chain knowledge.
+- Be concise (2–4 sentences) unless a detailed explanation is needed.
+- If the status or information is unclear, acknowledge it honestly rather than guessing.
+- Keep your tone professional yet friendly.
+- If you genuinely cannot help, suggest the user switch to the Live Agent tab.`;
 
                 const messagesPayload = [
                     { role: "system", content: systemPrompt },
@@ -117,7 +114,9 @@ Guidelines:
                     body: JSON.stringify({
                         model: "deepseek-chat",
                         messages: messagesPayload,
-                        temperature: 0.7
+                        temperature: 0.8,
+                        presence_penalty: 0.6,
+                        frequency_penalty: 0.4,
                     })
                 });
 
