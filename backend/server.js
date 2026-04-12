@@ -369,42 +369,70 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
         const { error } = await supabase.from('reconciliations').update({ match_status: newStatus, timeline_status: newTimeline }).eq('id', id);
         if (error) throw error;
 
-        const { data: recon, error: fetchErr } = await supabase.from('reconciliations').select('supplier_email, invoice_number, po_number, invoice_total, currency').eq('id', id).single();
+        const { data: recon, error: fetchErr } = await supabase
+            .from('reconciliations')
+            .select('supplier_email, invoice_number, po_number, invoice_total, currency')
+            .eq('id', id)
+            .single();
+
         if (fetchErr) {
             logError('Fetch Recon for Email', fetchErr, { id });
-        } else if (recon?.supplier_email) {
-            const statusText = newStatus === 'Approved' ? 'approved' : 'rejected';
-            const emailBody = `
-                <p>Your submitted PO (<strong>${recon.po_number || 'N/A'}</strong>) and Invoice (<strong>${recon.invoice_number}</strong>) have been <strong>${statusText}</strong> by the Finance Review Queue.</p>
-                ${newStatus === 'Approved'
-                    ? '<p>This means the 3-way match is now complete. Payment will be automatically processed according to our agreed Net-30 terms.</p>'
-                    : '<p>If you believe this rejection was made in error, please use the Dispute Chat feature in your supplier portal to resolve this discrepancy.</p>'
-                }
-            `;
-            
-            await sendSupplierEmail(
-                recon.supplier_email,
-                `PO and Invoice ${statusText.charAt(0).toUpperCase() + statusText.slice(1)} – ${recon.invoice_number}`,
-                emailBody,
-                {
-                    invoiceNumber: recon.invoice_number,
-                    poNumber: recon.po_number,
-                    amount: recon.invoice_total,
-                    currency: recon.currency || 'USD'
-                }
-            ).catch(err => logError('Recon Email', err, { email: recon.supplier_email }));
+        } else {
+            console.log(`📧 Recon email target: supplier_email="${recon?.supplier_email}", po_number="${recon?.po_number}", invoice_number="${recon?.invoice_number}"`);
 
-            try {
-                await supabase.from('notifications').insert([{
-                    user_email: recon.supplier_email,
-                    user_role: 'Supplier',
-                    title: `PO & Invoice ${statusText.charAt(0).toUpperCase() + statusText.slice(1)}`,
-                    message: `Your submitted PO and Invoice ${recon.invoice_number} have been ${statusText} by Finance.`,
-                    link: `/logs?po=${recon.invoice_number}`,
-                    is_read: false
-                }]);
-            } catch (notifErr) {
-                logError('Recon Notification', notifErr, { supplier_email: recon.supplier_email });
+            // Fallback: look up supplier email from purchase_orders if missing on reconciliation
+            let supplierEmail = recon?.supplier_email;
+            if (!supplierEmail && recon?.po_number) {
+                const { data: poRow } = await supabase
+                    .from('purchase_orders')
+                    .select('supplier_email')
+                    .eq('po_number', recon.po_number)
+                    .single();
+                supplierEmail = poRow?.supplier_email;
+                console.log(`🔍 Fallback PO lookup: found email="${supplierEmail}"`);
+            }
+
+            if (!supplierEmail) {
+                console.warn(`⚠️  No supplier_email found for reconciliation ${id} — skipping email/notification`);
+            } else {
+                const statusText = newStatus === 'Approved' ? 'approved' : 'rejected';
+                const statusLabel = statusText.charAt(0).toUpperCase() + statusText.slice(1);
+                const emailBody = `
+                    <p>Hello,</p>
+                    <p>Your submitted Purchase Order (<strong>${recon.po_number || 'N/A'}</strong>) and Invoice (<strong>${recon.invoice_number}</strong>) have been <strong>${statusText}</strong> by the Nestlé Finance Review Queue.</p>
+                    ${newStatus === 'Approved'
+                        ? `<p>✅ The 3-way match is now complete (PO ↔ Invoice ↔ GRN). Payment will be automatically processed according to our agreed <strong>Net-30</strong> terms from the date of goods receipt.</p>
+                           <p>You may track payment progress in your Supplier Dashboard.</p>`
+                        : `<p>❌ If you believe this rejection was made in error, please use the <strong>Dispute Chat</strong> feature on your Supplier Dashboard to raise a dispute with the Finance team.</p>`
+                    }
+                `;
+
+                await sendSupplierEmail(
+                    supplierEmail,
+                    `PO & Invoice ${statusLabel} – ${recon.invoice_number}`,
+                    emailBody,
+                    {
+                        invoiceNumber: recon.invoice_number,
+                        poNumber: recon.po_number,
+                        amount: recon.invoice_total,
+                        currency: recon.currency || 'USD'
+                    }
+                ).catch(err => logError('Recon Email', err, { email: supplierEmail }));
+
+                // In-app notification
+                try {
+                    await supabase.from('notifications').insert([{
+                        user_email: supplierEmail,
+                        user_role: 'Supplier',
+                        title: `${newStatus === 'Approved' ? '✅' : '❌'} PO & Invoice ${statusLabel}`,
+                        message: `Your PO (${recon.po_number || recon.invoice_number}) and Invoice (${recon.invoice_number}) have been ${statusText} by Finance.`,
+                        link: `/logs?po=${recon.po_number || recon.invoice_number}`,
+                        is_read: false
+                    }]);
+                    console.log(`🔔 In-app notification inserted for ${supplierEmail}`);
+                } catch (notifErr) {
+                    logError('Recon Notification', notifErr, { supplier_email: supplierEmail });
+                }
             }
         }
 
