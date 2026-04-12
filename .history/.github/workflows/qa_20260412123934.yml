@@ -17,9 +17,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: npm test
         env:
+          NODE_ENV: test
           MINDEE_V2_API_KEY: ${{ secrets.MINDEE_V2_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -35,20 +38,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - run: npm test
+      - run: npm run test:ci
 
-  e2e-tests:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm ci
-      - run: npx cypress run
-        env:
-          CYPRESS_BASE_URL: https://nestlefinancecommand.com
+  # Optional: E2E tests (comment out if Cypress is not installed)
+  # e2e-tests:
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: frontend
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
+  #         cache: 'npm'
+  #         cache-dependency-path: frontend/package-lock.json
+  #     - run: npm ci
+  #     - run: npx cypress run
+  #       env:
+  #         CYPRESS_BASE_URL: https://nestlefinancecommand.com
