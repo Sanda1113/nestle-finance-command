@@ -5,6 +5,7 @@ export default {
         '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
         '\\.(jpg|jpeg|png|gif|svg)$': '<rootDir>/__mocks__/fileMock.js',
         '^lucide-react$': '<rootDir>/__mocks__/lucide-react.js',
+        '^axios$': '<rootDir>/__mocks__/axios.js',
     },
     transform: {
         '^.+\\.(js|jsx|mjs|cjs|ts|tsx)$': [
