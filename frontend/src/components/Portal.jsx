@@ -126,22 +126,45 @@ export default function Portal({ user, onLogout }) {
     };
 
     return (
-        <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-            {/* Sidebar */}
-            <div className="md:w-64 bg-slate-900 text-slate-300 flex flex-col shadow-2xl z-10 shrink-0">
-                {/* Logo & User Section */}
-                <div className="p-5 border-b border-slate-800">
-                    <div className="flex items-center space-x-3 mb-4">
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-md p-1.5 border border-slate-700 shrink-0">
-                            <img src="/nestle-logo.svg" alt="Nestle" className="w-full h-full object-contain" />
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-black text-white tracking-tight leading-tight">Nestle<span className="text-blue-500">Finance</span></h1>
-                            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Command Center</p>
-                        </div>
+        <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+            {/* Top Header Bar — matches WarehousePortal/SupplierDashboard layout */}
+            <div className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm shrink-0">
+                <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-xl flex items-center justify-center shadow-md p-1.5 border border-slate-700 shrink-0">
+                        <img src="/nestle-logo.svg" alt="Nestle" className="w-full h-full object-contain" />
                     </div>
-                    <div className="flex items-center justify-between bg-slate-800/60 rounded-xl px-3 py-2">
-                        <div className="flex items-center gap-2 min-w-0">
+                    <div>
+                        <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-white leading-tight">Nestle<span className="text-blue-500">Finance</span></h1>
+                        <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-wider hidden sm:block">Command Center</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-1 sm:gap-3">
+                    <button type="button" onClick={triggerSync} className="p-2 sm:p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Force Sync">
+                        <RefreshCw className="w-5 h-5 sm:w-4 sm:h-4" />
+                    </button>
+                    <NotificationBell role="Finance" onNavigate={handleNotificationNavigate} />
+                    <div className="hidden sm:flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full">
+                        <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+                            <User className="w-3.5 h-3.5 text-white" />
+                        </div>
+                        <span className="text-xs font-medium text-slate-300">{user.email}</span>
+                    </div>
+                    <div className="w-px h-5 sm:h-6 bg-slate-700 mx-1 sm:mx-2 hidden sm:block"></div>
+                    <button type="button" onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 sm:p-1.5 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors" title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+                        {isDarkMode ? <Sun className="w-5 h-5 sm:w-4 sm:h-4" /> : <Moon className="w-5 h-5 sm:w-4 sm:h-4" />}
+                    </button>
+                    <button type="button" onClick={onLogout} className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-red-900/40 hover:bg-red-600 text-white rounded-lg text-xs sm:text-sm font-bold transition-colors">
+                        <LogOut className="w-4 h-4 shrink-0" /> <span className="hidden sm:block">Logout</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Content Area: sidebar + main */}
+            <div className="flex grow overflow-hidden">
+                {/* Sidebar — navigation only, visible on desktop */}
+                <div className="hidden md:flex md:w-56 bg-slate-900 text-slate-300 flex-col shadow-2xl z-10 shrink-0">
+                    <div className="p-4 border-b border-slate-800">
+                        <div className="flex items-center gap-2 bg-slate-800/60 rounded-xl px-3 py-2">
                             <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
                                 <User className="w-4 h-4 text-white" />
                             </div>
@@ -150,46 +173,40 @@ export default function Portal({ user, onLogout }) {
                                 <p className="text-[10px] text-slate-400 capitalize">{user.role} · Admin</p>
                             </div>
                         </div>
-                        <NotificationBell role="Finance" onNavigate={handleNotificationNavigate} />
+                    </div>
+                    <div className="grow py-5 flex flex-col gap-1 px-3 overflow-y-auto">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase px-3 mb-2 tracking-wider">Dashboards</p>
+                        <button type="button" onClick={() => setActiveTab('procurement')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'procurement' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
+                            <ShoppingCart className="w-4 h-4 shrink-0" /> Procurement (BOQ)
+                        </button>
+                        <button type="button" onClick={() => setActiveTab('finance')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'finance' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
+                            <ClipboardList className="w-4 h-4 shrink-0" /> Review Queue
+                        </button>
+                        <button type="button" onClick={() => setActiveTab('analytics')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'analytics' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
+                            <BarChart2 className="w-4 h-4 shrink-0" /> Analytics
+                        </button>
                     </div>
                 </div>
 
-                {/* Navigation */}
-                <div className="grow py-5 flex flex-col gap-1 px-3 overflow-y-auto">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase px-3 mb-2 tracking-wider">Dashboards</p>
-                    <button type="button" onClick={() => setActiveTab('procurement')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'procurement' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
-                        <ShoppingCart className="w-4 h-4 shrink-0" /> Procurement (BOQ)
-                    </button>
-                    <button type="button" onClick={() => setActiveTab('finance')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'finance' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
-                        <ClipboardList className="w-4 h-4 shrink-0" /> Review Queue
-                    </button>
-                    <button type="button" onClick={() => setActiveTab('analytics')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'analytics' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
-                        <BarChart2 className="w-4 h-4 shrink-0" /> Analytics
-                    </button>
-                </div>
-
-                {/* Footer Actions */}
-                <div className="p-3 border-t border-slate-800 space-y-2">
-                    <button type="button" onClick={triggerSync} className="w-full py-2 bg-slate-800 hover:bg-blue-600 rounded-xl text-xs font-bold text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2">
-                        <RefreshCw className="w-3.5 h-3.5" /> Force Sync
-                    </button>
-                    <div className="flex gap-2">
-                        <button type="button" onClick={() => setIsDarkMode(!isDarkMode)} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:text-white transition-all flex items-center justify-center gap-1.5">
-                            {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-                            {isDarkMode ? 'Light' : 'Dark'}
-                        </button>
-                        <button type="button" onClick={onLogout} className="flex-1 py-2 bg-red-900/40 hover:bg-red-600 border border-red-800/50 rounded-xl text-xs font-bold text-red-300 hover:text-white transition-all flex items-center justify-center gap-1.5">
-                            <LogOut className="w-3.5 h-3.5" /> Logout
-                        </button>
-                    </div>
+                {/* Main Content */}
+                <div className="grow overflow-y-auto p-4 md:p-8 pb-20 md:pb-8">
+                    {activeTab === 'procurement' && <ProcurementPortal user={user} />}
+                    {activeTab === 'finance' && <FinancePortal user={user} />}
+                    {activeTab === 'analytics' && <AnalyticsPortal />}
                 </div>
             </div>
 
-            {/* Main Content */}
-            <div className="grow overflow-y-auto p-4 md:p-8">
-                {activeTab === 'procurement' && <ProcurementPortal user={user} />}
-                {activeTab === 'finance' && <FinancePortal user={user} />}
-                {activeTab === 'analytics' && <AnalyticsPortal />}
+            {/* Mobile Bottom Navigation */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900 border-t border-slate-800 flex justify-around py-2 px-4">
+                <button type="button" onClick={() => setActiveTab('procurement')} className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'procurement' ? 'text-blue-400' : 'text-slate-500'}`}>
+                    <ShoppingCart className="w-5 h-5" /> <span>BOQ</span>
+                </button>
+                <button type="button" onClick={() => setActiveTab('finance')} className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'finance' ? 'text-blue-400' : 'text-slate-500'}`}>
+                    <ClipboardList className="w-5 h-5" /> <span>Review</span>
+                </button>
+                <button type="button" onClick={() => setActiveTab('analytics')} className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'analytics' ? 'text-blue-400' : 'text-slate-500'}`}>
+                    <BarChart2 className="w-5 h-5" /> <span>Analytics</span>
+                </button>
             </div>
 
             <AppNotifier role="Finance" />
