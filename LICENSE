@@ -20,6 +20,19 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
+THIRD-PARTY SERVICE NOTICE:
+The following third-party services used in this project are subscribed to and
+operated under the personal accounts of Sandakan Liyanage (project leader):
+
+  - Mindee OCR (https://mindee.com)
+  - Railway (https://railway.app)
+  - DeepSeek AI (https://deepseek.com)
+
+Anyone who obtains a copy of this software and wishes to use, run, or deploy it
+must replace all associated API keys and credentials with their own accounts and
+subscriptions for the above services. Use of Sandakan Liyanage's personal API
+keys or accounts without explicit written permission is strictly prohibited.
+
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
