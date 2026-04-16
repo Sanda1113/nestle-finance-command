@@ -523,13 +523,14 @@ export default function WarehousePortal({ user, onLogout }) {
     const handleImageUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
-        if (!String(file.type || '').startsWith('image/')) {
+        const fileType = typeof file.type === 'string' ? file.type.toLowerCase() : '';
+        if (!fileType.startsWith('image/')) {
             alert('Please upload a valid image file for barcode detection.');
             if (fileInputRef.current) fileInputRef.current.value = "";
             return;
         }
-        if (UNSUPPORTED_BARCODE_IMAGE_TYPES.has(String(file.type || '').toLowerCase())) {
-            alert('This photo format is not supported for barcode detection. Please use JPG or PNG.');
+        if (UNSUPPORTED_BARCODE_IMAGE_TYPES.has(fileType)) {
+            alert('HEIC/HEIF photo format is not supported for barcode detection. Please use JPG or PNG instead.');
             if (fileInputRef.current) fileInputRef.current.value = "";
             return;
         }
