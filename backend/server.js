@@ -326,13 +326,19 @@ app.post('/api/save-reconciliation', async (req, res) => {
     try {
         console.log(`💾 Saving reconciliation: ${invoiceData?.invoiceNumber} / ${poData?.poNumber}`);
 
-        const { error: invErr } = await supabase.from('invoices').insert([{
-            invoice_number: invoiceData.invoiceNumber,
-            extracted_amount: invoiceData.totalAmount,
-            status: matchStatus
-        }]);
-        if (invErr) {
-            logError('Insert Invoice', invErr, { invoiceNumber: invoiceData.invoiceNumber });
+        const invoiceFileUrl = invoiceData?.fileUrl || invoiceData?.file_url;
+        if (invoiceFileUrl) {
+            const { error: invErr } = await supabase.from('invoices').insert([{
+                invoice_number: invoiceData.invoiceNumber,
+                file_url: invoiceFileUrl,
+                extracted_amount: invoiceData.totalAmount,
+                status: matchStatus
+            }]);
+            if (invErr) {
+                logError('Insert Invoice', invErr, { invoiceNumber: invoiceData.invoiceNumber });
+            }
+        } else {
+            console.warn(`⚠️ Skipping invoices table insert for ${invoiceData?.invoiceNumber || 'unknown invoice'}: missing file URL. Proceeding with reconciliation save, but no invoices row will be created.`);
         }
 
         let timeline = matchStatus === 'Approved' ? 'Awaiting Payout' : 'Discrepancy - Manual Review';
