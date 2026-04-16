@@ -797,7 +797,7 @@ app.get('/api/purchase_orders/:id', async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('purchase_orders')
-            .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email, po_data')
+            .select('id, po_number, total_amount, status, created_at, is_downloaded, supplier_email, po_data')
             .eq('id', id)
             .single();
         if (error) throw error;
@@ -806,7 +806,13 @@ app.get('/api/purchase_orders/:id', async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized for this PO' });
         }
 
-        res.json({ success: true, data });
+        res.json({
+            success: true,
+            data: {
+                ...data,
+                updated_at: null
+            }
+        });
     } catch (error) {
         logError('Fetch Purchase Order', error, { id });
         res.status(500).json({ error: 'Failed to fetch purchase order' });
