@@ -517,6 +517,7 @@ export default function WarehousePortal({ user, onLogout }) {
             expiryDate: '',
             hasPhoto: false,
             photoFileName: '',
+            photoAttachedAt: null,
             riskLevel: 'Low'
         }));
         setReceivedItems(expectedItems);
