@@ -22,6 +22,7 @@ const getShipmentId = (poNum) => {
 const API_BASE_URL = 'https://nestle-finance-command-production.up.railway.app/api/sprint2';
 const SYNC_QUEUE_STORAGE_KEY = 'grnSyncQueue';
 const OFFLINE_PO_STORAGE_KEY = 'offlinePOs';
+const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
 
 // 📱 Mobile‑optimized Bottom Drawer Scanner
 const BarcodeScannerUI = ({ onScanSuccess, onClose }) => {
@@ -522,8 +523,14 @@ export default function WarehousePortal({ user, onLogout }) {
     const handleImageUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
-        if (!String(file.type || '').startsWith('image/')) {
+        const fileType = typeof file.type === 'string' ? file.type.toLowerCase() : '';
+        if (!fileType.startsWith('image/')) {
             alert('Please upload a valid image file for barcode detection.');
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            return;
+        }
+        if (UNSUPPORTED_BARCODE_IMAGE_TYPES.has(fileType)) {
+            alert('HEIC/HEIF photo format is not supported for barcode detection. Please use JPG or PNG instead.');
             if (fileInputRef.current) fileInputRef.current.value = "";
             return;
         }
@@ -872,7 +879,7 @@ export default function WarehousePortal({ user, onLogout }) {
     const handleScanSuccess = useCallback((text) => {
         setScanning(false);
         processScanResult(text);
-    }, []);
+    }, [processScanResult]);
 
     const handleCloseScanner = useCallback(() => {
         setScanning(false);
@@ -890,7 +897,18 @@ export default function WarehousePortal({ user, onLogout }) {
             className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans flex flex-col transition-colors duration-300 relative"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-            <div id="hidden-reader" style={{ display: 'none' }}></div>
+            <div
+                id="hidden-reader"
+                style={{
+                    position: 'fixed',
+                    left: '-9999px',
+                    top: '-9999px',
+                    width: '1px',
+                    height: '1px',
+                    opacity: 0,
+                    pointerEvents: 'none'
+                }}
+            />
 
             {isProcessingImage && (
                 <div className="fixed inset-0 z-[200] bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6">
