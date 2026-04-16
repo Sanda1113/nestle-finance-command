@@ -50,14 +50,40 @@ const buildShortageEvidence = (items = []) => {
 router.get('/notifications', async (req, res) => {
     const { email, role } = req.query;
     try {
-        let query = supabase.from('notifications').select('*');
+        if (email && role) {
+            const [emailResult, roleResult] = await Promise.all([
+                supabase
+                    .from('notifications')
+                    .select('*')
+                    .eq('user_email', email)
+                    .order('created_at', { ascending: false })
+                    .limit(50),
+                supabase
+                    .from('notifications')
+                    .select('*')
+                    .eq('user_role', role)
+                    .order('created_at', { ascending: false })
+                    .limit(50)
+            ]);
 
+            if (emailResult.error) throw emailResult.error;
+            if (roleResult.error) throw roleResult.error;
+
+            const merged = [...(emailResult.data || []), ...(roleResult.data || [])];
+            const deduped = Array.from(new Map(merged.map(item => [item.id, item])).values())
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                .slice(0, 50);
+
+            return res.json({ success: true, notifications: deduped });
+        } else if (!email && !role) {
+            return res.status(400).json({ error: 'Missing email or role parameter' });
+        }
+
+        let query = supabase.from('notifications').select('*');
         if (email) {
             query = query.eq('user_email', email);
-        } else if (role) {
-            query = query.eq('user_role', role);
         } else {
-            return res.status(400).json({ error: 'Missing email or role parameter' });
+            query = query.eq('user_role', role);
         }
 
         const { data, error } = await query
@@ -667,7 +693,7 @@ router.get('/livechat/:channel', async (req, res) => {
 
 // POST a message to a live chat channel
 router.post('/livechat/send', async (req, res) => {
-    const { channel, senderEmail, senderRole, recipientRole, message } = req.body;
+    const { channel, senderEmail, senderRole, recipientRole, recipientEmail, message } = req.body;
     if (!channel || !senderRole || !recipientRole || !message) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -682,15 +708,65 @@ router.post('/livechat/send', async (req, res) => {
         ]);
         if (error) throw error;
 
-        // Notify the recipient portal
-        await supabase.from('notifications').insert([
-            {
+        const notificationRecords = [];
+        const emailTargets = new Set();
+        if (typeof recipientEmail === 'string' && recipientEmail.trim()) {
+            emailTargets.add(recipientEmail.trim().toLowerCase());
+        }
+
+        if (recipientRole === 'Supplier') {
+            const { data: supplierUsers, error: supplierUsersErr } = await supabase
+                .from('app_users')
+                .select('email')
+                .eq('role', 'Supplier');
+            if (supplierUsersErr) throw supplierUsersErr;
+            (supplierUsers || []).forEach(({ email }) => {
+                if (typeof email === 'string' && email.trim()) {
+                    emailTargets.add(email.trim().toLowerCase());
+                }
+            });
+        }
+
+        if (emailTargets.size > 0) {
+            for (const email of emailTargets) {
+                notificationRecords.push({
+                    user_email: email,
+                    user_role: recipientRole,
+                    title: `💬 New Message from ${senderRole}`,
+                    message: `${senderRole} sent you a message in the live chat.`,
+                    is_read: false
+                });
+            }
+        } else {
+            notificationRecords.push({
                 user_role: recipientRole,
                 title: `💬 New Message from ${senderRole}`,
                 message: `${senderRole} sent you a message in the live chat.`,
                 is_read: false
-            }
-        ]);
+            });
+        }
+
+        const { error: notifErr } = await supabase.from('notifications').insert(notificationRecords);
+        if (notifErr) throw notifErr;
+
+        if (recipientRole === 'Supplier' && emailTargets.size > 0) {
+            const emailHtml = `
+                <p>You have a new live chat message from <strong>${senderRole}</strong>.</p>
+                <p><strong>Channel:</strong> ${channel}</p>
+                <blockquote style="border-left:4px solid #ccc; padding-left:10px;">${message}</blockquote>
+                <p>Please log in to your Supplier Dashboard to reply.</p>
+            `;
+            await Promise.all(Array.from(emailTargets).map((email) =>
+                sendSupplierEmail(
+                    email,
+                    `New Live Chat Message from ${senderRole}`,
+                    emailHtml,
+                    { poNumber: channel }
+                ).catch((mailErr) => {
+                    console.error(`Failed to send live chat supplier email to ${email}:`, mailErr);
+                })
+            ));
+        }
 
         res.json({ success: true, message: 'Message sent' });
     } catch (error) {

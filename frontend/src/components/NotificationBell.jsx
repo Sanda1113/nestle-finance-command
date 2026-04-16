@@ -9,7 +9,9 @@ export default function NotificationBell({ email, role, onNavigate }) {
 
     const fetchNotifications = async () => {
         try {
-            const params = email ? { email } : { role };
+            const params = {};
+            if (email) params.email = email;
+            if (role) params.role = role;
             const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/notifications', { params });
             const data = res.data.notifications || [];
             setNotifications(data);

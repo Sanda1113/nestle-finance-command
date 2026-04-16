@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User, FileText, Clock, DollarSign } from 'lucide-react';
+import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User, FileText, Clock, DollarSign, Search } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import AppNotifier from './AppNotifier';
 import NotificationBell from './NotificationBell';
@@ -446,6 +446,7 @@ function FinancePortal({ user }) {
     const [pos, setPOs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('All');
+    const [reviewSearchTerm, setReviewSearchTerm] = useState('');
     const [expandedRow, setExpandedRow] = useState(null);
     const [actionedRecords, setActionedRecords] = useState({});
 
@@ -531,6 +532,19 @@ function FinancePortal({ user }) {
         return false;
     });
 
+    const searchLower = reviewSearchTerm.trim().toLowerCase();
+    const visibleRecords = filteredRecords.filter((r) => {
+        if (!searchLower) return true;
+        const values = [
+            getShipmentId(r.po_number),
+            r.po_number,
+            r.invoice_number,
+            r.vendor_name,
+            r.displayStatus
+        ];
+        return values.some((val) => String(val || '').toLowerCase().includes(searchLower));
+    });
+
     return (
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -538,7 +552,17 @@ function FinancePortal({ user }) {
                     <h2 className="text-3xl font-black text-slate-800 dark:text-white">Finance Review Queue</h2>
                     <p className="text-slate-500 dark:text-slate-400">Resolve discrepancies and manually review supplier submissions.</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:items-center">
+                    <div className="relative w-full sm:w-80">
+                        <input
+                            type="text"
+                            value={reviewSearchTerm}
+                            onChange={(e) => setReviewSearchTerm(e.target.value)}
+                            placeholder="Search shipment, PO, invoice, vendor..."
+                            className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    </div>
                     <select value={filter} onChange={(e) => setFilter(e.target.value)} className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-300 outline-none focus:ring-2 focus:ring-blue-500">
                         <option value="All">All Documents</option>
                         <option value="Pending">Needs Review / Pending</option>
@@ -567,7 +591,7 @@ function FinancePortal({ user }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                            {filteredRecords.map((r) => {
+                            {visibleRecords.map((r) => {
                                 const isActioned = actionedRecords[r.id] || r.displayStatus.includes('Approved') || r.displayStatus.includes('Reject');
                                 const relatedBoq = boqs.find(b => (b.status || '').includes(r.po_number));
                                 const isExpanded = expandedRow === r.id;

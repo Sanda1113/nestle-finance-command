@@ -105,6 +105,7 @@ const BarcodeScannerUI = ({ onScanSuccess, onClose }) => {
         <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-sm flex items-end justify-center animate-in fade-in duration-200" onClick={onClose}>
             <div
                 className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-t-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300 pb-safe"
+                style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
                 onClick={e => e.stopPropagation()}
             >
                 <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
@@ -281,6 +282,18 @@ export default function WarehousePortal({ user, onLogout }) {
     const latestState = useRef({ pos, selectedPO, receivedItems });
     useEffect(() => { latestState.current = { pos, selectedPO, receivedItems }; }, [pos, selectedPO, receivedItems]);
 
+    const normalizeQueueItem = useCallback((item) => {
+        if (!item) return null;
+        const looksTyped = item && typeof item === 'object' && item.type && item.payload;
+        const candidate = looksTyped ? item : { type: 'submit', payload: item };
+        const type = candidate.type === 'reject' ? 'reject' : 'submit';
+        const payload = candidate.payload;
+        if (!payload || typeof payload !== 'object') return null;
+        const poNumber = typeof payload.poNumber === 'string' ? payload.poNumber.trim() : '';
+        if (!poNumber) return null;
+        return { type, payload };
+    }, []);
+
     useEffect(() => {
         if (isDarkMode) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
@@ -288,21 +301,27 @@ export default function WarehousePortal({ user, onLogout }) {
 
     // Load sync queue from localStorage on mount
     useEffect(() => {
-        const savedQueue = JSON.parse(localStorage.getItem('grnSyncQueue') || '[]');
-        let migratedLegacyCount = 0;
-        const normalizedQueue = (Array.isArray(savedQueue) ? savedQueue : []).map(item => {
-            if (item && typeof item === 'object' && item.type && item.payload) return item;
-            migratedLegacyCount += 1;
-            return { type: 'submit', payload: item };
-        });
-        if (migratedLegacyCount > 0) {
-            console.warn(`Migrated ${migratedLegacyCount} legacy offline queue item(s) to typed format.`);
+        let savedQueue = [];
+        try {
+            savedQueue = JSON.parse(localStorage.getItem('grnSyncQueue') || '[]');
+        } catch {
+            savedQueue = [];
+        }
+        const rawQueue = Array.isArray(savedQueue) ? savedQueue : [];
+        const normalizedQueue = rawQueue.map(normalizeQueueItem).filter(Boolean);
+        const droppedCount = rawQueue.length - normalizedQueue.length;
+        if (droppedCount > 0) {
+            console.warn(`Dropped ${droppedCount} invalid offline queue item(s).`);
         }
         setSyncQueue(normalizedQueue);
-    }, []);
+    }, [normalizeQueueItem]);
 
     // Persist queue to localStorage whenever it changes
     useEffect(() => {
+        if (syncQueue.length === 0) {
+            localStorage.removeItem('grnSyncQueue');
+            return;
+        }
         localStorage.setItem('grnSyncQueue', JSON.stringify(syncQueue));
     }, [syncQueue]);
 
@@ -353,12 +372,17 @@ export default function WarehousePortal({ user, onLogout }) {
 
     const syncPendingGRNs = async () => {
         if (syncingRef.current) return;
-        const queue = [...syncQueue];
-        if (queue.length === 0) return;
+        const queue = syncQueue.map(normalizeQueueItem).filter(Boolean);
+        if (queue.length === 0) {
+            setSyncQueue([]);
+            localStorage.removeItem('grnSyncQueue');
+            return;
+        }
 
         syncingRef.current = true;
         setIsSyncing(true);
         const failedItems = [];
+        let droppedInvalidCount = syncQueue.length - queue.length;
 
         for (const queueItem of queue) {
             const rawType = queueItem?.type;
@@ -375,18 +399,28 @@ export default function WarehousePortal({ user, onLogout }) {
             try {
                 await axios.post(endpoint, payload);
             } catch (error) {
-                console.error(`Failed to sync GRN for ${payload.poNumber}:`, error);
-                failedItems.push({ type, payload });
+                const statusCode = Number(error?.response?.status || 0);
+                if (statusCode >= 400 && statusCode < 500) {
+                    console.error(`Dropping invalid offline action for ${payload.poNumber}:`, error?.response?.data || error.message);
+                    droppedInvalidCount += 1;
+                } else {
+                    console.error(`Failed to sync GRN for ${payload.poNumber}:`, error);
+                    failedItems.push({ type, payload });
+                }
             }
         }
 
         if (failedItems.length === 0) {
             setSyncQueue([]);
             localStorage.removeItem('grnSyncQueue');
-            alert('📡 All offline shipment actions have been synced successfully.');
+            if (droppedInvalidCount > 0) {
+                alert(`📡 Offline queue cleaned and synced. ${droppedInvalidCount} invalid action(s) were removed.`);
+            } else {
+                alert('📡 All offline shipment actions have been synced successfully.');
+            }
         } else {
             setSyncQueue(failedItems);
-            alert(`⚠️ ${failedItems.length} offline action(s) failed to sync. They will remain in the queue for retry.`);
+            alert(`⚠️ ${failedItems.length} offline action(s) failed to sync.${droppedInvalidCount > 0 ? ` ${droppedInvalidCount} invalid action(s) were removed.` : ''} They will remain in the queue for retry.`);
         }
 
         setIsSyncing(false);
@@ -458,12 +492,13 @@ export default function WarehousePortal({ user, onLogout }) {
         try {
             if ('BarcodeDetector' in window) {
                 try {
-                    const formats = ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39'];
+                    const formats = ['qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'codabar', 'pdf417', 'data_matrix', 'aztec'];
                     const detector = new window.BarcodeDetector({ formats });
                     const imageBitmap = await createImageBitmap(file);
                     const barcodes = await detector.detect(imageBitmap);
-                    if (barcodes && barcodes.length > 0) {
-                        processScanResult(barcodes[0].rawValue);
+                    const firstValue = Array.isArray(barcodes) && barcodes.length > 0 ? String(barcodes[0]?.rawValue || '').trim() : '';
+                    if (firstValue) {
+                        processScanResult(firstValue);
                         return;
                     }
                 } catch {
@@ -473,7 +508,12 @@ export default function WarehousePortal({ user, onLogout }) {
 
             const html5QrCode = new Html5Qrcode("hidden-reader");
             try {
-                const decodedText = await html5QrCode.scanFile(file, true);
+                let decodedText = '';
+                try {
+                    decodedText = await html5QrCode.scanFile(file, true);
+                } catch {
+                    decodedText = await html5QrCode.scanFile(file, false);
+                }
                 processScanResult(decodedText);
             } catch (qrError) {
                 console.error("QR scan failed:", qrError);
@@ -481,10 +521,10 @@ export default function WarehousePortal({ user, onLogout }) {
                     barcode: 'Unknown',
                     name: 'Scan Failed',
                     category: 'Error',
-                    message: '❌ No barcode found. Try better lighting or use manual entry.'
+                    message: '❌ No barcode found. Try retaking photo closer to the barcode or use manual entry.'
                 });
             } finally {
-                html5QrCode.clear();
+                html5QrCode.clear().catch(() => { });
             }
         } catch (err) {
             console.error("Image processing error:", err);
@@ -791,7 +831,10 @@ export default function WarehousePortal({ user, onLogout }) {
     );
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans flex flex-col transition-colors duration-300 relative">
+        <div
+            className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans flex flex-col transition-colors duration-300 relative"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
             <div id="hidden-reader" style={{ display: 'none' }}></div>
 
             {isProcessingImage && (
@@ -842,7 +885,10 @@ export default function WarehousePortal({ user, onLogout }) {
                 </div>
             )}
 
-            <div className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm shrink-0">
+            <div
+                className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 sm:px-6 sm:py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm shrink-0"
+                style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+            >
                 <div className="flex items-center space-x-2 sm:space-x-3">
                     <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-xl flex items-center justify-center shadow-md p-1.5 border border-slate-700 shrink-0">
                         <img src="/nestle-logo.svg" alt="Nestle" className="w-full h-full object-contain" />
@@ -1196,7 +1242,7 @@ export default function WarehousePortal({ user, onLogout }) {
                             </div>
                         </div>
 
-                        <div className="lg:w-2/3 p-4 sm:p-6 lg:p-8 overflow-y-auto max-h-[70vh] lg:max-h-[800px]">
+                        <div className="lg:w-2/3 p-4 sm:p-6 lg:p-8 overflow-y-auto max-h-[65vh] lg:max-h-[800px]">
                             <div className="space-y-4">
                                 {receivedItems.map((item, idx) => {
                                     const isShort = item.status === 'Shortage';
@@ -1309,7 +1355,10 @@ export default function WarehousePortal({ user, onLogout }) {
                             </div>
                         </div>
 
-                        <div className="sticky bottom-0 left-0 w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+                        <div
+                            className="sticky bottom-0 left-0 w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
+                            style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+                        >
                             <button
                                 onClick={submitGRN}
                                 className="w-full py-4 text-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98]"
