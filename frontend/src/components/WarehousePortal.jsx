@@ -289,7 +289,16 @@ export default function WarehousePortal({ user, onLogout }) {
     // Load sync queue from localStorage on mount
     useEffect(() => {
         const savedQueue = JSON.parse(localStorage.getItem('grnSyncQueue') || '[]');
-        setSyncQueue(savedQueue);
+        let migratedLegacyCount = 0;
+        const normalizedQueue = (Array.isArray(savedQueue) ? savedQueue : []).map(item => {
+            if (item && typeof item === 'object' && item.type && item.payload) return item;
+            migratedLegacyCount += 1;
+            return { type: 'submit', payload: item };
+        });
+        if (migratedLegacyCount > 0) {
+            console.warn(`Migrated ${migratedLegacyCount} legacy offline queue item(s) to typed format.`);
+        }
+        setSyncQueue(normalizedQueue);
     }, []);
 
     // Persist queue to localStorage whenever it changes
@@ -351,22 +360,33 @@ export default function WarehousePortal({ user, onLogout }) {
         setIsSyncing(true);
         const failedItems = [];
 
-        for (const payload of queue) {
+        for (const queueItem of queue) {
+            const rawType = queueItem?.type;
+            if (rawType && rawType !== 'reject' && rawType !== 'submit') {
+                console.warn(`Unknown offline queue action type "${rawType}" encountered. Leaving item in queue and skipping sync for this item.`);
+                failedItems.push(queueItem);
+                continue;
+            }
+            const type = rawType === 'reject' ? 'reject' : 'submit';
+            const payload = queueItem?.payload ?? queueItem;
+            const endpoint = type === 'reject'
+                ? 'https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/reject'
+                : 'https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/submit';
             try {
-                await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/submit', payload);
+                await axios.post(endpoint, payload);
             } catch (error) {
                 console.error(`Failed to sync GRN for ${payload.poNumber}:`, error);
-                failedItems.push(payload);
+                failedItems.push({ type, payload });
             }
         }
 
         if (failedItems.length === 0) {
             setSyncQueue([]);
             localStorage.removeItem('grnSyncQueue');
-            alert('📡 All offline GRNs have been synced successfully.');
+            alert('📡 All offline shipment actions have been synced successfully.');
         } else {
             setSyncQueue(failedItems);
-            alert(`⚠️ ${failedItems.length} GRN(s) failed to sync. They will remain in the queue for retry.`);
+            alert(`⚠️ ${failedItems.length} offline action(s) failed to sync. They will remain in the queue for retry.`);
         }
 
         setIsSyncing(false);
@@ -598,7 +618,7 @@ export default function WarehousePortal({ user, onLogout }) {
         };
 
         if (isOffline) {
-            const newQueue = [...syncQueue, payload];
+            const newQueue = [...syncQueue, { type: 'submit', payload }];
             setSyncQueue(newQueue);
             alert(`📡 OFFLINE MODE: GRN saved locally.\n📍 GPS Tag: ${gpsLocation}`);
             setSelectedPO(null);
@@ -613,7 +633,7 @@ export default function WarehousePortal({ user, onLogout }) {
                 fetchPOs();
             } catch (err) {
                 alert('Failed to log GRN. Saving offline.');
-                const newQueue = [...syncQueue, payload];
+                const newQueue = [...syncQueue, { type: 'submit', payload }];
                 setSyncQueue(newQueue);
                 setSelectedPO(null);
                 setViewMode('completed');
@@ -678,20 +698,38 @@ export default function WarehousePortal({ user, onLogout }) {
         if (!window.confirm('Reject this shipment and cancel the entire transaction?')) return;
 
         setIsRejecting(true);
+        const payload = {
+            poNumber: selectedPO.po_number,
+            rejectedBy: user.email,
+            itemsReceived: receivedItems,
+            rejectionReason: reason
+        };
+
+        if (isOffline) {
+            const newQueue = [...syncQueue, { type: 'reject', payload }];
+            setSyncQueue(newQueue);
+            alert('📡 OFFLINE MODE: Shipment rejection saved locally and will auto-sync when online.');
+            setSelectedPO(null);
+            setViewMode('completed');
+            fetchPOs();
+            setIsRejecting(false);
+            return;
+        }
+
         try {
-            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/reject', {
-                poNumber: selectedPO.po_number,
-                rejectedBy: user.email,
-                itemsReceived: receivedItems,
-                rejectionReason: reason
-            });
+            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/reject', payload);
             alert('❌ Shipment rejected due to shortage. Transaction canceled.');
             setSelectedPO(null);
             setViewMode('completed');
             fetchPOs();
         } catch (error) {
             console.error(error);
-            alert('Failed to reject shipment.');
+            const newQueue = [...syncQueue, { type: 'reject', payload }];
+            setSyncQueue(newQueue);
+            alert('Failed to reject shipment online. Rejection saved offline and queued for sync.');
+            setSelectedPO(null);
+            setViewMode('completed');
+            fetchPOs();
         } finally {
             setIsRejecting(false);
         }
@@ -883,7 +921,7 @@ export default function WarehousePortal({ user, onLogout }) {
                         onClick={syncPendingGRNs}
                         className="mb-4 w-full bg-amber-500 hover:bg-amber-600 text-white p-3 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg transition-colors text-sm"
                     >
-                        <RefreshCw className="w-4 h-4 shrink-0" /> {syncQueue.length} pending GRNs. Tap to sync.
+                        <RefreshCw className="w-4 h-4 shrink-0" /> {syncQueue.length} pending offline action(s). Tap to sync.
                     </button>
                 )}
 
