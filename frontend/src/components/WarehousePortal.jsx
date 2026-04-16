@@ -273,6 +273,7 @@ export default function WarehousePortal({ user, onLogout }) {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isDarkMode, setIsDarkMode] = useState(true);
     const [isClearing, setIsClearing] = useState(false);
+    const [isRejecting, setIsRejecting] = useState(false);
 
     // Prevent duplicate sync calls
     const syncingRef = useRef(false);
@@ -643,8 +644,50 @@ export default function WarehousePortal({ user, onLogout }) {
         }
     };
 
+    const handleRejectShipment = async () => {
+        if (!selectedPO) return;
+        const shortageItems = receivedItems.filter(item =>
+            item.status === 'Shortage' || Number(item.actualQtyReceived || 0) < Number(item.qty || 0)
+        );
+        if (shortageItems.length === 0) {
+            alert('Shipment can only be rejected when a shortage is detected.');
+            return;
+        }
+
+        const reasonInput = window.prompt('Reason for rejection (required):');
+        if (reasonInput === null) return;
+
+        const reason = reasonInput.trim();
+        if (!reason) {
+            alert('Please provide a rejection reason.');
+            return;
+        }
+
+        if (!window.confirm('Reject this shipment and cancel the entire transaction?')) return;
+
+        setIsRejecting(true);
+        try {
+            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/reject', {
+                poNumber: selectedPO.po_number,
+                rejectedBy: user.email,
+                itemsReceived: receivedItems,
+                rejectionReason: reason
+            });
+            alert('❌ Shipment rejected due to shortage. Transaction canceled.');
+            setSelectedPO(null);
+            setViewMode('completed');
+            fetchPOs();
+        } catch (error) {
+            console.error(error);
+            alert('Failed to reject shipment.');
+        } finally {
+            setIsRejecting(false);
+        }
+    };
+
     const rawPendingList = pos.filter(po => {
-        const isCompleted = po.status && po.status.includes('Received');
+        const status = String(po.status || '');
+        const isCompleted = status.includes('Received') || status.includes('Cancelled');
         const isDeliveredToDock = po.status === 'Delivered to Dock' || po.status === 'Pending Warehouse GRN' || po.po_data?.delivery_timestamp;
         return !isCompleted && isDeliveredToDock;
     });
@@ -655,7 +698,10 @@ export default function WarehousePortal({ user, onLogout }) {
         return timeB - timeA;
     });
 
-    const completedList = pos.filter(po => po.status && po.status.includes('Received'));
+    const completedList = pos.filter(po => {
+        const status = String(po.status || '');
+        return status.includes('Received') || status.includes('Cancelled');
+    });
     const activeList = viewMode === 'pending' ? pendingList : completedList;
     const filteredPOs = activeList.filter(po => po.po_number.toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -690,6 +736,9 @@ export default function WarehousePortal({ user, onLogout }) {
     const canClear = selectedPO &&
         (selectedPO.status === 'Goods Received (GRN Logged)' ||
             selectedPO.status === 'Partially Received (Awaiting Backorder)');
+    const canRejectForShortage = selectedPO && receivedItems.some(item =>
+        item.status === 'Shortage' || Number(item.actualQtyReceived || 0) < Number(item.qty || 0)
+    );
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans flex flex-col transition-colors duration-300 relative">
@@ -939,7 +988,9 @@ export default function WarehousePortal({ user, onLogout }) {
                                 </div>
                             ) : (
                                 filteredPOs.map(po => {
-                                    const isCompleted = po.status && po.status.includes('Received');
+                                    const status = String(po.status || '');
+                                    const isCancelled = status.includes('Cancelled');
+                                    const isCompleted = status.includes('Received') || isCancelled;
                                     return (
                                         <div
                                             key={po.id}
@@ -947,9 +998,9 @@ export default function WarehousePortal({ user, onLogout }) {
                                             className={`group bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border ${isCompleted ? 'border-emerald-500/50' : 'border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl cursor-pointer'} transition-all relative overflow-hidden`}
                                         >
                                             {isCompleted && (
-                                                <div className="absolute inset-0 bg-emerald-50/10 dark:bg-slate-900/50 backdrop-blur-[1px] flex flex-col items-center justify-center z-10 p-4">
-                                                    <span className="bg-emerald-500 text-white px-4 py-2 rounded-xl font-black flex items-center gap-2 shadow-lg w-full justify-center text-sm">
-                                                        <CheckCircle2 className="w-5 h-5" /> COMPLETED
+                                                <div className={`absolute inset-0 ${isCancelled ? 'bg-red-50/20' : 'bg-emerald-50/10'} dark:bg-slate-900/50 backdrop-blur-[1px] flex flex-col items-center justify-center z-10 p-4`}>
+                                                    <span className={`${isCancelled ? 'bg-red-600' : 'bg-emerald-500'} text-white px-4 py-2 rounded-xl font-black flex items-center gap-2 shadow-lg w-full justify-center text-sm`}>
+                                                        {isCancelled ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />} {isCancelled ? 'CANCELLED' : 'COMPLETED'}
                                                     </span>
                                                     <p className="text-xs text-slate-500 font-bold mt-3 uppercase tracking-wider bg-white dark:bg-slate-800 px-3 py-1 rounded-full">
                                                         {getShipmentId(po.po_number)}
@@ -1080,6 +1131,16 @@ export default function WarehousePortal({ user, onLogout }) {
                                     >
                                         <CheckCircle2 className="w-6 h-6 sm:w-5 sm:h-5" />
                                         {isClearing ? 'Clearing...' : 'Clear Goods for Payout'}
+                                    </button>
+                                )}
+                                {canRejectForShortage && (
+                                    <button
+                                        onClick={handleRejectShipment}
+                                        disabled={isRejecting}
+                                        className="w-full py-4 text-lg sm:text-base bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow-lg shadow-red-500/30 flex items-center justify-center gap-2"
+                                    >
+                                        <AlertCircle className="w-6 h-6 sm:w-5 sm:h-5" />
+                                        {isRejecting ? 'Rejecting...' : 'Reject Shipment (Cancel Transaction)'}
                                     </button>
                                 )}
                             </div>
@@ -1213,6 +1274,16 @@ export default function WarehousePortal({ user, onLogout }) {
                                 >
                                     <CheckCircle2 className="w-6 h-6 shrink-0" />
                                     {isClearing ? 'Clearing...' : 'Clear Goods for Payout'}
+                                </button>
+                            )}
+                            {canRejectForShortage && (
+                                <button
+                                    onClick={handleRejectShipment}
+                                    disabled={isRejecting}
+                                    className="w-full py-4 text-lg bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow-lg shadow-red-500/30 flex items-center justify-center gap-2 mt-3"
+                                >
+                                    <AlertCircle className="w-6 h-6 shrink-0" />
+                                    {isRejecting ? 'Rejecting...' : 'Reject Shipment (Cancel Transaction)'}
                                 </button>
                             )}
                         </div>

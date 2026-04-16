@@ -500,6 +500,7 @@ function FinancePortal({ user }) {
         const relatedPO = pos.find(p => p.po_number === r.po_number);
         const isGrnCompleted = relatedPO && relatedPO.status && relatedPO.status.includes('Received');
         const isDelivered = relatedPO && (relatedPO.status === 'Delivered to Dock' || relatedPO.po_data?.delivery_timestamp);
+        const isWarehouseCancelled = relatedPO && String(relatedPO.status || '').includes('Cancelled');
 
         let displayStatus = String(r.match_status || '');
 
@@ -511,7 +512,9 @@ function FinancePortal({ user }) {
             displayStatus = isMathMatch ? 'Matched - Pending Finance Review' : 'Discrepancy Detected';
         }
 
-        if (displayStatus.toLowerCase().includes('approve')) {
+        if (isWarehouseCancelled) {
+            displayStatus = 'Rejected by Warehouse (Shortage)';
+        } else if (displayStatus.toLowerCase().includes('approve')) {
             if (isGrnCompleted) displayStatus = 'Approved - Awaiting Payout';
             else if (isDelivered) displayStatus = 'Pending Warehouse GRN';
             else displayStatus = 'Approved (Awaiting Delivery)';
