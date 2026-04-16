@@ -724,13 +724,28 @@ router.post('/livechat/send', async (req, res) => {
             emailTargets.add(normalizeEmail(recipientEmail));
         }
 
-        if (recipientRole === 'Supplier') {
-            const { data: supplierUsers, error: supplierUsersErr } = await supabase
-                .from('app_users')
-                .select('email')
-                .eq('role', 'Supplier');
-            if (supplierUsersErr) throw supplierUsersErr;
-            (supplierUsers || []).forEach(({ email }) => {
+        const normalizedRecipientRole = String(recipientRole || '').trim().toLowerCase();
+        if (normalizedRecipientRole === 'supplier') {
+            const [supplierUsersLowerResult, supplierUsersTitleResult] = await Promise.all([
+                supabase
+                    .from('app_users')
+                    .select('email')
+                    .eq('role', 'supplier'),
+                supabase
+                    .from('app_users')
+                    .select('email')
+                    .eq('role', 'Supplier')
+            ]);
+
+            if (supplierUsersLowerResult.error) throw supplierUsersLowerResult.error;
+            if (supplierUsersTitleResult.error) throw supplierUsersTitleResult.error;
+
+            const supplierUsers = [
+                ...(supplierUsersLowerResult.data || []),
+                ...(supplierUsersTitleResult.data || [])
+            ];
+
+            supplierUsers.forEach(({ email }) => {
                 if (typeof email === 'string' && email.trim()) {
                     emailTargets.add(normalizeEmail(email));
                 }
@@ -759,7 +774,7 @@ router.post('/livechat/send', async (req, res) => {
         const { error: notifErr } = await supabase.from('notifications').insert(notificationRecords);
         if (notifErr) throw notifErr;
 
-        if (recipientRole === 'Supplier' && emailTargets.size > 0) {
+        if (normalizedRecipientRole === 'supplier' && emailTargets.size > 0) {
             const safeSenderRole = escapeHtml(senderRole);
             const safeChannel = escapeHtml(channel);
             const safeMessage = escapeHtml(message);
