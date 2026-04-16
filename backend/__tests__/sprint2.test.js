@@ -6,6 +6,7 @@ jest.mock('../db', () => {
     const mockQuery = {
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
+        ilike: jest.fn().mockReturnThis(),
         order: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue({ data: [], error: null }),
         single: jest.fn().mockResolvedValue({ data: { po_data: {}, supplier_email: 'test@example.com' }, error: null }),
@@ -162,5 +163,30 @@ describe('Sprint2 Routes', () => {
         expect(evidence.photoFileName).toBe('shortage_evidence.jpg');
         expect(evidence.photoMimeType).toBe('image/jpeg');
         expect(evidence.photoDataUrl).toBe('data:image/jpeg;base64,/9j/abc');
+    });
+
+    test('POST /api/sprint2/livechat/send sends supplier email notifications', async () => {
+        const { sendSupplierEmail } = require('../mailer');
+        sendSupplierEmail.mockClear();
+
+        const res = await request(app)
+            .post('/api/sprint2/livechat/send')
+            .send({
+                channel: 'LIVECHAT-Finance-Supplier',
+                senderEmail: 'finance@test.com',
+                senderRole: 'Finance',
+                recipientRole: 'Supplier',
+                recipientEmail: 'supplier@test.com',
+                message: 'Please check the shipment update.'
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(sendSupplierEmail).toHaveBeenCalledWith(
+            'supplier@test.com',
+            expect.stringContaining('New Live Chat Message from Finance'),
+            expect.any(String),
+            expect.objectContaining({ poNumber: 'LIVECHAT-Finance-Supplier' })
+        );
     });
 });

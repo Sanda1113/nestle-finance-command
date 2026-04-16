@@ -19,6 +19,10 @@ const getShipmentId = (poNum) => {
     return `SHP-${poNum.replace(/[^a-zA-Z]/g, '').substring(0, 6).toUpperCase()}`;
 };
 
+const API_BASE_URL = 'https://nestle-finance-command-production.up.railway.app/api/sprint2';
+const SYNC_QUEUE_STORAGE_KEY = 'grnSyncQueue';
+const OFFLINE_PO_STORAGE_KEY = 'offlinePOs';
+
 // 📱 Mobile‑optimized Bottom Drawer Scanner
 const BarcodeScannerUI = ({ onScanSuccess, onClose }) => {
     const scannerRef = useRef(null);
@@ -286,12 +290,27 @@ export default function WarehousePortal({ user, onLogout }) {
         if (!item) return null;
         const looksTyped = typeof item === 'object' && item !== null && item.type && item.payload;
         const candidate = looksTyped ? item : { type: 'submit', payload: item };
-        const type = candidate.type === 'reject' ? 'reject' : 'submit';
+        const rawType = String(candidate.type || 'submit').trim().toLowerCase();
+        const type = rawType === 'submit' || rawType === 'reject' || rawType === 'acknowledge'
+            ? rawType
+            : null;
+        if (!type) return null;
         const payload = candidate.payload;
         if (!payload || typeof payload !== 'object') return null;
         const poNumber = typeof payload.poNumber === 'string' ? payload.poNumber.trim() : '';
         if (!poNumber) return null;
         return { type, payload };
+    }, []);
+
+    const loadCachedPOs = useCallback(() => {
+        try {
+            const cachedRaw = localStorage.getItem(OFFLINE_PO_STORAGE_KEY);
+            if (!cachedRaw) return [];
+            const parsed = JSON.parse(cachedRaw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
     }, []);
 
     useEffect(() => {
@@ -303,7 +322,7 @@ export default function WarehousePortal({ user, onLogout }) {
     useEffect(() => {
         let savedQueue = [];
         try {
-            savedQueue = JSON.parse(localStorage.getItem('grnSyncQueue') || '[]');
+            savedQueue = JSON.parse(localStorage.getItem(SYNC_QUEUE_STORAGE_KEY) || '[]');
         } catch {
             savedQueue = [];
         }
@@ -319,63 +338,50 @@ export default function WarehousePortal({ user, onLogout }) {
     // Persist queue to localStorage whenever it changes
     useEffect(() => {
         if (syncQueue.length === 0) {
-            localStorage.removeItem('grnSyncQueue');
+            localStorage.removeItem(SYNC_QUEUE_STORAGE_KEY);
             return;
         }
-        localStorage.setItem('grnSyncQueue', JSON.stringify(syncQueue));
+        localStorage.setItem(SYNC_QUEUE_STORAGE_KEY, JSON.stringify(syncQueue));
     }, [syncQueue]);
 
-    // Online/Offline listeners
-    useEffect(() => {
-        const handleOnline = () => {
-            setIsOffline(false);
-            // Auto-sync when coming back online (debounced)
-            if (!syncingRef.current && syncQueue.length > 0) {
-                syncPendingGRNs();
-            }
-        };
-        const handleOffline = () => setIsOffline(true);
-        window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', handleOffline);
-        return () => {
-            window.removeEventListener('online', handleOnline);
-            window.removeEventListener('offline', handleOffline);
-        };
-    }, [syncQueue.length]);
+    const fetchPOs = useCallback(async ({ preferCached = false } = {}) => {
+        if (preferCached) {
+            const cachedPOs = loadCachedPOs();
+            if (cachedPOs.length > 0) setPOs(cachedPOs);
+        }
 
-    const fetchPOs = async () => {
-        if (isOffline) {
+        if (!navigator.onLine) {
             setLoading(false);
-            const cached = localStorage.getItem('offlinePOs');
-            if (cached) setPOs(JSON.parse(cached));
+            const cachedPOs = loadCachedPOs();
+            if (cachedPOs.length > 0) setPOs(cachedPOs);
             return;
         }
         try {
-            const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/pending-pos');
+            const res = await axios.get(`${API_BASE_URL}/grn/pending-pos`);
             const enhancedData = res.data.data.map(po => ({
                 ...po, trustScore: po.supplier_email.includes('nestle') ? 98 : Math.floor(Math.random() * (95 - 65 + 1) + 65)
             }));
             setPOs(enhancedData);
-            localStorage.setItem('offlinePOs', JSON.stringify(enhancedData));
+            localStorage.setItem(OFFLINE_PO_STORAGE_KEY, JSON.stringify(enhancedData));
         } catch (err) {
             console.error(err);
-            const cached = localStorage.getItem('offlinePOs');
-            if (cached) setPOs(JSON.parse(cached));
+            const cachedPOs = loadCachedPOs();
+            if (cachedPOs.length > 0) setPOs(cachedPOs);
         } finally { setLoading(false); }
-    };
+    }, [loadCachedPOs]);
 
     useEffect(() => {
         fetchPOs();
         const interval = setInterval(() => fetchPOs(), 5000);
         return () => clearInterval(interval);
-    }, [isOffline]);
+    }, [fetchPOs, isOffline]);
 
-    const syncPendingGRNs = async () => {
+    const syncPendingGRNs = useCallback(async () => {
         if (syncingRef.current) return;
         const queue = syncQueue.map(normalizeQueueItem).filter(Boolean);
         if (queue.length === 0) {
             setSyncQueue([]);
-            localStorage.removeItem('grnSyncQueue');
+            localStorage.removeItem(SYNC_QUEUE_STORAGE_KEY);
             return;
         }
 
@@ -386,16 +392,18 @@ export default function WarehousePortal({ user, onLogout }) {
 
         for (const queueItem of queue) {
             const rawType = queueItem?.type;
-            if (rawType && rawType !== 'reject' && rawType !== 'submit') {
+            if (rawType && rawType !== 'reject' && rawType !== 'submit' && rawType !== 'acknowledge') {
                 console.warn(`Unknown offline queue action type "${rawType}" encountered. Leaving item in queue and skipping sync for this item.`);
                 failedItems.push(queueItem);
                 continue;
             }
-            const type = rawType === 'reject' ? 'reject' : 'submit';
+            const type = rawType === 'reject' ? 'reject' : rawType === 'acknowledge' ? 'acknowledge' : 'submit';
             const payload = queueItem?.payload ?? queueItem;
             const endpoint = type === 'reject'
-                ? 'https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/reject'
-                : 'https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/submit';
+                ? `${API_BASE_URL}/grn/reject`
+                : type === 'acknowledge'
+                    ? `${API_BASE_URL}/grn/acknowledge`
+                    : `${API_BASE_URL}/grn/submit`;
             try {
                 await axios.post(endpoint, payload);
             } catch (error) {
@@ -412,7 +420,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
         if (failedItems.length === 0) {
             setSyncQueue([]);
-            localStorage.removeItem('grnSyncQueue');
+            localStorage.removeItem(SYNC_QUEUE_STORAGE_KEY);
             if (droppedInvalidCount > 0) {
                 alert(`📡 Offline queue cleaned and synced. ${droppedInvalidCount} invalid action(s) were removed.`);
             } else {
@@ -426,25 +434,54 @@ export default function WarehousePortal({ user, onLogout }) {
         setIsSyncing(false);
         syncingRef.current = false;
         fetchPOs();
-    };
+    }, [fetchPOs, normalizeQueueItem, syncQueue]);
+
+    // Online/Offline listeners
+    useEffect(() => {
+        const handleOnline = () => {
+            setIsOffline(false);
+            fetchPOs({ preferCached: true });
+            if (!syncingRef.current && syncQueue.length > 0) {
+                syncPendingGRNs();
+            }
+        };
+        const handleOffline = () => setIsOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, [fetchPOs, syncPendingGRNs, syncQueue.length]);
 
     const processScanResult = (decodedText) => {
+        const scannedText = typeof decodedText === 'string' ? decodedText.trim() : '';
+        if (!scannedText) {
+            setDetectedProduct({
+                barcode: 'Empty Scan',
+                name: 'Scan Failed',
+                category: 'Error',
+                message: '❌ No barcode detected. Please try again or use manual entry.'
+            });
+            return;
+        }
+
         const state = latestState.current;
 
         if (!state.selectedPO) {
-            const matchedPO = state.pos.find(p => p.po_number.toLowerCase() === decodedText.toLowerCase());
+            const matchedPO = state.pos.find(p => p.po_number.toLowerCase() === scannedText.toLowerCase());
 
             if (matchedPO) {
                 if (matchedPO.status && matchedPO.status.includes('Received')) {
                     alert(`📦 Shipment ${getShipmentId(matchedPO.po_number)} found, but it has already been COMPLETED and locked.`);
                 } else {
-                    setSearchTerm(decodedText);
+                    setSearchTerm(scannedText);
                     setViewMode('pending');
                     handleSelectPO(matchedPO);
                 }
             } else {
                 setDetectedProduct({
-                    barcode: decodedText,
+                    barcode: scannedText,
                     name: "Unknown Scanned Item",
                     category: "Unrecognized Inventory",
                     message: `❌ Item not found. This shipment/item does not exist in the current pending dock queue.`
@@ -453,12 +490,12 @@ export default function WarehousePortal({ user, onLogout }) {
             return;
         }
 
-        let scannedSku = decodedText;
+        let scannedSku = scannedText;
         let scannedBatch = null;
         let scannedExpiry = null;
 
-        if (decodedText.includes('|')) {
-            const parts = decodedText.split('|');
+        if (scannedText.includes('|')) {
+            const parts = scannedText.split('|');
             scannedSku = parts[0];
             scannedBatch = parts[1];
             scannedExpiry = parts[2];
@@ -473,7 +510,7 @@ export default function WarehousePortal({ user, onLogout }) {
             safePlayAudio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
         } else {
             setDetectedProduct({
-                barcode: decodedText,
+                barcode: scannedText,
                 name: "Unknown Scanned Item",
                 category: "Unrecognized Inventory",
                 message: `❌ Item not in PO. This item does not match any expected items for Shipment ${getShipmentId(state.selectedPO.po_number)}. Please segregate this item for Procurement review.`
@@ -485,6 +522,11 @@ export default function WarehousePortal({ user, onLogout }) {
     const handleImageUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
+        if (!String(file.type || '').startsWith('image/')) {
+            alert('Please upload a valid image file for barcode detection.');
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            return;
+        }
 
         setScanning(false);
         setIsProcessingImage(true);
@@ -687,15 +729,25 @@ export default function WarehousePortal({ user, onLogout }) {
 
     const handleAcknowledgeArrival = async (po) => {
         if (!window.confirm('Acknowledge that this truck has arrived at the bay?')) return;
+        const payload = {
+            poNumber: po.po_number,
+            ackedBy: user.email
+        };
+
+        if (isOffline) {
+            setSyncQueue([...syncQueue, { type: 'acknowledge', payload }]);
+            alert('📡 OFFLINE MODE: Arrival acknowledgement saved locally and will auto-sync when online.');
+            return;
+        }
+
         try {
-            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/acknowledge', {
-                poNumber: po.po_number,
-                ackedBy: user.email
-            });
+            await axios.post(`${API_BASE_URL}/grn/acknowledge`, payload);
             alert('✅ Arrival Acknowledged. Supplier has been notified.');
             fetchPOs();
-        } catch {
-            alert('Failed to acknowledge arrival.');
+        } catch (error) {
+            console.error(error);
+            setSyncQueue([...syncQueue, { type: 'acknowledge', payload }]);
+            alert('Failed to acknowledge arrival online. Action saved offline and queued for sync.');
         }
     };
 
