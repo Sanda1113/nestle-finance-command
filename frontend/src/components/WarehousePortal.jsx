@@ -363,7 +363,7 @@ export default function WarehousePortal({ user, onLogout }) {
         for (const queueItem of queue) {
             const rawType = queueItem?.type;
             if (rawType && rawType !== 'reject' && rawType !== 'submit') {
-                console.warn(`Unknown offline queue action type "${rawType}" encountered. Leaving item in queue for manual review.`);
+                console.warn(`Unknown offline queue action type "${rawType}" encountered. Leaving item in queue and skipping sync for this item.`);
                 failedItems.push(queueItem);
                 continue;
             }
