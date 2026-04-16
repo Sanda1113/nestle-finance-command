@@ -45,4 +45,34 @@ describe('Sprint2 Routes', () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty('success', true);
     });
+
+    test('POST /api/sprint2/grn/reject rejects shortage shipment and cancels transaction', async () => {
+        const res = await request(app)
+            .post('/api/sprint2/grn/reject')
+            .send({
+                poNumber: 'PO-12345',
+                rejectedBy: 'warehouse@test.com',
+                rejectionReason: 'Delivered quantity lower than expected',
+                itemsReceived: [
+                    { description: 'Milk Powder', qty: 10, actualQtyReceived: 7, status: 'Shortage' }
+                ]
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+    });
+
+    test('POST /api/sprint2/grn/reject returns 400 when no shortages are provided', async () => {
+        const res = await request(app)
+            .post('/api/sprint2/grn/reject')
+            .send({
+                poNumber: 'PO-12345',
+                itemsReceived: [
+                    { description: 'Milk Powder', qty: 10, actualQtyReceived: 10, status: 'Full Match' }
+                ]
+            });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.body).toHaveProperty('error', 'Shipment can only be rejected when shortages are present');
+    });
 });
