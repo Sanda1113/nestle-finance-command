@@ -806,6 +806,7 @@ export default function WarehousePortal({ user, onLogout }) {
                 accept="image/*"
                 ref={shortagePhotoInputRef}
                 onChange={handleShortagePhotoUpload}
+                aria-label="Upload shortage item photo"
                 className="hidden"
             />
 
