@@ -34,7 +34,7 @@ export default function AppNotifier({ role }) {
                     }
                 }
             }
-        } catch (error) {
+        } catch {
             // Ignore background polling errors
         } finally {
             isInitialLoad.current = false;

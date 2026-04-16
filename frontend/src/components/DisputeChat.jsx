@@ -155,7 +155,7 @@ Approach:
             setNewMessage('');
             setIsFormMode(false);
             fetchMessages();
-        } catch (err) { alert('Message failed'); }
+        } catch { alert('Message failed'); }
         finally { setIsSending(false); }
     };
 

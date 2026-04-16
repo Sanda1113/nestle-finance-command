@@ -8,7 +8,7 @@ import FloatingChat from './FloatingChat';
 const formatCurrency = (amount, currencyCode = 'USD') => {
     if (amount === undefined || amount === null || isNaN(amount)) return '$0.00';
     try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode }).format(amount); }
-    catch (e) { return `${currencyCode} ${Number(amount).toFixed(2)}`; }
+    catch { return `${currencyCode} ${Number(amount).toFixed(2)}`; }
 };
 
 const getShipmentId = (poNum) => {
@@ -46,8 +46,8 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [myLogs, setMyLogs] = useState([]);
     const [myRecons, setMyRecons] = useState([]);
     const [matchStatus, setMatchStatus] = useState('Pending');
-    const [dbStatus, setDbStatus] = useState('');
-    const [error, setError] = useState(null);
+    const [, setDbStatus] = useState('');
+    const [, setError] = useState(null);
 
     const [expandedLog, setExpandedLog] = useState(null);
 
@@ -72,7 +72,7 @@ export default function SupplierDashboard({ user, onLogout }) {
             setMyLogs(logsRes.data.logs || []);
             setMyRecons(reconsRes.data.data || []);
             setMyBoqs(boqsRes.data.data || []);
-        } catch (err) { console.error("Failed to fetch data"); }
+        } catch { console.error("Failed to fetch data"); }
     };
 
     useEffect(() => {
@@ -150,7 +150,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                     setDbStatus('✅ Saved to Ledger — submitted to Finance Review Queue.');
                 }
             }
-        } catch (err) { setError("Processing failed. Please try again."); setMatchStatus('Error'); }
+        } catch { setError("Processing failed. Please try again."); setMatchStatus('Error'); }
         finally { setLoading(false); }
     };
 
@@ -173,7 +173,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                 });
                 setDbStatus('Sent to Procurement Team');
             }
-        } catch (err) { setError("Processing failed."); setMatchStatus('Error'); }
+        } catch { setError("Processing failed."); setMatchStatus('Error'); }
         finally { setLoading(false); }
     };
 
@@ -265,7 +265,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                 alert('Rejected BOQ cleared. You can now submit a corrected quote.');
                 setMode('boq');
                 fetchData();
-            } catch (e) { alert('Failed to clear BOQ for resubmission'); }
+            } catch { alert('Failed to clear BOQ for resubmission'); }
         } else {
             const realId = String(id).replace('rec-', '');
             try {
@@ -273,7 +273,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                 alert('Document removed from review queue. You can now submit a corrected invoice.');
                 setMode('match');
                 fetchData();
-            } catch (e) { alert('Failed to clear for resubmission'); }
+            } catch { alert('Failed to clear for resubmission'); }
         }
     };
 
@@ -283,7 +283,7 @@ export default function SupplierDashboard({ user, onLogout }) {
             await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/supplier/mark-delivered', { poNumber });
             alert("✅ Status Updated: The Warehouse Dock has been notified of your arrival.");
             fetchData();
-        } catch (e) { alert('Failed to update delivery status.'); }
+        } catch { alert('Failed to update delivery status.'); }
     };
 
     const totalPOs = myPOs.length;
@@ -663,7 +663,7 @@ export default function SupplierDashboard({ user, onLogout }) {
 
                                                 const poNumeric = String(po.po_number || '').match(/\d+/)?.[0] || String(po.po_number);
                                                 const relatedRecon = myRecons.find(r => String(r.po_number || '').includes(poNumeric) || String(r.invoice_number || '').includes(poNumeric));
-                                                const isFinanceApproved = relatedRecon && String(relatedRecon.match_status || '').toLowerCase() === 'approved';
+                                                const _isFinanceApproved = relatedRecon && String(relatedRecon.match_status || '').toLowerCase() === 'approved';
 
                                                 return (
                                                     <div key={po.id} className="bg-slate-900 rounded-xl border border-slate-800 flex flex-col hover:shadow-lg transition-all group overflow-hidden">

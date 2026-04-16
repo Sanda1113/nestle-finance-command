@@ -8,7 +8,7 @@ export const safePlayAudio = (url) => {
                 // Autoplay blocked – ignore silently
             });
         }
-    } catch (e) {
+    } catch {
         // Audio not supported
     }
 };
