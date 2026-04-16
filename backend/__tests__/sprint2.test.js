@@ -76,4 +76,70 @@ describe('Sprint2 Routes', () => {
         expect(res.statusCode).toBe(400);
         expect(res.body).toHaveProperty('error', 'Shipment can only be rejected when shortages are present');
     });
+
+    test('POST /api/sprint2/grn/reject persists warehouse_rejection evidence into po_data', async () => {
+        // Clear recorded mock calls so earlier tests do not pollute this assertion.
+        // Mock implementations (mockReturnThis, mockResolvedValue, etc.) are preserved.
+        jest.clearAllMocks();
+
+        const res = await request(app)
+            .post('/api/sprint2/grn/reject')
+            .send({
+                poNumber: 'PO-EVIDENCE',
+                rejectedBy: 'warehouse@test.com',
+                rejectionReason: 'Short delivery',
+                itemsReceived: [
+                    {
+                        description: 'Milk Powder',
+                        qty: 10,
+                        actualQtyReceived: 7,
+                        status: 'Shortage',
+                        reasonCode: 'Missing from Truck',
+                        photoFileName: 'shortage_evidence.jpg',
+                        photoDataUrl: 'data:image/jpeg;base64,/9j/abc',
+                        photoMimeType: 'image/jpeg'
+                    }
+                ]
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+
+        const supabase = require('../db');
+
+        // All from() calls return the same shared mockQuery; get a reference via
+        // the recorded results of the first call made during this test.
+        const mockQuery = supabase.from.mock.results[0].value;
+
+        // Locate the update() call that wrote po_data (the purchase_orders evidence update).
+        const poUpdateCall = mockQuery.update.mock.calls.find(
+            ([payload]) => payload && payload.po_data !== undefined
+        );
+
+        expect(poUpdateCall).toBeDefined();
+
+        const updatePayload = poUpdateCall[0];
+        expect(updatePayload.status).toBe('Transaction Cancelled (Shortage)');
+
+        const warehouseRejection = updatePayload.po_data.warehouse_rejection;
+        expect(warehouseRejection).toBeDefined();
+        expect(warehouseRejection.rejectedBy).toBe('warehouse@test.com');
+        expect(warehouseRejection.rejectionReason).toBe('Short delivery');
+        // rejectedAt should be an ISO-8601 timestamp
+        expect(warehouseRejection.rejectedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+        expect(Array.isArray(warehouseRejection.shortageEvidence)).toBe(true);
+        expect(warehouseRejection.shortageEvidence).toHaveLength(1);
+
+        const evidence = warehouseRejection.shortageEvidence[0];
+        expect(evidence.description).toBe('Milk Powder');
+        expect(evidence.expectedQty).toBe(10);
+        expect(evidence.receivedQty).toBe(7);
+        expect(evidence.shortageQty).toBe(3);
+        expect(evidence.reasonCode).toBe('Missing from Truck');
+        expect(evidence.hasPhoto).toBe(true);
+        expect(evidence.photoFileName).toBe('shortage_evidence.jpg');
+        expect(evidence.photoMimeType).toBe('image/jpeg');
+        expect(evidence.photoDataUrl).toBe('data:image/jpeg;base64,/9j/abc');
+    });
 });
