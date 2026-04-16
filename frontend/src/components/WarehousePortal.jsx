@@ -796,6 +796,7 @@ export default function WarehousePortal({ user, onLogout }) {
             <input
                 type="file"
                 accept="image/*"
+                capture="environment"
                 ref={fileInputRef}
                 onChange={handleImageUpload}
                 className="hidden"
