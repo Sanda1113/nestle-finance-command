@@ -572,6 +572,9 @@ function FinancePortal({ user }) {
                                 const isActioned = actionedRecords[r.id] || r.displayStatus.includes('Approved') || r.displayStatus.includes('Reject');
                                 const relatedBoq = boqs.find(b => (b.status || '').includes(r.po_number));
                                 const isExpanded = expandedRow === r.id;
+                                const rejectionEvidence = r.relatedPO?.po_data?.warehouse_rejection || null;
+                                const grnEvidence = r.relatedPO?.po_data?.warehouse_grn || null;
+                                const shortageEvidence = rejectionEvidence?.shortageEvidence || grnEvidence?.shortageEvidence || [];
 
                                 const poUploadTime = relatedBoq ? new Date(relatedBoq.created_at) : null;
                                 const invoiceUploadTime = r.processed_at ? new Date(r.processed_at) : null;
@@ -664,6 +667,26 @@ function FinancePortal({ user }) {
                                                                     <p className="text-[10px] font-bold uppercase">Var: <span className={r.invoice_total === r.po_total ? 'text-emerald-500' : 'text-red-500'}>{formatCurrency(Math.abs(r.invoice_total - r.po_total))}</span></p>
                                                                 </div>
                                                             </div>
+                                                            {shortageEvidence.length > 0 && (
+                                                                <div className="bg-gradient-to-br from-red-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-red-200 dark:border-red-900/50 shadow-sm relative overflow-hidden">
+                                                                    <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
+                                                                    <h4 className="text-xs font-bold text-red-700 dark:text-red-400 uppercase tracking-wider mb-2">4. Warehouse Shortage Evidence</h4>
+                                                                    {rejectionEvidence?.rejectionReason && (
+                                                                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">Reason: {rejectionEvidence.rejectionReason}</p>
+                                                                    )}
+                                                                    <div className="space-y-2">
+                                                                        {shortageEvidence.map((item, idx) => (
+                                                                            <div key={`${item.description}-${idx}`} className="p-2 bg-white/70 dark:bg-slate-900/70 rounded border border-red-100 dark:border-red-900/40">
+                                                                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{item.description}</p>
+                                                                                <p className="text-[11px] text-slate-600 dark:text-slate-300">Received {item.receivedQty} / Expected {item.expectedQty}</p>
+                                                                                {item.photoDataUrl && (
+                                                                                    <img src={item.photoDataUrl} alt={`${item.description} shortage evidence`} className="mt-2 h-20 w-20 object-cover rounded border border-red-200 dark:border-red-900/50" />
+                                                                                )}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
 
                                                         <div>

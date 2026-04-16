@@ -485,9 +485,15 @@ export default function WarehousePortal({ user, onLogout }) {
         shortagePhotoInputRef.current?.click();
     };
 
-    const handleShortagePhotoUpload = (event) => {
+    const handleShortagePhotoUpload = async (event) => {
         const file = event.target.files?.[0];
         if (file && activePhotoItemIndex !== null) {
+            const photoDataUrl = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+                reader.onerror = () => resolve('');
+                reader.readAsDataURL(file);
+            });
             setReceivedItems(prev =>
                 prev.map((item, idx) =>
                     idx === activePhotoItemIndex
@@ -495,7 +501,10 @@ export default function WarehousePortal({ user, onLogout }) {
                             ...item,
                             hasPhoto: true,
                             photoFileName: file.name,
-                            photoAttachedAt: new Date().toISOString()
+                            photoAttachedAt: new Date().toISOString(),
+                            photoMimeType: file.type || 'image/*',
+                            photoSizeBytes: Number(file.size || 0),
+                            photoDataUrl
                         }
                         : item
                 )
@@ -519,6 +528,9 @@ export default function WarehousePortal({ user, onLogout }) {
             hasPhoto: false,
             photoFileName: '',
             photoAttachedAt: null,
+            photoMimeType: '',
+            photoSizeBytes: 0,
+            photoDataUrl: '',
             riskLevel: 'Low'
         }));
         setReceivedItems(expectedItems);
