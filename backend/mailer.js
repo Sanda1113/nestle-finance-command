@@ -57,7 +57,6 @@ const buildEmailHtml = (title, body, refs = {}) => {
                     ${refSection}
                     <p style="margin-top: 25px;">You can view full details and documents by logging into your Supplier Dashboard.</p>
                     <a href="${portalBaseUrl}" class="button">Go to Supplier Portal →</a>
-                    <p style="font-size: 12px; color: #64748b; margin-top: 12px;">Portal URL: ${portalBaseUrl}</p>
                     <div class="note">
                         <strong>ℹ️ Note:</strong> This is an automated notification from the Nestle Finance Command Center. Please do not reply directly to this email. For any queries, use the chat feature in your portal.
                     </div>

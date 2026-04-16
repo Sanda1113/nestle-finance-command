@@ -289,10 +289,15 @@ export default function WarehousePortal({ user, onLogout }) {
     // Load sync queue from localStorage on mount
     useEffect(() => {
         const savedQueue = JSON.parse(localStorage.getItem('grnSyncQueue') || '[]');
+        let migratedLegacyCount = 0;
         const normalizedQueue = (Array.isArray(savedQueue) ? savedQueue : []).map(item => {
             if (item && typeof item === 'object' && item.type && item.payload) return item;
+            migratedLegacyCount += 1;
             return { type: 'submit', payload: item };
         });
+        if (migratedLegacyCount > 0) {
+            console.warn(`Migrated ${migratedLegacyCount} legacy offline queue item(s) to typed format.`);
+        }
         setSyncQueue(normalizedQueue);
     }, []);
 
@@ -356,7 +361,11 @@ export default function WarehousePortal({ user, onLogout }) {
         const failedItems = [];
 
         for (const queueItem of queue) {
-            const type = queueItem?.type === 'reject' ? 'reject' : 'submit';
+            const rawType = queueItem?.type;
+            const type = rawType === 'reject' ? 'reject' : 'submit';
+            if (rawType && rawType !== 'reject' && rawType !== 'submit') {
+                console.warn(`Unknown offline queue action type "${rawType}" encountered. Defaulting to "submit".`);
+            }
             const payload = queueItem?.payload ?? queueItem;
             const endpoint = type === 'reject'
                 ? 'https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/reject'
