@@ -364,25 +364,31 @@ router.post('/grn/reject', async (req, res) => {
 
         if (poUpdateErr) throw poUpdateErr;
 
-        const { data: relatedRecons, error: reconFetchErr } = await supabase
-            .from('reconciliations')
-            .select('id')
-            .eq('po_number', poNumber)
-            .limit(1);
-
-        if (reconFetchErr) throw reconFetchErr;
-
-        if (Array.isArray(relatedRecons) && relatedRecons.length > 0) {
-            const { error: reconUpdateErr } = await supabase
+        try {
+            const { data: relatedRecons, error: reconFetchErr } = await supabase
                 .from('reconciliations')
-                .update({
-                    match_status: 'Rejected',
-                    timeline_status: 'Rejected - Warehouse Shortage',
-                    processed_at: new Date().toISOString()
-                })
-                .eq('po_number', poNumber);
+                .select('id')
+                .eq('po_number', poNumber)
+                .limit(1);
 
-            if (reconUpdateErr) throw reconUpdateErr;
+            if (reconFetchErr) {
+                console.error('Failed to fetch reconciliation context for rejection:', reconFetchErr);
+            } else if (Array.isArray(relatedRecons) && relatedRecons.length > 0) {
+                const { error: reconUpdateErr } = await supabase
+                    .from('reconciliations')
+                    .update({
+                        match_status: 'Rejected',
+                        timeline_status: 'Rejected - Warehouse Shortage',
+                        processed_at: new Date().toISOString()
+                    })
+                    .eq('po_number', poNumber);
+
+                if (reconUpdateErr) {
+                    console.error('Failed to update reconciliation for rejection:', reconUpdateErr);
+                }
+            }
+        } catch (reconErr) {
+            console.error('Unexpected reconciliation error during shipment rejection:', reconErr);
         }
 
         try {
