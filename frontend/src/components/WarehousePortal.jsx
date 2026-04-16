@@ -362,10 +362,12 @@ export default function WarehousePortal({ user, onLogout }) {
 
         for (const queueItem of queue) {
             const rawType = queueItem?.type;
-            const type = rawType === 'reject' ? 'reject' : 'submit';
             if (rawType && rawType !== 'reject' && rawType !== 'submit') {
-                console.warn(`Unknown offline queue action type "${rawType}" encountered. Defaulting to "submit".`);
+                console.warn(`Unknown offline queue action type "${rawType}" encountered. Leaving item in queue for manual review.`);
+                failedItems.push(queueItem);
+                continue;
             }
+            const type = rawType === 'reject' ? 'reject' : 'submit';
             const payload = queueItem?.payload ?? queueItem;
             const endpoint = type === 'reject'
                 ? 'https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/reject'

@@ -79,9 +79,9 @@ const sendSupplierEmail = async (toEmail, subject, htmlBody, refs = {}) => {
 
     try {
         const fullHtml = buildEmailHtml(subject, htmlBody, refs);
-        const fromAddress = process.env.EMAIL_FROM || 'Nestle Finance Command Notifications <notifications@nestlefinancecommand.com>';
+        const emailFromAddress = process.env.EMAIL_FROM || 'Nestle Finance Command Notifications <notifications@nestlefinancecommand.com>';
         const { data, error } = await resend.emails.send({
-            from: fromAddress,
+            from: emailFromAddress,
             to: [toEmail],
             subject: `Nestle Portal: ${subject}`,
             html: fullHtml
