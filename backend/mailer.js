@@ -2,11 +2,21 @@
 const { Resend } = require('resend');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+const DEFAULT_PORTAL_BASE_URL = 'https://www.nestlefinancecommand.com';
+
+const getPortalBaseUrl = () => {
+    const configured = (process.env.APP_BASE_URL || DEFAULT_PORTAL_BASE_URL).trim();
+    const withProtocol = /^https?:\/\//i.test(configured) ? configured : `https://${configured}`;
+    return withProtocol.replace(/\/+$/, '');
+};
 
 /**
- * Generate a professional email HTML template with Nestlé branding
+ * Generate a professional email HTML template with Nestle branding
  */
 const buildEmailHtml = (title, body, refs = {}) => {
+    const portalBaseUrl = getPortalBaseUrl();
+    const logoUrl = `${portalBaseUrl}/nestle-logo.svg`;
+
     const refSection = refs.poNumber || refs.invoiceNumber ? `
         <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2563eb;">
             <h3 style="margin: 0 0 10px 0; color: #1e293b;">📋 Transaction Reference</h3>
@@ -37,8 +47,8 @@ const buildEmailHtml = (title, body, refs = {}) => {
         <body>
             <div class="container">
                 <div class="header">
-                    <img src="https://nestlefinancecommand.com/nestle-logo.svg" alt="Nestlé" style="max-width: 80px;" />
-                    <h1>Nestlé Finance Command</h1>
+                    <img src="${logoUrl}" alt="Nestle" style="max-width: 80px;" />
+                    <h1>Nestle Finance Command</h1>
                     <p>Global Procurement & Supply Chain</p>
                 </div>
                 <div class="content">
@@ -46,13 +56,14 @@ const buildEmailHtml = (title, body, refs = {}) => {
                     ${body}
                     ${refSection}
                     <p style="margin-top: 25px;">You can view full details and documents by logging into your Supplier Dashboard.</p>
-                    <a href="https://nestlefinancecommand.com" class="button">Go to Supplier Portal →</a>
+                    <a href="${portalBaseUrl}" class="button">Go to Supplier Portal →</a>
+                    <p style="font-size: 12px; color: #64748b; margin-top: 12px;">Portal URL: ${portalBaseUrl}</p>
                     <div class="note">
-                        <strong>ℹ️ Note:</strong> This is an automated notification from the Nestlé Finance Command Center. Please do not reply directly to this email. For any queries, use the chat feature in your portal.
+                        <strong>ℹ️ Note:</strong> This is an automated notification from the Nestle Finance Command Center. Please do not reply directly to this email. For any queries, use the chat feature in your portal.
                     </div>
                 </div>
                 <div class="footer">
-                    <p>© 2026 Nestlé Finance Command. All rights reserved.</p>
+                    <p>© 2026 Nestle Finance Command. All rights reserved.</p>
                     <p>123 Corporate Blvd, Colombo, Sri Lanka</p>
                 </div>
             </div>
@@ -69,10 +80,11 @@ const sendSupplierEmail = async (toEmail, subject, htmlBody, refs = {}) => {
 
     try {
         const fullHtml = buildEmailHtml(subject, htmlBody, refs);
+        const fromAddress = process.env.EMAIL_FROM || 'Nestle Finance Command Notifications <notifications@nestlefinancecommand.com>';
         const { data, error } = await resend.emails.send({
-            from: 'Nestlé Finance Command <notifications@nestlefinancecommand.com>',
+            from: fromAddress,
             to: [toEmail],
-            subject: `Nestlé Portal: ${subject}`,
+            subject: `Nestle Portal: ${subject}`,
             html: fullHtml
         });
 
