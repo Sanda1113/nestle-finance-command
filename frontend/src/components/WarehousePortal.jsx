@@ -264,6 +264,8 @@ export default function WarehousePortal({ user, onLogout }) {
     const [isProcessingImage, setIsProcessingImage] = useState(false);
     const [detectedProduct, setDetectedProduct] = useState(null);
     const fileInputRef = useRef(null);
+    const shortagePhotoInputRef = useRef(null);
+    const [activePhotoItemIndex, setActivePhotoItemIndex] = useState(null);
     const [blindMode, setBlindMode] = useState(true);
 
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -477,6 +479,31 @@ export default function WarehousePortal({ user, onLogout }) {
         }
     };
 
+    const openShortagePhotoPicker = (index) => {
+        setActivePhotoItemIndex(index);
+        shortagePhotoInputRef.current?.click();
+    };
+
+    const handleShortagePhotoUpload = (event) => {
+        const file = event.target.files?.[0];
+        if (file && activePhotoItemIndex !== null) {
+            setReceivedItems(prev =>
+                prev.map((item, idx) =>
+                    idx === activePhotoItemIndex
+                        ? {
+                            ...item,
+                            hasPhoto: true,
+                            photoFileName: file.name,
+                            photoAttachedAt: new Date().toISOString()
+                        }
+                        : item
+                )
+            );
+        }
+        setActivePhotoItemIndex(null);
+        if (shortagePhotoInputRef.current) shortagePhotoInputRef.current.value = "";
+    };
+
     const handleSelectPO = (po) => {
         setSelectedPO(po);
         const expectedItems = po.po_data.lineItems.map((item, index) => ({
@@ -489,6 +516,7 @@ export default function WarehousePortal({ user, onLogout }) {
             batchNumber: '',
             expiryDate: '',
             hasPhoto: false,
+            photoFileName: '',
             riskLevel: 'Low'
         }));
         setReceivedItems(expectedItems);
@@ -612,12 +640,6 @@ export default function WarehousePortal({ user, onLogout }) {
         } finally {
             setIsClearing(false);
         }
-    };
-
-    const togglePhoto = (index) => {
-        const updated = [...receivedItems];
-        updated[index].hasPhoto = !updated[index].hasPhoto;
-        setReceivedItems(updated);
     };
 
     const rawPendingList = pos.filter(po => {
@@ -774,9 +796,15 @@ export default function WarehousePortal({ user, onLogout }) {
             <input
                 type="file"
                 accept="image/*"
-                capture="environment"
                 ref={fileInputRef}
                 onChange={handleImageUpload}
+                className="hidden"
+            />
+            <input
+                type="file"
+                accept="image/*"
+                ref={shortagePhotoInputRef}
+                onChange={handleShortagePhotoUpload}
                 className="hidden"
             />
 
@@ -1147,11 +1175,16 @@ export default function WarehousePortal({ user, onLogout }) {
 
                                                     <div className="flex items-center justify-between w-full sm:w-auto sm:ml-auto">
                                                         <button
-                                                            onClick={() => togglePhoto(idx)}
+                                                            onClick={() => openShortagePhotoPicker(idx)}
                                                             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition-colors ${item.hasPhoto ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                                         >
                                                             <Camera className="w-5 h-5 sm:w-4 sm:h-4 shrink-0" /> {item.hasPhoto ? 'Photo Attached' : 'Add Photo'}
                                                         </button>
+                                                        {item.photoFileName && (
+                                                            <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 ml-2 max-w-[150px] truncate">
+                                                                {item.photoFileName}
+                                                            </span>
+                                                        )}
                                                         <span className="sm:hidden text-[10px] font-black uppercase text-red-600 ml-2">{item.status}</span>
                                                     </div>
                                                 </div>
