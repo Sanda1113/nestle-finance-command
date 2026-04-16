@@ -367,7 +367,14 @@ app.post('/api/save-reconciliation', async (req, res) => {
 app.get('/api/reconciliations', async (req, res) => {
     try {
         const { email } = req.query;
-        let query = supabase.from('reconciliations').select('*').order('processed_at', { ascending: false });
+        let query = supabase
+            .from('reconciliations')
+            .select(
+                email
+                    ? 'id, vendor_name, invoice_number, po_number, invoice_total, po_total, match_status, timeline_status, supplier_email, processed_at, created_at, updated_at'
+                    : '*'
+            )
+            .order('processed_at', { ascending: false });
         // If a supplier email is passed, filter to only their records
         if (email) {
             query = query.eq('supplier_email', email);
@@ -579,7 +586,14 @@ app.post('/api/save-boq', async (req, res) => {
 app.get('/api/boqs', async (req, res) => {
     try {
         const { email } = req.query;
-        let query = supabase.from('boqs').select('*').order('created_at', { ascending: false });
+        let query = supabase
+            .from('boqs')
+            .select(
+                email
+                    ? 'id, vendor_name, document_number, total_amount, currency, status, supplier_email, created_at, updated_at, rejection_reason'
+                    : '*'
+            )
+            .order('created_at', { ascending: false });
         if (email) {
             query = query.eq('supplier_email', email);
         }
@@ -732,7 +746,12 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
 app.get('/api/supplier/pos/:email', async (req, res) => {
     const { email } = req.params;
     try {
-        const { data, error } = await supabase.from('purchase_orders').select('*').eq('supplier_email', email).not('po_data', 'is', null).order('id', { ascending: false });
+        const { data, error } = await supabase
+            .from('purchase_orders')
+            .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, po_data')
+            .eq('supplier_email', email)
+            .order('id', { ascending: false })
+            .limit(200);
         if (error) throw error;
         res.json({ success: true, data });
     } catch (error) {
@@ -763,16 +782,28 @@ app.get('/api/supplier/logs/:email', async (req, res) => {
     try {
         console.log(`📜 Fetching timeline logs for ${email}`);
 
-        // Fetch BOQs with approval/rejection status
-        const { data: boqs, error: boqErr } = await supabase.from('boqs').select('id, document_number, total_amount, status, created_at, rejection_reason, vendor_name').eq('supplier_email', email);
+        const [
+            { data: boqs, error: boqErr },
+            { data: pos, error: posErr },
+            { data: recs, error: recErr }
+        ] = await Promise.all([
+            supabase
+                .from('boqs')
+                .select('id, document_number, total_amount, status, created_at, rejection_reason, vendor_name')
+                .eq('supplier_email', email),
+            supabase
+                .from('purchase_orders')
+                .select('id, po_number, total_amount, status, created_at, is_downloaded')
+                .eq('supplier_email', email)
+                .limit(200),
+            supabase
+                .from('reconciliations')
+                .select('id, invoice_number, match_status, timeline_status, processed_at')
+                .eq('supplier_email', email)
+        ]);
+
         if (boqErr) logError('Fetch BOQs for Logs', boqErr, { email });
-
-        // Fetch POs with download status
-        const { data: pos, error: posErr } = await supabase.from('purchase_orders').select('id, po_number, total_amount, status, created_at, is_downloaded').eq('supplier_email', email);
         if (posErr) logError('Fetch POs for Logs', posErr, { email });
-
-        // Fetch Reconciliations with approval/rejection status
-        const { data: recs, error: recErr } = await supabase.from('reconciliations').select('id, invoice_number, match_status, timeline_status, processed_at').eq('supplier_email', email);
         if (recErr) logError('Fetch Recons for Logs', recErr, { email });
 
         let logs = [];

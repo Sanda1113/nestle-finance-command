@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2 } from 'lucide-react';
 import DisputeChat from './DisputeChat';
@@ -52,33 +52,54 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [expandedLog, setExpandedLog] = useState(null);
 
     const [isDarkMode, setIsDarkMode] = useState(true);
+    const isFetchingDataRef = useRef(false);
+    const isMountedRef = useRef(true);
     useEffect(() => {
         if (isDarkMode) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
     }, [isDarkMode]);
 
     const fetchData = async () => {
+        if (isFetchingDataRef.current || !user?.email) return;
+        isFetchingDataRef.current = true;
         try {
-            const [posRes, logsRes, reconsRes, boqsRes] = await Promise.all([
-                axios.get(`https://nestle-finance-command-production.up.railway.app/api/supplier/pos/${user.email}`),
-                axios.get(`https://nestle-finance-command-production.up.railway.app/api/supplier/logs/${user.email}`),
-                axios.get(`https://nestle-finance-command-production.up.railway.app/api/reconciliations?email=${encodeURIComponent(user.email)}`),
-                axios.get(`https://nestle-finance-command-production.up.railway.app/api/boqs?email=${encodeURIComponent(user.email)}`)
+            const [posRes, logsRes, reconsRes, boqsRes] = await Promise.allSettled([
+                axios.get(`https://nestle-finance-command-production.up.railway.app/api/supplier/pos/${user.email}`, { timeout: 15000 }),
+                axios.get(`https://nestle-finance-command-production.up.railway.app/api/supplier/logs/${user.email}`, { timeout: 15000 }),
+                axios.get(`https://nestle-finance-command-production.up.railway.app/api/reconciliations?email=${encodeURIComponent(user.email)}`, { timeout: 15000 }),
+                axios.get(`https://nestle-finance-command-production.up.railway.app/api/boqs?email=${encodeURIComponent(user.email)}`, { timeout: 15000 })
             ]);
 
-            const sortedPOs = (posRes.data.data || []).sort((a, b) => new Date(b.created_at || b.po_data?.poDate || 0) - new Date(a.created_at || a.po_data?.poDate || 0));
+            if (!isMountedRef.current) return;
 
-            setMyPOs(sortedPOs);
-            setMyLogs(logsRes.data.logs || []);
-            setMyRecons(reconsRes.data.data || []);
-            setMyBoqs(boqsRes.data.data || []);
+            if (posRes.status === 'fulfilled') {
+                const sortedPOs = (posRes.value.data.data || []).sort((a, b) => new Date(b.created_at || b.po_data?.poDate || 0) - new Date(a.created_at || a.po_data?.poDate || 0));
+                setMyPOs(sortedPOs);
+            }
+            if (logsRes.status === 'fulfilled') {
+                setMyLogs(logsRes.value.data.logs || []);
+            }
+            if (reconsRes.status === 'fulfilled') {
+                setMyRecons(reconsRes.value.data.data || []);
+            }
+            if (boqsRes.status === 'fulfilled') {
+                setMyBoqs(boqsRes.value.data.data || []);
+            }
+
         } catch { console.error("Failed to fetch data"); }
+        finally {
+            isFetchingDataRef.current = false;
+        }
     };
 
     useEffect(() => {
+        isMountedRef.current = true;
         fetchData();
-        const interval = setInterval(fetchData, 500);
-        return () => clearInterval(interval);
+        const interval = setInterval(fetchData, 30000);
+        return () => {
+            isMountedRef.current = false;
+            clearInterval(interval);
+        };
     }, [user.email]);
 
     const handleMatchUpload = async () => {
@@ -267,7 +288,8 @@ export default function SupplierDashboard({ user, onLogout }) {
                 fetchData();
             } catch { alert('Failed to clear BOQ for resubmission'); }
         } else {
-            const realId = String(id).replace('rec-', '');
+            const realId = String(id || '').replace(/^rec-/, '');
+            if (!realId) { alert('Invalid reconciliation reference for resubmission.'); return; }
             try {
                 await axios.post(`https://nestle-finance-command-production.up.railway.app/api/sprint2/reconciliations/${realId}/resubmit`);
                 alert('Document removed from review queue. You can now submit a corrected invoice.');
