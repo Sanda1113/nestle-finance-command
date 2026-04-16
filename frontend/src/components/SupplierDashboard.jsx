@@ -60,7 +60,8 @@ export default function SupplierDashboard({ user, onLogout }) {
     }, [isDarkMode]);
 
     const fetchData = async () => {
-        if (isFetchingDataRef.current || !user?.email) return;
+        if (!user?.email) return;
+        if (isFetchingDataRef.current) return;
         isFetchingDataRef.current = true;
         try {
             const [posRes, logsRes, reconsRes, boqsRes] = await Promise.allSettled([
@@ -70,23 +71,34 @@ export default function SupplierDashboard({ user, onLogout }) {
                 axios.get(`https://nestle-finance-command-production.up.railway.app/api/boqs?email=${encodeURIComponent(user.email)}`, { timeout: 15000 })
             ]);
 
-            if (!isMountedRef.current) return;
+            if (isMountedRef.current) {
+                if (posRes.status === 'fulfilled') {
+                    const sortedPOs = (posRes.value.data.data || []).sort((a, b) => {
+                        const aTime = a.created_at ? new Date(a.created_at).getTime() : Number.NEGATIVE_INFINITY;
+                        const bTime = b.created_at ? new Date(b.created_at).getTime() : Number.NEGATIVE_INFINITY;
+                        const dateDiff = bTime - aTime;
+                        if (dateDiff !== 0) return dateDiff;
+                        const aId = Number.isFinite(Number(a.id)) ? Number(a.id) : Number.NEGATIVE_INFINITY;
+                        const bId = Number.isFinite(Number(b.id)) ? Number(b.id) : Number.NEGATIVE_INFINITY;
+                        if (bId !== aId) return bId - aId;
+                        return String(b.po_number || '').localeCompare(String(a.po_number || ''));
+                    });
+                    setMyPOs(sortedPOs);
+                }
+                if (logsRes.status === 'fulfilled') {
+                    setMyLogs(logsRes.value.data.logs || []);
+                }
+                if (reconsRes.status === 'fulfilled') {
+                    setMyRecons(reconsRes.value.data.data || []);
+                }
+                if (boqsRes.status === 'fulfilled') {
+                    setMyBoqs(boqsRes.value.data.data || []);
+                }
+            }
 
-            if (posRes.status === 'fulfilled') {
-                const sortedPOs = (posRes.value.data.data || []).sort((a, b) => new Date(b.created_at || b.po_data?.poDate || 0) - new Date(a.created_at || a.po_data?.poDate || 0));
-                setMyPOs(sortedPOs);
-            }
-            if (logsRes.status === 'fulfilled') {
-                setMyLogs(logsRes.value.data.logs || []);
-            }
-            if (reconsRes.status === 'fulfilled') {
-                setMyRecons(reconsRes.value.data.data || []);
-            }
-            if (boqsRes.status === 'fulfilled') {
-                setMyBoqs(boqsRes.value.data.data || []);
-            }
-
-        } catch { console.error("Failed to fetch data"); }
+        } catch (error) {
+            console.error('Failed to fetch supplier dashboard data:', error);
+        }
         finally {
             isFetchingDataRef.current = false;
         }
@@ -199,9 +211,20 @@ export default function SupplierDashboard({ user, onLogout }) {
     };
 
     const handlePrintPO = async (po) => {
-        const printWindow = window.open('', '', 'width=800,height=900');
-        const poData = po.po_data;
-        const html = `
+        try {
+            let selectedPO = po;
+            if (!selectedPO?.po_data?.lineItems) {
+                const fullPORes = await axios.get(`https://nestle-finance-command-production.up.railway.app/api/purchase_orders/${po.id}?email=${encodeURIComponent(user.email)}`, { timeout: 15000 });
+                selectedPO = fullPORes.data?.data || po;
+            }
+            const poData = selectedPO?.po_data;
+            if (!poData) {
+                alert('Unable to load full PO details for PDF generation.');
+                return;
+            }
+
+            const printWindow = window.open('', '', 'width=800,height=900');
+            const html = `
             <html>
             <head>
                 <title>PO ${poData.poNumber}</title>
@@ -268,14 +291,24 @@ export default function SupplierDashboard({ user, onLogout }) {
             </body>
             </html>
         `;
-        printWindow.document.write(html);
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => { printWindow.print(); }, 500);
+            printWindow.document.write(html);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => { printWindow.print(); }, 500);
 
-        if (!po.is_downloaded) {
-            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/purchase_orders/${po.id}/downloaded`);
-            fetchData();
+            if (!selectedPO.is_downloaded) {
+                await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/purchase_orders/${selectedPO.id}/downloaded`);
+                fetchData();
+            }
+        } catch (error) {
+            console.error('Failed to generate or download PO PDF:', error);
+            if (error?.code === 'ECONNABORTED') {
+                alert('PO details request timed out. Please try again.');
+            } else if (!error?.response) {
+                alert('Network error while loading PO details. Check your connection and retry.');
+            } else {
+                alert('Failed to open PO PDF. Please try again.');
+            }
         }
     };
 

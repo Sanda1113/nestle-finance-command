@@ -669,12 +669,12 @@ router.post('/disputes/send', async (req, res) => {
 });
 
 router.post('/reconciliations/:id/resubmit', async (req, res) => {
-    const normalizedId = String(req.params.id || '').replace(/^rec-/, '');
-    if (!normalizedId) {
+    const reconciliationId = String(req.params.id || '').replace(/^rec-/, '');
+    if (!reconciliationId) {
         return res.status(400).json({ error: 'Invalid reconciliation id' });
     }
     try {
-        const { error } = await supabase.from('reconciliations').delete().eq('id', normalizedId);
+        const { error } = await supabase.from('reconciliations').delete().eq('id', reconciliationId);
         if (error) throw error;
         res.json({ success: true, message: 'Document removed. Ready for resubmission.' });
     } catch (error) {

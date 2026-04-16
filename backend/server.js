@@ -748,15 +748,38 @@ app.get('/api/supplier/pos/:email', async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('purchase_orders')
-            .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, po_data')
+            // Exclude po_data here to keep supplier dashboard list payloads light.
+            // Full po_data is fetched on-demand via GET /api/purchase_orders/:id for PDF generation.
+            .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email')
             .eq('supplier_email', email)
-            .order('id', { ascending: false })
-            .limit(200);
+            .order('id', { ascending: false });
         if (error) throw error;
         res.json({ success: true, data });
     } catch (error) {
         logError('Fetch Supplier POs', error, { email });
         res.status(500).json({ error: 'Failed to fetch POs' });
+    }
+});
+
+app.get('/api/purchase_orders/:id', async (req, res) => {
+    const { id } = req.params;
+    const { email } = req.query;
+    try {
+        const { data, error } = await supabase
+            .from('purchase_orders')
+            .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email, po_data')
+            .eq('id', id)
+            .single();
+        if (error) throw error;
+
+        if (email && data?.supplier_email && data.supplier_email !== email) {
+            return res.status(403).json({ error: 'Unauthorized for this PO' });
+        }
+
+        res.json({ success: true, data });
+    } catch (error) {
+        logError('Fetch Purchase Order', error, { id });
+        res.status(500).json({ error: 'Failed to fetch purchase order' });
     }
 });
 
@@ -794,8 +817,7 @@ app.get('/api/supplier/logs/:email', async (req, res) => {
             supabase
                 .from('purchase_orders')
                 .select('id, po_number, total_amount, status, created_at, is_downloaded')
-                .eq('supplier_email', email)
-                .limit(200),
+                .eq('supplier_email', email),
             supabase
                 .from('reconciliations')
                 .select('id, invoice_number, match_status, timeline_status, processed_at')
