@@ -19,6 +19,10 @@ const getShipmentId = (poNum) => {
     return `SHP-${poNum.replace(/[^a-zA-Z]/g, '').substring(0, 6).toUpperCase()}`;
 };
 
+const API_BASE_URL = 'https://nestle-finance-command-production.up.railway.app/api/sprint2';
+const SYNC_QUEUE_STORAGE_KEY = 'grnSyncQueue';
+const OFFLINE_PO_STORAGE_KEY = 'offlinePOs';
+
 // 📱 Mobile‑optimized Bottom Drawer Scanner
 const BarcodeScannerUI = ({ onScanSuccess, onClose }) => {
     const scannerRef = useRef(null);
@@ -253,10 +257,6 @@ const BarcodeScannerUI = ({ onScanSuccess, onClose }) => {
 };
 
 export default function WarehousePortal({ user, onLogout }) {
-    const API_BASE_URL = 'https://nestle-finance-command-production.up.railway.app/api/sprint2';
-    const SYNC_QUEUE_STORAGE_KEY = 'grnSyncQueue';
-    const OFFLINE_PO_STORAGE_KEY = 'offlinePOs';
-
     const [pos, setPOs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedPO, setSelectedPO] = useState(null);
@@ -350,7 +350,7 @@ export default function WarehousePortal({ user, onLogout }) {
             if (cachedPOs.length > 0) setPOs(cachedPOs);
         }
 
-        if (!navigator.onLine || isOffline) {
+        if (!navigator.onLine) {
             setLoading(false);
             const cachedPOs = loadCachedPOs();
             if (cachedPOs.length > 0) setPOs(cachedPOs);
@@ -368,7 +368,7 @@ export default function WarehousePortal({ user, onLogout }) {
             const cachedPOs = loadCachedPOs();
             if (cachedPOs.length > 0) setPOs(cachedPOs);
         } finally { setLoading(false); }
-    }, [isOffline, loadCachedPOs]);
+    }, [loadCachedPOs]);
 
     useEffect(() => {
         fetchPOs();
@@ -434,7 +434,7 @@ export default function WarehousePortal({ user, onLogout }) {
         setIsSyncing(false);
         syncingRef.current = false;
         fetchPOs();
-    }, [API_BASE_URL, SYNC_QUEUE_STORAGE_KEY, fetchPOs, normalizeQueueItem, syncQueue]);
+    }, [fetchPOs, normalizeQueueItem, syncQueue]);
 
     // Online/Offline listeners
     useEffect(() => {
@@ -455,13 +455,13 @@ export default function WarehousePortal({ user, onLogout }) {
     }, [fetchPOs, syncPendingGRNs, syncQueue.length]);
 
     const processScanResult = (decodedText) => {
-        const normalizedText = typeof decodedText === 'string' ? decodedText.trim() : '';
-        if (!normalizedText) {
+        const scannedText = typeof decodedText === 'string' ? decodedText.trim() : '';
+        if (!scannedText) {
             setDetectedProduct({
-                barcode: 'Unknown',
+                barcode: 'Empty Scan',
                 name: 'Scan Failed',
                 category: 'Error',
-                message: '❌ No barcode found. Try taking another photo closer to the barcode or use manual entry.'
+                message: '❌ No barcode detected. Please try again or use manual entry.'
             });
             return;
         }
@@ -469,19 +469,19 @@ export default function WarehousePortal({ user, onLogout }) {
         const state = latestState.current;
 
         if (!state.selectedPO) {
-            const matchedPO = state.pos.find(p => p.po_number.toLowerCase() === normalizedText.toLowerCase());
+            const matchedPO = state.pos.find(p => p.po_number.toLowerCase() === scannedText.toLowerCase());
 
             if (matchedPO) {
                 if (matchedPO.status && matchedPO.status.includes('Received')) {
                     alert(`📦 Shipment ${getShipmentId(matchedPO.po_number)} found, but it has already been COMPLETED and locked.`);
                 } else {
-                    setSearchTerm(normalizedText);
+                    setSearchTerm(scannedText);
                     setViewMode('pending');
                     handleSelectPO(matchedPO);
                 }
             } else {
                 setDetectedProduct({
-                    barcode: normalizedText,
+                    barcode: scannedText,
                     name: "Unknown Scanned Item",
                     category: "Unrecognized Inventory",
                     message: `❌ Item not found. This shipment/item does not exist in the current pending dock queue.`
@@ -490,12 +490,12 @@ export default function WarehousePortal({ user, onLogout }) {
             return;
         }
 
-        let scannedSku = normalizedText;
+        let scannedSku = scannedText;
         let scannedBatch = null;
         let scannedExpiry = null;
 
-        if (normalizedText.includes('|')) {
-            const parts = normalizedText.split('|');
+        if (scannedText.includes('|')) {
+            const parts = scannedText.split('|');
             scannedSku = parts[0];
             scannedBatch = parts[1];
             scannedExpiry = parts[2];
@@ -510,7 +510,7 @@ export default function WarehousePortal({ user, onLogout }) {
             safePlayAudio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
         } else {
             setDetectedProduct({
-                barcode: normalizedText,
+                barcode: scannedText,
                 name: "Unknown Scanned Item",
                 category: "Unrecognized Inventory",
                 message: `❌ Item not in PO. This item does not match any expected items for Shipment ${getShipmentId(state.selectedPO.po_number)}. Please segregate this item for Procurement review.`
@@ -523,7 +523,7 @@ export default function WarehousePortal({ user, onLogout }) {
         const file = event.target.files[0];
         if (!file) return;
         if (!String(file.type || '').startsWith('image/')) {
-            alert('Please upload an image file for barcode detection.');
+            alert('Please upload a valid image file for barcode detection.');
             if (fileInputRef.current) fileInputRef.current.value = "";
             return;
         }

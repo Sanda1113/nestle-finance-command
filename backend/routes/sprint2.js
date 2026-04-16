@@ -726,26 +726,13 @@ router.post('/livechat/send', async (req, res) => {
 
         const normalizedRecipientRole = String(recipientRole || '').trim().toLowerCase();
         if (normalizedRecipientRole === 'supplier') {
-            const [supplierUsersLowerResult, supplierUsersTitleResult] = await Promise.all([
-                supabase
-                    .from('app_users')
-                    .select('email')
-                    .eq('role', 'supplier'),
-                supabase
-                    .from('app_users')
-                    .select('email')
-                    .eq('role', 'Supplier')
-            ]);
+            const { data: supplierUsers, error: supplierUsersErr } = await supabase
+                .from('app_users')
+                .select('email')
+                .ilike('role', 'supplier');
+            if (supplierUsersErr) throw supplierUsersErr;
 
-            if (supplierUsersLowerResult.error) throw supplierUsersLowerResult.error;
-            if (supplierUsersTitleResult.error) throw supplierUsersTitleResult.error;
-
-            const supplierUsers = [
-                ...(supplierUsersLowerResult.data || []),
-                ...(supplierUsersTitleResult.data || [])
-            ];
-
-            supplierUsers.forEach(({ email }) => {
+            (supplierUsers || []).forEach(({ email }) => {
                 if (typeof email === 'string' && email.trim()) {
                     emailTargets.add(normalizeEmail(email));
                 }
