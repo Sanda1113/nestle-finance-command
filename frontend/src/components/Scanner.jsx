@@ -46,7 +46,7 @@ function BarcodeScannerUI({ onScanSuccess, onClose }) {
                     (error) => {
                         // Ignore continuous "no code found" errors
                         // Only log real issues in development
-                        if (process.env.NODE_ENV === 'development') {
+                        if (import.meta.env.DEV) {
                             if (!error?.includes?.('No MultiFormat Readers')) {
                                 console.debug('Scanner debug:', error);
                             }

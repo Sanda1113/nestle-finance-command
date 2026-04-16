@@ -466,7 +466,7 @@ export default function WarehousePortal({ user, onLogout }) {
                         processScanResult(barcodes[0].rawValue);
                         return;
                     }
-                } catch (e) {
+                } catch {
                     console.log("Native detector failed, trying html5-qrcode...");
                 }
             }
@@ -605,7 +605,7 @@ export default function WarehousePortal({ user, onLogout }) {
             try {
                 const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 }));
                 gpsLocation = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
-            } catch (e) { console.log("GPS Denied/Failed"); }
+            } catch { console.log("GPS Denied/Failed"); }
         }
 
         const payload = {
@@ -631,7 +631,7 @@ export default function WarehousePortal({ user, onLogout }) {
                 setSelectedPO(null);
                 setViewMode('completed');
                 fetchPOs();
-            } catch (err) {
+            } catch {
                 alert('Failed to log GRN. Saving offline.');
                 const newQueue = [...syncQueue, { type: 'submit', payload }];
                 setSyncQueue(newQueue);
@@ -651,7 +651,7 @@ export default function WarehousePortal({ user, onLogout }) {
             });
             alert('✅ Arrival Acknowledged. Supplier has been notified.');
             fetchPOs();
-        } catch (err) {
+        } catch {
             alert('Failed to acknowledge arrival.');
         }
     };
@@ -669,7 +669,7 @@ export default function WarehousePortal({ user, onLogout }) {
             setSelectedPO(null);
             setViewMode('completed');
             fetchPOs();
-        } catch (err) {
+        } catch {
             alert('Failed to clear goods.');
         } finally {
             setIsClearing(false);

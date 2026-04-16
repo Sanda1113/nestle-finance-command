@@ -14,7 +14,7 @@ export default function NotificationBell({ email, role, onNavigate }) {
             const data = res.data.notifications || [];
             setNotifications(data);
             setUnreadCount(data.filter(n => !n.is_read).length);
-        } catch (err) { }
+        } catch { /* ignore polling errors */ }
     };
 
     useEffect(() => {
@@ -27,7 +27,7 @@ export default function NotificationBell({ email, role, onNavigate }) {
         try {
             await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/notifications/mark-read', { ids });
             fetchNotifications();
-        } catch (err) { }
+        } catch { /* ignore mark-read errors */ }
     };
 
     const handleNotificationClick = (notification) => {

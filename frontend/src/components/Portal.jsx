@@ -10,8 +10,7 @@ import FloatingChat from './FloatingChat';
 const formatCurrency = (amount, currencyCode = 'USD') => {
     if (amount === undefined || amount === null || isNaN(amount)) return '$0.00';
     try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode }).format(amount); }
-    catch (e) { return `${currencyCode} ${Number(amount).toFixed(2)}`; }
-};
+    catch { return `${currencyCode} ${Number(amount).toFixed(2)}`; }};
 
 const getShipmentId = (poNum) => {
     if (!poNum || typeof poNum !== 'string') return 'SHP-PENDING';
@@ -252,7 +251,7 @@ function ProcurementPortal({ user }) {
             if (res.data.success) {
                 alert(`✅ Success! Generated PO Number: ${res.data.poNumber}\nRouted directly to Supplier Inbox.`);
             }
-        } catch (err) { alert("Failed to generate PO."); }
+        } catch { alert("Failed to generate PO."); }
         finally { setProcessingBoqs(prev => ({ ...prev, [id]: false })); }
     };
 
@@ -262,14 +261,14 @@ function ProcurementPortal({ user }) {
         setProcessingBoqs(prev => ({ ...prev, [id]: true }));
         try {
             await axios.post(`https://nestle-finance-command-production.up.railway.app/api/boqs/${id}/reject`, { reason });
-        } catch (err) { alert("Failed to reject BOQ."); }
+        } catch { alert("Failed to reject BOQ."); }
         finally { setProcessingBoqs(prev => ({ ...prev, [id]: false })); }
     };
 
     const totalBOQs = boqs.length;
     const pendingBOQs = boqs.filter(b => b.status === 'Pending Review').length;
     const approvedBOQs = boqs.filter(b => (b.status || '').includes('PO Generated')).length;
-    const rejectedBOQs = boqs.filter(b => b.status === 'Rejected').length;
+    const _rejectedBOQs = boqs.filter(b => b.status === 'Rejected').length;
     const totalValue = boqs.reduce((sum, b) => sum + (b.total_amount || 0), 0);
 
     const uniqueSuppliers = [...new Set(boqs.map(b => b.supplier_email).filter(Boolean))];
@@ -490,7 +489,7 @@ function FinancePortal({ user }) {
         try {
             await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/reconciliations/${id}`, { newStatus: decision });
             fetchData(false);
-        } catch (err) {
+        } catch {
             alert("Failed to update status.");
             setActionedRecords(prev => ({ ...prev, [id]: false }));
         }
