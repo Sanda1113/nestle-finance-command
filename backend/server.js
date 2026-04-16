@@ -369,11 +369,7 @@ app.get('/api/reconciliations', async (req, res) => {
         const { email } = req.query;
         let query = supabase
             .from('reconciliations')
-            .select(
-                email
-                    ? 'id, vendor_name, invoice_number, po_number, invoice_total, po_total, match_status, timeline_status, supplier_email, processed_at, created_at, updated_at'
-                    : '*'
-            )
+            .select('*')
             .order('processed_at', { ascending: false });
         // If a supplier email is passed, filter to only their records
         if (email) {
@@ -381,7 +377,23 @@ app.get('/api/reconciliations', async (req, res) => {
         }
         const { data, error } = await query;
         if (error) throw error;
-        res.json({ success: true, data });
+        const responseData = email
+            ? (data || []).map(item => ({
+                id: item.id,
+                vendor_name: item.vendor_name,
+                invoice_number: item.invoice_number,
+                po_number: item.po_number,
+                invoice_total: item.invoice_total,
+                po_total: item.po_total,
+                match_status: item.match_status,
+                timeline_status: item.timeline_status,
+                supplier_email: item.supplier_email,
+                processed_at: item.processed_at,
+                created_at: item.created_at,
+                updated_at: item.updated_at || item.processed_at || item.created_at || null
+            }))
+            : data;
+        res.json({ success: true, data: responseData });
     } catch (error) {
         logError('Fetch Reconciliations', error);
         res.status(500).json({ error: 'Failed to fetch ledger' });
@@ -588,18 +600,28 @@ app.get('/api/boqs', async (req, res) => {
         const { email } = req.query;
         let query = supabase
             .from('boqs')
-            .select(
-                email
-                    ? 'id, vendor_name, document_number, total_amount, currency, status, supplier_email, created_at, updated_at, rejection_reason'
-                    : '*'
-            )
+            .select('*')
             .order('created_at', { ascending: false });
         if (email) {
             query = query.eq('supplier_email', email);
         }
         const { data, error } = await query;
         if (error) throw error;
-        res.json({ success: true, data });
+        const responseData = email
+            ? (data || []).map(item => ({
+                id: item.id,
+                vendor_name: item.vendor_name,
+                document_number: item.document_number,
+                total_amount: item.total_amount,
+                currency: item.currency,
+                status: item.status,
+                supplier_email: item.supplier_email,
+                created_at: item.created_at,
+                updated_at: item.updated_at || item.created_at || null,
+                rejection_reason: item.rejection_reason || null
+            }))
+            : data;
+        res.json({ success: true, data: responseData });
     } catch (error) {
         logError('Fetch BOQs', error);
         res.status(500).json({ error: 'Failed to fetch BOQs' });
@@ -748,13 +770,21 @@ app.get('/api/supplier/pos/:email', async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('purchase_orders')
-            // Exclude po_data here to keep supplier dashboard list payloads light.
-            // Full po_data is fetched on-demand via GET /api/purchase_orders/:id for PDF generation.
-            .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email')
+            .select('*')
             .eq('supplier_email', email)
             .order('id', { ascending: false });
         if (error) throw error;
-        res.json({ success: true, data });
+        const responseData = (data || []).map(item => ({
+            id: item.id,
+            po_number: item.po_number,
+            total_amount: item.total_amount,
+            status: item.status,
+            created_at: item.created_at,
+            updated_at: item.updated_at || item.created_at || null,
+            is_downloaded: item.is_downloaded,
+            supplier_email: item.supplier_email
+        }));
+        res.json({ success: true, data: responseData });
     } catch (error) {
         logError('Fetch Supplier POs', error, { email });
         res.status(500).json({ error: 'Failed to fetch POs' });
