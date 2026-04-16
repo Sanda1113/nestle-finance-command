@@ -810,7 +810,7 @@ app.get('/api/purchase_orders/:id', async (req, res) => {
             success: true,
             data: {
                 ...data,
-                updated_at: data?.created_at || null
+                updated_at: data.created_at || null
             }
         });
     } catch (error) {
