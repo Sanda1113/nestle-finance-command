@@ -77,6 +77,27 @@ describe('Sprint2 Routes', () => {
         expect(res.body).toHaveProperty('error', 'Shipment can only be rejected when shortages are present');
     });
 
+    test('POST /api/sprint2/grn/reject still succeeds when reconciliation lookup fails', async () => {
+        jest.clearAllMocks();
+        const supabase = require('../db');
+        const mockQuery = supabase.from();
+        mockQuery.limit.mockResolvedValueOnce({ data: null, error: { message: 'reconciliation lookup failed' } });
+
+        const res = await request(app)
+            .post('/api/sprint2/grn/reject')
+            .send({
+                poNumber: 'PO-12345',
+                rejectedBy: 'warehouse@test.com',
+                rejectionReason: 'Delivered quantity lower than expected',
+                itemsReceived: [
+                    { description: 'Milk Powder', qty: 10, actualQtyReceived: 7, status: 'Shortage' }
+                ]
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+    });
+
     test('POST /api/sprint2/grn/reject persists warehouse_rejection evidence into po_data', async () => {
         // Clear recorded mock calls so earlier tests do not pollute this assertion.
         // Mock implementations (mockReturnThis, mockResolvedValue, etc.) are preserved.
