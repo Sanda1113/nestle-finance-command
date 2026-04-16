@@ -38,10 +38,30 @@ describe('Nestle Finance API', () => {
         expect(Array.isArray(res.body.data)).toBe(true);
     });
 
+    test('GET /api/boqs with supplier email returns success', async () => {
+        const res = await request(app).get('/api/boqs?email=test%40example.com');
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(Array.isArray(res.body.data)).toBe(true);
+    });
+
     test('GET /api/reconciliations returns success', async () => {
         const res = await request(app).get('/api/reconciliations');
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty('success', true);
+    });
+
+    test('GET /api/reconciliations with supplier email returns success', async () => {
+        const res = await request(app).get('/api/reconciliations?email=test%40example.com');
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+    });
+
+    test('GET /api/supplier/pos/:email returns success', async () => {
+        const res = await request(app).get('/api/supplier/pos/test%40example.com');
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(Array.isArray(res.body.data)).toBe(true);
     });
 
     test('POST /api/extract-invoice without file returns 400', async () => {
