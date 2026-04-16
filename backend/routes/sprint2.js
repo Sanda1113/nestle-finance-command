@@ -269,6 +269,10 @@ router.post('/grn/reject', async (req, res) => {
         return res.status(400).json({ error: 'poNumber is required' });
     }
 
+    if (!rejectedBy) {
+        return res.status(400).json({ error: 'rejectedBy is required' });
+    }
+
     const shortageItems = Array.isArray(itemsReceived)
         ? itemsReceived.filter(item =>
             item?.status === 'Shortage' || Number(item?.actualQtyReceived || 0) < Number(item?.qty || 0)
@@ -289,14 +293,26 @@ router.post('/grn/reject', async (req, res) => {
 
         if (poUpdateErr) throw poUpdateErr;
 
-        await supabase
+        const { data: relatedRecons, error: reconFetchErr } = await supabase
             .from('reconciliations')
-            .update({
-                match_status: 'Rejected',
-                timeline_status: 'Rejected - Warehouse Shortage',
-                processed_at: new Date().toISOString()
-            })
-            .eq('po_number', poNumber);
+            .select('id')
+            .eq('po_number', poNumber)
+            .limit(1);
+
+        if (reconFetchErr) throw reconFetchErr;
+
+        if (Array.isArray(relatedRecons) && relatedRecons.length > 0) {
+            const { error: reconUpdateErr } = await supabase
+                .from('reconciliations')
+                .update({
+                    match_status: 'Rejected',
+                    timeline_status: 'Rejected - Warehouse Shortage',
+                    processed_at: new Date().toISOString()
+                })
+                .eq('po_number', poNumber);
+
+            if (reconUpdateErr) throw reconUpdateErr;
+        }
 
         const { data: po } = await supabase
             .from('purchase_orders')
@@ -310,7 +326,7 @@ router.post('/grn/reject', async (req, res) => {
 
         await supabase.from('disputes').insert([{
             reference_number: poNumber,
-            sender_email: rejectedBy || 'Warehouse',
+            sender_email: rejectedBy,
             sender_role: 'Warehouse',
             message: `WAREHOUSE REJECTION: Shipment ${shipmentId} rejected due to shortage. ${rejectionReason ? `Reason: ${rejectionReason}. ` : ''}Short items: ${shortageSummary}. Transaction canceled.`
         }]);

@@ -646,7 +646,9 @@ export default function WarehousePortal({ user, onLogout }) {
 
     const handleRejectShipment = async () => {
         if (!selectedPO) return;
-        const shortageItems = receivedItems.filter(item => item.status === 'Shortage');
+        const shortageItems = receivedItems.filter(item =>
+            item.status === 'Shortage' || Number(item.actualQtyReceived || 0) < Number(item.qty || 0)
+        );
         if (shortageItems.length === 0) {
             alert('Shipment can only be rejected when a shortage is detected.');
             return;
@@ -734,7 +736,9 @@ export default function WarehousePortal({ user, onLogout }) {
     const canClear = selectedPO &&
         (selectedPO.status === 'Goods Received (GRN Logged)' ||
             selectedPO.status === 'Partially Received (Awaiting Backorder)');
-    const canRejectForShortage = selectedPO && receivedItems.some(item => item.status === 'Shortage');
+    const canRejectForShortage = selectedPO && receivedItems.some(item =>
+        item.status === 'Shortage' || Number(item.actualQtyReceived || 0) < Number(item.qty || 0)
+    );
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans flex flex-col transition-colors duration-300 relative">
@@ -996,7 +1000,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                             {isCompleted && (
                                                 <div className={`absolute inset-0 ${isCancelled ? 'bg-red-50/20' : 'bg-emerald-50/10'} dark:bg-slate-900/50 backdrop-blur-[1px] flex flex-col items-center justify-center z-10 p-4`}>
                                                     <span className={`${isCancelled ? 'bg-red-600' : 'bg-emerald-500'} text-white px-4 py-2 rounded-xl font-black flex items-center gap-2 shadow-lg w-full justify-center text-sm`}>
-                                                        <CheckCircle2 className="w-5 h-5" /> {isCancelled ? 'CANCELLED' : 'COMPLETED'}
+                                                        {isCancelled ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />} {isCancelled ? 'CANCELLED' : 'COMPLETED'}
                                                     </span>
                                                     <p className="text-xs text-slate-500 font-bold mt-3 uppercase tracking-wider bg-white dark:bg-slate-800 px-3 py-1 rounded-full">
                                                         {getShipmentId(po.po_number)}

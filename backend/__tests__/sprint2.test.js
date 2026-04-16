@@ -67,6 +67,7 @@ describe('Sprint2 Routes', () => {
             .post('/api/sprint2/grn/reject')
             .send({
                 poNumber: 'PO-12345',
+                rejectedBy: 'warehouse@test.com',
                 itemsReceived: [
                     { description: 'Milk Powder', qty: 10, actualQtyReceived: 10, status: 'Full Match' }
                 ]
