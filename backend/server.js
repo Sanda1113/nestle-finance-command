@@ -338,7 +338,7 @@ app.post('/api/save-reconciliation', async (req, res) => {
                 logError('Insert Invoice', invErr, { invoiceNumber: invoiceData.invoiceNumber });
             }
         } else {
-            console.warn(`⚠️ Skipping invoices table insert for ${invoiceData?.invoiceNumber || 'unknown invoice'}: missing file URL`);
+            console.warn(`⚠️ Skipping invoices table insert for ${invoiceData?.invoiceNumber || 'unknown invoice'}: missing file URL. Reconciliation will still be saved, but no invoices row will be created.`);
         }
 
         let timeline = matchStatus === 'Approved' ? 'Awaiting Payout' : 'Discrepancy - Manual Review';
