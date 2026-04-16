@@ -18,6 +18,32 @@ const formatCurrency = (amount, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
 };
 
+const toSafeNumber = (value) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+};
+
+const buildShortageEvidence = (items = []) => {
+    return (Array.isArray(items) ? items : []).map((item) => {
+        const expectedQty = toSafeNumber(item?.qty);
+        const receivedQty = toSafeNumber(item?.actualQtyReceived);
+        const shortageQty = Math.max(expectedQty - receivedQty, 0);
+        return {
+            description: item?.description || 'Item',
+            expectedQty,
+            receivedQty,
+            shortageQty,
+            reasonCode: item?.reasonCode || '',
+            status: item?.status || '',
+            hasPhoto: Boolean(item?.hasPhoto || item?.photoDataUrl),
+            photoFileName: item?.photoFileName || '',
+            photoMimeType: item?.photoMimeType || '',
+            photoAttachedAt: item?.photoAttachedAt || null,
+            photoDataUrl: item?.photoDataUrl || ''
+        };
+    });
+};
+
 // ==========================================
 // 🔔 NOTIFICATION ENDPOINTS
 // ==========================================
@@ -203,19 +229,38 @@ router.post('/grn/submit', async (req, res) => {
 
         const newStatus = isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)';
 
-        await supabase.from('purchase_orders').update({ status: newStatus }).eq('po_number', poNumber);
-
+        const shortageEvidence = buildShortageEvidence(
+            (itemsReceived || []).filter(item => item?.status === 'Shortage' || toSafeNumber(item?.actualQtyReceived) < toSafeNumber(item?.qty))
+        );
         const { data: poContext } = await supabase
             .from('purchase_orders')
-            .select('supplier_email')
+            .select('supplier_email, po_data')
             .eq('po_number', poNumber)
             .single();
+
+        const updatedPoData = {
+            ...(poContext?.po_data || {}),
+            warehouse_grn: {
+                submittedBy: receivedBy,
+                submittedAt: new Date().toISOString(),
+                totalReceivedAmount: toSafeNumber(totalReceivedAmount),
+                isPartial: Boolean(isPartial),
+                gpsLocation: gpsLocation || 'Location Unavailable',
+                itemsReceived: Array.isArray(itemsReceived) ? itemsReceived : [],
+                shortageEvidence
+            }
+        };
+
+        await supabase.from('purchase_orders').update({ status: newStatus, po_data: updatedPoData }).eq('po_number', poNumber);
+
+        const shortageCount = shortageEvidence.length;
+        const photoEvidenceCount = shortageEvidence.filter(item => item.photoDataUrl).length;
 
         await supabase.from('notifications').insert([
             {
                 user_role: 'Finance',
                 title: '✅ GRN Completed',
-                message: `Warehouse finished scanning ${poNumber}. Ready for final payout validation.`,
+                message: `Warehouse finished scanning ${poNumber}. ${shortageCount > 0 ? `${shortageCount} shortage item(s) flagged${photoEvidenceCount > 0 ? ` with ${photoEvidenceCount} photo evidence attachment(s)` : ''}. ` : ''}Ready for final payout validation.`,
                 link: `/finance?recon=${poNumber}`,
                 is_read: false
             }
@@ -285,10 +330,36 @@ router.post('/grn/reject', async (req, res) => {
 
     try {
         const shipmentId = getShipmentId(poNumber);
-        const canceledStatus = 'Transaction Cancelled - Warehouse Rejected (Shortage)';
+        const canceledStatus = 'Transaction Cancelled (Shortage)';
+        const rejectedAt = new Date().toISOString();
+        const shortageEvidence = buildShortageEvidence(shortageItems);
+        const shortageSummary = shortageEvidence
+            .map(item => `${item.description} (${item.receivedQty}/${item.expectedQty})`)
+            .join(', ');
+
+        const { data: poContext, error: poFetchErr } = await supabase
+            .from('purchase_orders')
+            .select('supplier_email, total_amount, po_data')
+            .eq('po_number', poNumber)
+            .single();
+
+        if (poFetchErr) throw poFetchErr;
+
+        const rejectionContext = {
+            rejectedBy,
+            rejectedAt,
+            rejectionReason: rejectionReason || '',
+            shortageEvidence
+        };
+
+        const updatedPoData = {
+            ...(poContext?.po_data || {}),
+            warehouse_rejection: rejectionContext
+        };
+
         const { error: poUpdateErr } = await supabase
             .from('purchase_orders')
-            .update({ status: canceledStatus })
+            .update({ status: canceledStatus, po_data: updatedPoData })
             .eq('po_number', poNumber);
 
         if (poUpdateErr) throw poUpdateErr;
@@ -314,40 +385,42 @@ router.post('/grn/reject', async (req, res) => {
             if (reconUpdateErr) throw reconUpdateErr;
         }
 
-        const { data: po } = await supabase
-            .from('purchase_orders')
-            .select('supplier_email, total_amount')
-            .eq('po_number', poNumber)
-            .single();
+        try {
+            await supabase.from('disputes').insert([{
+                reference_number: poNumber,
+                sender_email: rejectedBy,
+                sender_role: 'Warehouse',
+                message: `WAREHOUSE REJECTION: Shipment ${shipmentId} rejected due to shortage. ${rejectionReason ? `Reason: ${rejectionReason}. ` : ''}Short items: ${shortageSummary}. Transaction canceled.`
+            }]);
+        } catch (disputeErr) {
+            console.error('Failed to log warehouse rejection dispute:', disputeErr);
+        }
 
-        const shortageSummary = shortageItems
-            .map(item => `${item.description || 'Item'} (${item.actualQtyReceived || 0}/${item.qty || 0})`)
-            .join(', ');
-
-        await supabase.from('disputes').insert([{
-            reference_number: poNumber,
-            sender_email: rejectedBy,
-            sender_role: 'Warehouse',
-            message: `WAREHOUSE REJECTION: Shipment ${shipmentId} rejected due to shortage. ${rejectionReason ? `Reason: ${rejectionReason}. ` : ''}Short items: ${shortageSummary}. Transaction canceled.`
-        }]);
-
-        await supabase.from('notifications').insert([{
-            user_role: 'Finance',
-            title: '❌ Shipment Rejected by Warehouse',
-            message: `Shipment ${shipmentId} (${poNumber}) was rejected for shortage. Entire transaction has been canceled.`,
-            link: `/finance?recon=${poNumber}`,
-            is_read: false
-        }]);
-
-        if (po?.supplier_email) {
+        try {
             await supabase.from('notifications').insert([{
-                user_email: po.supplier_email,
-                user_role: 'Supplier',
-                title: '❌ Shipment Rejected',
-                message: `Shipment ${shipmentId} was rejected by warehouse due to shortages. Transaction canceled.`,
-                link: `/logs?po=${poNumber}`,
+                user_role: 'Finance',
+                title: '❌ Shipment Rejected by Warehouse',
+                message: `Shipment ${shipmentId} (${poNumber}) was rejected for shortage. Updated quantities and photo evidence are available in the finance review context.`,
+                link: `/finance?recon=${poNumber}`,
                 is_read: false
             }]);
+        } catch (financeNotifErr) {
+            console.error('Failed to create finance rejection notification:', financeNotifErr);
+        }
+
+        if (poContext?.supplier_email) {
+            try {
+                await supabase.from('notifications').insert([{
+                    user_email: poContext.supplier_email,
+                    user_role: 'Supplier',
+                    title: '❌ Shipment Rejected',
+                    message: `Shipment ${shipmentId} was rejected by warehouse due to shortages. Transaction canceled.`,
+                    link: `/logs?po=${poNumber}`,
+                    is_read: false
+                }]);
+            } catch (supplierNotifErr) {
+                console.error('Failed to create supplier rejection notification:', supplierNotifErr);
+            }
 
             const emailBody = `
                 <p>Your shipment <strong>${shipmentId}</strong> (PO: ${poNumber}) has been <strong>rejected by the warehouse</strong> due to a goods shortage.</p>
@@ -357,12 +430,16 @@ router.post('/grn/reject', async (req, res) => {
                 <p>Please coordinate with the procurement/finance teams for next steps.</p>
             `;
 
-            await sendSupplierEmail(
-                po.supplier_email,
-                `Shipment Rejected – ${shipmentId}`,
-                emailBody,
-                { poNumber, amount: po.total_amount, currency: 'USD' }
-            );
+            try {
+                await sendSupplierEmail(
+                    poContext.supplier_email,
+                    `Shipment Rejected – ${shipmentId}`,
+                    emailBody,
+                    { poNumber, amount: poContext.total_amount, currency: 'USD' }
+                );
+            } catch (supplierEmailErr) {
+                console.error('Failed to send supplier rejection email:', supplierEmailErr);
+            }
         }
 
         return res.json({ success: true, message: 'Shipment rejected and transaction canceled.' });
