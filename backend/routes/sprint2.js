@@ -44,12 +44,24 @@ const buildShortageEvidence = (items = []) => {
     });
 };
 
+const normalizeEmail = (value = '') => String(value).trim().toLowerCase();
+const escapeHtml = (value = '') => String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
 // ==========================================
 // 🔔 NOTIFICATION ENDPOINTS
 // ==========================================
 router.get('/notifications', async (req, res) => {
     const { email, role } = req.query;
     try {
+        if (!email && !role) {
+            return res.status(400).json({ error: 'Missing email or role parameter' });
+        }
+
         if (email && role) {
             const [emailResult, roleResult] = await Promise.all([
                 supabase
@@ -75,8 +87,6 @@ router.get('/notifications', async (req, res) => {
                 .slice(0, 50);
 
             return res.json({ success: true, notifications: deduped });
-        } else if (!email && !role) {
-            return res.status(400).json({ error: 'Missing email or role parameter' });
         }
 
         let query = supabase.from('notifications').select('*');
@@ -711,7 +721,7 @@ router.post('/livechat/send', async (req, res) => {
         const notificationRecords = [];
         const emailTargets = new Set();
         if (typeof recipientEmail === 'string' && recipientEmail.trim()) {
-            emailTargets.add(recipientEmail.trim().toLowerCase());
+            emailTargets.add(normalizeEmail(recipientEmail));
         }
 
         if (recipientRole === 'Supplier') {
@@ -722,7 +732,7 @@ router.post('/livechat/send', async (req, res) => {
             if (supplierUsersErr) throw supplierUsersErr;
             (supplierUsers || []).forEach(({ email }) => {
                 if (typeof email === 'string' && email.trim()) {
-                    emailTargets.add(email.trim().toLowerCase());
+                    emailTargets.add(normalizeEmail(email));
                 }
             });
         }
@@ -750,20 +760,24 @@ router.post('/livechat/send', async (req, res) => {
         if (notifErr) throw notifErr;
 
         if (recipientRole === 'Supplier' && emailTargets.size > 0) {
+            const safeSenderRole = escapeHtml(senderRole);
+            const safeChannel = escapeHtml(channel);
+            const safeMessage = escapeHtml(message);
+            const safeSubjectSenderRole = String(senderRole || '').replace(/[\r\n]+/g, ' ').trim();
             const emailHtml = `
-                <p>You have a new live chat message from <strong>${senderRole}</strong>.</p>
-                <p><strong>Channel:</strong> ${channel}</p>
-                <blockquote style="border-left:4px solid #ccc; padding-left:10px;">${message}</blockquote>
+                <p>You have a new live chat message from <strong>${safeSenderRole}</strong>.</p>
+                <p><strong>Channel:</strong> ${safeChannel}</p>
+                <blockquote style="border-left:4px solid #ccc; padding-left:10px;">${safeMessage}</blockquote>
                 <p>Please log in to your Supplier Dashboard to reply.</p>
             `;
             await Promise.all(Array.from(emailTargets).map((email) =>
                 sendSupplierEmail(
                     email,
-                    `New Live Chat Message from ${senderRole}`,
+                    `New Live Chat Message from ${safeSubjectSenderRole || 'Support Team'}`,
                     emailHtml,
                     { poNumber: channel }
                 ).catch((mailErr) => {
-                    console.error(`Failed to send live chat supplier email to ${email}:`, mailErr);
+                    console.error('Failed to send live chat supplier email:', email, mailErr);
                 })
             ));
         }

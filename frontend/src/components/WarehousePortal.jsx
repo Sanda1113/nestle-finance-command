@@ -284,7 +284,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
     const normalizeQueueItem = useCallback((item) => {
         if (!item) return null;
-        const looksTyped = item && typeof item === 'object' && item.type && item.payload;
+        const looksTyped = typeof item === 'object' && item !== null && item.type && item.payload;
         const candidate = looksTyped ? item : { type: 'submit', payload: item };
         const type = candidate.type === 'reject' ? 'reject' : 'submit';
         const payload = candidate.payload;
@@ -420,7 +420,7 @@ export default function WarehousePortal({ user, onLogout }) {
             }
         } else {
             setSyncQueue(failedItems);
-            alert(`⚠️ ${failedItems.length} offline action(s) failed to sync.${droppedInvalidCount > 0 ? ` ${droppedInvalidCount} invalid action(s) were removed.` : ''} They will remain in the queue for retry.`);
+            alert(`⚠️ ${failedItems.length} offline action(s) failed to sync.${droppedInvalidCount > 0 ? ` ${droppedInvalidCount} invalid action(s) were removed.` : ''} Failed items will remain in the queue for retry.`);
         }
 
         setIsSyncing(false);
@@ -511,7 +511,8 @@ export default function WarehousePortal({ user, onLogout }) {
                 let decodedText = '';
                 try {
                     decodedText = await html5QrCode.scanFile(file, true);
-                } catch {
+                } catch (firstErr) {
+                    console.debug('Scan with inversion attempt failed, retrying standard scan:', firstErr);
                     decodedText = await html5QrCode.scanFile(file, false);
                 }
                 processScanResult(decodedText);
@@ -521,10 +522,12 @@ export default function WarehousePortal({ user, onLogout }) {
                     barcode: 'Unknown',
                     name: 'Scan Failed',
                     category: 'Error',
-                    message: '❌ No barcode found. Try retaking photo closer to the barcode or use manual entry.'
+                    message: '❌ No barcode found. Try taking another photo closer to the barcode or use manual entry.'
                 });
             } finally {
-                html5QrCode.clear().catch(() => { });
+                html5QrCode.clear().catch((cleanupErr) => {
+                    console.debug('QR cleanup warning:', cleanupErr);
+                });
             }
         } catch (err) {
             console.error("Image processing error:", err);
