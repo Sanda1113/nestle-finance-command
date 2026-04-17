@@ -1014,7 +1014,7 @@ BRF:449
 BRH:32
 end_of_record
 TN:
-SF:routes\auth.js
+SF:routes/auth.js
 FN:10,(anonymous_0)
 FN:26,(anonymous_1)
 FNF:2
@@ -1064,7 +1064,7 @@ BRF:10
 BRH:2
 end_of_record
 TN:
-SF:routes\notifications.js
+SF:routes/notifications.js
 FN:6,(anonymous_0)
 FN:22,(anonymous_1)
 FN:33,(anonymous_2)
@@ -1109,7 +1109,7 @@ BRF:6
 BRH:0
 end_of_record
 TN:
-SF:routes\sprint2.js
+SF:routes/sprint2.js
 FN:9,(anonymous_0)
 FN:17,(anonymous_1)
 FN:21,(anonymous_2)

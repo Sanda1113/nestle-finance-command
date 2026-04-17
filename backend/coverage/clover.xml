@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1776371007385" clover="3.2.0">
-  <project timestamp="1776371007385" name="All files">
+<coverage generated="1776416060377" clover="3.2.0">
+  <project timestamp="1776416060377" name="All files">
     <metrics statements="760" coveredstatements="227" conditionals="652" coveredconditionals="108" methods="89" coveredmethods="24" elements="1501" coveredelements="359" complexity="0" loc="760" ncloc="760" packages="2" files="4" classes="4"/>
     <package name="backend">
       <metrics statements="449" coveredstatements="96" conditionals="449" coveredconditionals="32" methods="54" coveredmethods="11"/>
-      <file name="server.js" path="C:\Users\sanda\nestle-finance-command\backend\server.js">
+      <file name="server.js" path="/home/runner/work/nestle-finance-command/nestle-finance-command/backend/server.js">
         <metrics statements="449" coveredstatements="96" conditionals="449" coveredconditionals="32" methods="54" coveredmethods="11"/>
         <line num="2" count="2" type="stmt"/>
         <line num="3" count="2" type="stmt"/>
@@ -459,7 +459,7 @@
     </package>
     <package name="backend.routes">
       <metrics statements="311" coveredstatements="131" conditionals="203" coveredconditionals="76" methods="35" coveredmethods="13"/>
-      <file name="auth.js" path="C:\Users\sanda\nestle-finance-command\backend\routes\auth.js">
+      <file name="auth.js" path="/home/runner/work/nestle-finance-command/nestle-finance-command/backend/routes/auth.js">
         <metrics statements="27" coveredstatements="9" conditionals="10" coveredconditionals="2" methods="2" coveredmethods="0"/>
         <line num="1" count="2" type="stmt"/>
         <line num="2" count="2" type="stmt"/>
@@ -489,7 +489,7 @@
         <line num="40" count="0" type="stmt"/>
         <line num="44" count="2" type="stmt"/>
       </file>
-      <file name="notifications.js" path="C:\Users\sanda\nestle-finance-command\backend\routes\notifications.js">
+      <file name="notifications.js" path="/home/runner/work/nestle-finance-command/nestle-finance-command/backend/routes/notifications.js">
         <metrics statements="24" coveredstatements="0" conditionals="6" coveredconditionals="0" methods="3" coveredmethods="0"/>
         <line num="1" count="0" type="stmt"/>
         <line num="2" count="0" type="stmt"/>
@@ -516,7 +516,7 @@
         <line num="37" count="0" type="stmt"/>
         <line num="41" count="0" type="stmt"/>
       </file>
-      <file name="sprint2.js" path="C:\Users\sanda\nestle-finance-command\backend\routes\sprint2.js">
+      <file name="sprint2.js" path="/home/runner/work/nestle-finance-command/nestle-finance-command/backend/routes/sprint2.js">
         <metrics statements="260" coveredstatements="122" conditionals="187" coveredconditionals="74" methods="30" coveredmethods="13"/>
         <line num="2" count="2" type="stmt"/>
         <line num="3" count="2" type="stmt"/>
