@@ -24,6 +24,7 @@ const SYNC_QUEUE_STORAGE_KEY = 'grnSyncQueue';
 const OFFLINE_PO_STORAGE_KEY = 'offlinePOs';
 const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
 const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge'];
+const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload']);
 
 // 📱 Mobile‑optimized Bottom Drawer Scanner
 const BarcodeScannerUI = ({ onScanSuccess, onClose }) => {
@@ -313,6 +314,50 @@ export default function WarehousePortal({ user, onLogout }) {
             return [];
         }
     }, []);
+
+    const updatePOStatusLocally = useCallback((poNumber, nextStatus, poDataPatch = {}) => {
+        if (!poNumber || !nextStatus) {
+            console.warn('Skipping local PO status update due to missing poNumber or status.', { poNumber, nextStatus });
+            return;
+        }
+        setPOs((prev) => {
+            const next = prev.map((po) => {
+                if (po.po_number !== poNumber) return po;
+                return {
+                    ...po,
+                    status: nextStatus,
+                    po_data: {
+                        ...(po.po_data || {}),
+                        ...(poDataPatch || {})
+                    }
+                };
+            });
+            try {
+                localStorage.setItem(OFFLINE_PO_STORAGE_KEY, JSON.stringify(next));
+            } catch {
+                // ignore cache write failures
+            }
+            return next;
+        });
+    }, []);
+
+    const buildWarehouseGRNPatch = (submittedBy, submittedAt, totalReceivedAmount, isPartial, gpsLocation) => ({
+        warehouse_grn: {
+            submittedBy,
+            submittedAt,
+            totalReceivedAmount,
+            isPartial: Boolean(isPartial),
+            gpsLocation
+        }
+    });
+
+    const buildWarehouseRejectionPatch = (rejectedBy, rejectedAt, rejectionReason) => ({
+        warehouse_rejection: {
+            rejectedBy,
+            rejectedAt,
+            rejectionReason
+        }
+    });
 
     const sanitizeItemsForOfflineQueue = useCallback((items = []) => {
         if (!Array.isArray(items)) return [];
@@ -752,16 +797,27 @@ export default function WarehousePortal({ user, onLogout }) {
             isPartial: isPartial,
             gpsLocation
         };
+        const submittedAt = new Date().toISOString();
 
         if (isOffline) {
             enqueueOfflineAction('submit', payload);
+            updatePOStatusLocally(
+                selectedPO.po_number,
+                isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)',
+                buildWarehouseGRNPatch(user.email, submittedAt, totalAmount, isPartial, gpsLocation)
+            );
             alert(`📡 OFFLINE MODE: GRN saved locally.\n📍 GPS Tag: ${gpsLocation}`);
             setSelectedPO(null);
             setViewMode('completed');
             fetchPOs();
         } else {
             try {
-                await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/submit', payload);
+                await axios.post(`${API_BASE_URL}/grn/submit`, payload);
+                updatePOStatusLocally(
+                    selectedPO.po_number,
+                    isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)',
+                    buildWarehouseGRNPatch(user.email, submittedAt, totalAmount, isPartial, gpsLocation)
+                );
                 alert(`✅ Secure GRN Logged. GPS Coordinates Captured. Pipeline updated.`);
                 setSelectedPO(null);
                 setViewMode('completed');
@@ -769,6 +825,11 @@ export default function WarehousePortal({ user, onLogout }) {
             } catch {
                 alert('Failed to log GRN. Saving offline.');
                 enqueueOfflineAction('submit', payload);
+                updatePOStatusLocally(
+                    selectedPO.po_number,
+                    isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)',
+                    buildWarehouseGRNPatch(user.email, submittedAt, totalAmount, isPartial, gpsLocation)
+                );
                 setSelectedPO(null);
                 setViewMode('completed');
                 fetchPOs();
@@ -785,17 +846,20 @@ export default function WarehousePortal({ user, onLogout }) {
 
         if (isOffline) {
             enqueueOfflineAction('acknowledge', payload);
+            updatePOStatusLocally(po.po_number, 'Truck at Bay - Pending Unload');
             alert('📡 OFFLINE MODE: Arrival acknowledgement saved locally and will auto-sync when online.');
             return;
         }
 
         try {
             await axios.post(`${API_BASE_URL}/grn/acknowledge`, payload);
+            updatePOStatusLocally(po.po_number, 'Truck at Bay - Pending Unload');
             alert('✅ Arrival Acknowledged. Supplier has been notified.');
             fetchPOs();
         } catch (error) {
             console.error(error);
             enqueueOfflineAction('acknowledge', payload);
+            updatePOStatusLocally(po.po_number, 'Truck at Bay - Pending Unload');
             alert('Failed to acknowledge arrival online. Action saved offline and queued for sync.');
         }
     };
@@ -805,10 +869,11 @@ export default function WarehousePortal({ user, onLogout }) {
         if (!window.confirm('Confirm that all goods have been inspected and are ready for payout?')) return;
         setIsClearing(true);
         try {
-            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/clear', {
+            await axios.post(`${API_BASE_URL}/grn/clear`, {
                 poNumber: selectedPO.po_number,
                 clearedBy: user.email
             });
+            updatePOStatusLocally(selectedPO.po_number, 'Goods Cleared - Ready for Payout');
             alert('✅ Goods marked as cleared. Finance has been notified.');
             setSelectedPO(null);
             setViewMode('completed');
@@ -848,9 +913,15 @@ export default function WarehousePortal({ user, onLogout }) {
             itemsReceived: receivedItems,
             rejectionReason: reason
         };
+        const rejectedAt = new Date().toISOString();
 
         if (isOffline) {
             enqueueOfflineAction('reject', payload);
+            updatePOStatusLocally(
+                selectedPO.po_number,
+                'Transaction Cancelled (Shortage)',
+                buildWarehouseRejectionPatch(user.email, rejectedAt, reason)
+            );
             alert('📡 OFFLINE MODE: Shipment rejection saved locally and will auto-sync when online.');
             setSelectedPO(null);
             setViewMode('completed');
@@ -860,7 +931,12 @@ export default function WarehousePortal({ user, onLogout }) {
         }
 
         try {
-            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/reject', payload);
+            await axios.post(`${API_BASE_URL}/grn/reject`, payload);
+            updatePOStatusLocally(
+                selectedPO.po_number,
+                'Transaction Cancelled (Shortage)',
+                buildWarehouseRejectionPatch(user.email, rejectedAt, reason)
+            );
             alert('❌ Shipment rejected due to shortage. Transaction canceled.');
             setSelectedPO(null);
             setViewMode('completed');
@@ -868,6 +944,11 @@ export default function WarehousePortal({ user, onLogout }) {
         } catch (error) {
             console.error(error);
             enqueueOfflineAction('reject', payload);
+            updatePOStatusLocally(
+                selectedPO.po_number,
+                'Transaction Cancelled (Shortage)',
+                buildWarehouseRejectionPatch(user.email, rejectedAt, reason)
+            );
             alert('Failed to reject shipment online. Rejection saved offline and queued for sync.');
             setSelectedPO(null);
             setViewMode('completed');
@@ -880,7 +961,7 @@ export default function WarehousePortal({ user, onLogout }) {
     const rawPendingList = pos.filter(po => {
         const status = String(po.status || '');
         const isCompleted = status.includes('Received') || status.includes('Cancelled');
-        const isDeliveredToDock = po.status === 'Delivered to Dock' || po.status === 'Pending Warehouse GRN' || po.po_data?.delivery_timestamp;
+        const isDeliveredToDock = WAREHOUSE_PROCESSABLE_STATUSES.has(status) || po.po_data?.delivery_timestamp;
         return !isCompleted && isDeliveredToDock;
     });
 
