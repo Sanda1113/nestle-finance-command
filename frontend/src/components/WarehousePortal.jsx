@@ -1225,9 +1225,9 @@ export default function WarehousePortal({ user, onLogout }) {
                         <div className="lg:w-1/3 bg-slate-50 dark:bg-slate-800/30 p-4 sm:p-6 lg:p-8 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 flex flex-col">
                             <button
                                 onClick={() => setSelectedPO(null)}
-                                className="flex items-center gap-1.5 text-sm sm:text-xs text-slate-500 hover:text-blue-600 font-bold mb-4 w-fit"
+                                className="flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600 font-bold mb-4 w-fit"
                             >
-                                <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" /> Back to Queue
+                                <ArrowLeft className="w-4 h-4" /> Back to Queue
                             </button>
                             <div className="flex justify-between items-start mb-1">
                                 <div>
@@ -1238,7 +1238,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                 </div>
                                 <button
                                     onClick={() => setBlindMode(!blindMode)}
-                                    className={`p-3 sm:p-2 rounded-lg shrink-0 ${blindMode ? 'bg-blue-100 text-blue-600 ring-2 ring-blue-500/50' : 'bg-slate-200 text-slate-600'}`}
+                                    className={`h-11 w-11 sm:h-10 sm:w-10 rounded-xl shrink-0 inline-flex items-center justify-center transition-colors ${blindMode ? 'bg-blue-100 text-blue-600 ring-2 ring-blue-500/50' : 'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:hover:bg-slate-700'}`}
                                     title="Toggle Strict Blind Receiving"
                                 >
                                     {blindMode ? <EyeOff className="w-5 h-5 sm:w-4 sm:h-4" /> : <Eye className="w-5 h-5 sm:w-4 sm:h-4" />}
@@ -1270,35 +1270,35 @@ export default function WarehousePortal({ user, onLogout }) {
                                 </div>
                             )}
 
-                            <div className="flex gap-2 mb-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
                                 <button
                                     onClick={() => setScanning(true)}
-                                    className="flex-1 py-3 sm:py-3 text-base sm:text-sm bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2"
+                                    className="min-h-12 sm:min-h-11 px-3 text-sm sm:text-sm bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
                                 >
-                                    <ScanBarcode className="w-5 h-5" /> Scan
+                                    <ScanBarcode className="w-4 h-4 sm:w-5 sm:h-5" /> Scan
                                 </button>
                                 <button
                                     onClick={() => fileInputRef.current.click()}
-                                    className="flex-1 py-3 sm:py-3 text-base sm:text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2"
+                                    className="min-h-12 sm:min-h-11 px-3 text-sm sm:text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
                                 >
-                                    <Camera className="w-5 h-5" /> Photo
+                                    <Camera className="w-4 h-4 sm:w-5 sm:h-5" /> Photo
                                 </button>
                             </div>
 
                             <div className="hidden lg:block mt-auto space-y-3 pt-4">
                                 <button
                                     onClick={submitGRN}
-                                    className="w-full py-4 text-lg sm:text-base bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2"
+                                    className="w-full min-h-12 px-4 text-base bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]"
                                 >
-                                    <CheckCircle2 className="w-6 h-6 sm:w-5 sm:h-5" /> Confirm Goods Received (Sign GRN)
+                                    <CheckCircle2 className="w-5 h-5" /> Confirm Goods Received (Sign GRN)
                                 </button>
                                 {canClear && (
                                     <button
                                         onClick={handleClearGoods}
                                         disabled={isClearing}
-                                        className="w-full py-4 text-lg sm:text-base bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2"
+                                        className="w-full min-h-12 px-4 text-base bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]"
                                     >
-                                        <CheckCircle2 className="w-6 h-6 sm:w-5 sm:h-5" />
+                                        <CheckCircle2 className="w-5 h-5" />
                                         {isClearing ? 'Clearing...' : 'Clear Goods for Payout'}
                                     </button>
                                 )}
@@ -1306,9 +1306,9 @@ export default function WarehousePortal({ user, onLogout }) {
                                     <button
                                         onClick={handleRejectShipment}
                                         disabled={isRejecting}
-                                        className="w-full py-4 text-lg sm:text-base bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow-lg shadow-red-500/30 flex items-center justify-center gap-2"
+                                        className="w-full min-h-12 px-4 text-base bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow-lg shadow-red-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]"
                                     >
-                                        <AlertCircle className="w-6 h-6 sm:w-5 sm:h-5" />
+                                        <AlertCircle className="w-5 h-5" />
                                         {isRejecting ? 'Rejecting...' : 'Reject Shipment (Cancel Transaction)'}
                                     </button>
                                 )}
@@ -1326,7 +1326,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                     return (
                                         <div
                                             key={idx}
-                                            className={`p-4 sm:p-5 rounded-2xl border-2 transition-all bg-white dark:bg-slate-950 ${isHighRisk ? 'border-red-500 shadow-lg shadow-red-500/20' : isShort ? 'border-red-500/50' : isOver ? 'border-amber-500/50' : isPending ? 'border-slate-200 dark:border-slate-800' : 'border-emerald-500/30'}`}
+                                            className={`p-4 sm:p-5 rounded-2xl border-2 transition-all bg-white dark:bg-slate-950 shadow-sm ${isHighRisk ? 'border-red-500 shadow-lg shadow-red-500/20' : isShort ? 'border-red-500/50' : isOver ? 'border-amber-500/50' : isPending ? 'border-slate-200 dark:border-slate-800' : 'border-emerald-500/30'}`}
                                         >
                                             <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
                                                 <div className="flex-1">
@@ -1346,10 +1346,10 @@ export default function WarehousePortal({ user, onLogout }) {
                                                     <p className="text-[10px] text-blue-400 font-mono mt-1">Barcode: {item.expectedBarcode}</p>
                                                 </div>
 
-                                                <div className="flex items-center justify-between sm:justify-start gap-1 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto">
+                                                <div className="flex items-center justify-between sm:justify-start gap-1.5 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto">
                                                     <button
                                                         onClick={() => handleQtyChange(idx, -1)}
-                                                        className="w-12 h-12 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
+                                                        className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
                                                     >
                                                         -
                                                     </button>
@@ -1358,11 +1358,11 @@ export default function WarehousePortal({ user, onLogout }) {
                                                         value={item.actualQtyReceived || ''}
                                                         placeholder="0"
                                                         onChange={(e) => handleQtyChange(idx, 0, e.target.value)}
-                                                        className={`w-full sm:w-16 min-w-[3rem] text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`}
+                                                        className={`w-full sm:w-16 min-w-12 text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`}
                                                     />
                                                     <button
                                                         onClick={() => handleQtyChange(idx, 1)}
-                                                        className="w-12 h-12 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
+                                                        className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
                                                     >
                                                         +
                                                     </button>
@@ -1398,7 +1398,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                                     <select
                                                         value={item.reasonCode}
                                                         onChange={(e) => handleInputChange(idx, 'reasonCode', e.target.value)}
-                                                        className={`w-full sm:w-auto border text-sm font-bold rounded-lg px-3 py-2 outline-none ${isHighRisk ? 'bg-red-500 text-white border-red-600' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-400'}`}
+                                                        className={`w-full sm:w-auto min-h-11 border text-sm font-bold rounded-lg px-3 py-2 outline-none ${isHighRisk ? 'bg-red-500 text-white border-red-600' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-400'}`}
                                                     >
                                                         <option value="">⚠️ Select Shortage Reason...</option>
                                                         <option value="Missing from Truck">Missing from Truck</option>
@@ -1409,7 +1409,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                                     <div className="flex items-center justify-between w-full sm:w-auto sm:ml-auto">
                                                         <button
                                                             onClick={() => openShortagePhotoPicker(idx)}
-                                                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition-colors ${item.hasPhoto ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                                            className={`min-h-11 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition-colors ${item.hasPhoto ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                                         >
                                                             <Camera className="w-5 h-5 sm:w-4 sm:h-4 shrink-0" /> {item.hasPhoto ? 'Photo Attached' : 'Add Photo'}
                                                         </button>
@@ -1429,22 +1429,22 @@ export default function WarehousePortal({ user, onLogout }) {
                         </div>
 
                         <div
-                            className="sticky bottom-0 left-0 w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
+                            className="sticky bottom-0 left-0 w-full lg:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
                             style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
                         >
                             <button
                                 onClick={submitGRN}
-                                className="w-full py-4 text-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98]"
+                                className="w-full min-h-12 px-4 text-base sm:text-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98]"
                             >
-                                <CheckCircle2 className="w-6 h-6 shrink-0" /> Confirm Goods Received (Sign GRN)
+                                <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> Confirm Goods Received (Sign GRN)
                             </button>
                             {canClear && (
                                 <button
                                     onClick={handleClearGoods}
                                     disabled={isClearing}
-                                    className="w-full py-4 text-lg bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2 mt-3"
+                                    className="w-full min-h-12 px-4 text-base sm:text-lg bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2 mt-3"
                                 >
-                                    <CheckCircle2 className="w-6 h-6 shrink-0" />
+                                    <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
                                     {isClearing ? 'Clearing...' : 'Clear Goods for Payout'}
                                 </button>
                             )}
@@ -1452,9 +1452,9 @@ export default function WarehousePortal({ user, onLogout }) {
                                 <button
                                     onClick={handleRejectShipment}
                                     disabled={isRejecting}
-                                    className="w-full py-4 text-lg bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow-lg shadow-red-500/30 flex items-center justify-center gap-2 mt-3"
+                                    className="w-full min-h-12 px-4 text-base sm:text-lg bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow-lg shadow-red-500/30 flex items-center justify-center gap-2 mt-3"
                                 >
-                                    <AlertCircle className="w-6 h-6 shrink-0" />
+                                    <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
                                     {isRejecting ? 'Rejecting...' : 'Reject Shipment (Cancel Transaction)'}
                                 </button>
                             )}
