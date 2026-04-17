@@ -23,6 +23,7 @@ const API_BASE_URL = 'https://nestle-finance-command-production.up.railway.app/a
 const SYNC_QUEUE_STORAGE_KEY = 'grnSyncQueue';
 const OFFLINE_PO_STORAGE_KEY = 'offlinePOs';
 const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
+const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge'];
 
 // 📱 Mobile‑optimized Bottom Drawer Scanner
 const BarcodeScannerUI = ({ onScanSuccess, onClose }) => {
@@ -283,6 +284,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
     // Prevent duplicate sync calls
     const syncingRef = useRef(false);
+    const queuePersistAlertShownRef = useRef(false);
 
     const latestState = useRef({ pos, selectedPO, receivedItems });
     useEffect(() => { latestState.current = { pos, selectedPO, receivedItems }; }, [pos, selectedPO, receivedItems]);
@@ -292,9 +294,7 @@ export default function WarehousePortal({ user, onLogout }) {
         const looksTyped = typeof item === 'object' && item !== null && item.type && item.payload;
         const candidate = looksTyped ? item : { type: 'submit', payload: item };
         const rawType = String(candidate.type || 'submit').trim().toLowerCase();
-        const type = rawType === 'submit' || rawType === 'reject' || rawType === 'acknowledge'
-            ? rawType
-            : null;
+        const type = VALID_SYNC_ACTION_TYPES.includes(rawType) ? rawType : null;
         if (!type) return null;
         const payload = candidate.payload;
         if (!payload || typeof payload !== 'object') return null;
@@ -313,6 +313,37 @@ export default function WarehousePortal({ user, onLogout }) {
             return [];
         }
     }, []);
+
+    const sanitizeItemsForOfflineQueue = useCallback((items = []) => {
+        if (!Array.isArray(items)) return [];
+        return items.map((item) => {
+            if (!item || typeof item !== 'object') return item;
+            return {
+                ...item,
+                hasPhoto: Boolean(item.hasPhoto || item.photoDataUrl),
+                photoDataUrl: ''
+            };
+        });
+    }, []);
+
+    const sanitizePayloadForOfflineQueue = useCallback((payload) => {
+        if (!payload || typeof payload !== 'object') return payload;
+        if (!Array.isArray(payload.itemsReceived)) return payload;
+        return {
+            ...payload,
+            itemsReceived: sanitizeItemsForOfflineQueue(payload.itemsReceived)
+        };
+    }, [sanitizeItemsForOfflineQueue]);
+
+    const enqueueOfflineAction = useCallback((type, payload) => {
+        const safeType = VALID_SYNC_ACTION_TYPES.includes(type) ? type : null;
+        if (!safeType) {
+            console.warn(`Ignoring unsupported offline action type "${String(type)}".`);
+            return;
+        }
+        const safePayload = sanitizePayloadForOfflineQueue(payload);
+        setSyncQueue((prev) => [...prev, { type: safeType, payload: safePayload }]);
+    }, [sanitizePayloadForOfflineQueue]);
 
     useEffect(() => {
         if (isDarkMode) document.documentElement.classList.add('dark');
@@ -340,9 +371,22 @@ export default function WarehousePortal({ user, onLogout }) {
     useEffect(() => {
         if (syncQueue.length === 0) {
             localStorage.removeItem(SYNC_QUEUE_STORAGE_KEY);
+            queuePersistAlertShownRef.current = false;
             return;
         }
-        localStorage.setItem(SYNC_QUEUE_STORAGE_KEY, JSON.stringify(syncQueue));
+        try {
+            localStorage.setItem(SYNC_QUEUE_STORAGE_KEY, JSON.stringify(syncQueue));
+            queuePersistAlertShownRef.current = false;
+        } catch (error) {
+            console.error('Failed to persist offline queue to localStorage:', error);
+            if (!queuePersistAlertShownRef.current) {
+                queuePersistAlertShownRef.current = true;
+                const reason = error?.name === 'QuotaExceededError'
+                    ? 'Storage is full on this device.'
+                    : 'Browser storage is unavailable.';
+                alert(`⚠️ Offline queue could not be fully saved. ${reason} Keep the app open and reconnect to sync pending actions; closing the app before reconnect may lose unsaved actions.`);
+            }
+        }
     }, [syncQueue]);
 
     const fetchPOs = useCallback(async ({ preferCached = false } = {}) => {
@@ -393,7 +437,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
         for (const queueItem of queue) {
             const rawType = queueItem?.type;
-            if (rawType && rawType !== 'reject' && rawType !== 'submit' && rawType !== 'acknowledge') {
+            if (rawType && !VALID_SYNC_ACTION_TYPES.includes(rawType)) {
                 console.warn(`Unknown offline queue action type "${rawType}" encountered. Leaving item in queue and skipping sync for this item.`);
                 failedItems.push(queueItem);
                 continue;
@@ -710,8 +754,7 @@ export default function WarehousePortal({ user, onLogout }) {
         };
 
         if (isOffline) {
-            const newQueue = [...syncQueue, { type: 'submit', payload }];
-            setSyncQueue(newQueue);
+            enqueueOfflineAction('submit', payload);
             alert(`📡 OFFLINE MODE: GRN saved locally.\n📍 GPS Tag: ${gpsLocation}`);
             setSelectedPO(null);
             setViewMode('completed');
@@ -725,8 +768,7 @@ export default function WarehousePortal({ user, onLogout }) {
                 fetchPOs();
             } catch {
                 alert('Failed to log GRN. Saving offline.');
-                const newQueue = [...syncQueue, { type: 'submit', payload }];
-                setSyncQueue(newQueue);
+                enqueueOfflineAction('submit', payload);
                 setSelectedPO(null);
                 setViewMode('completed');
                 fetchPOs();
@@ -742,7 +784,7 @@ export default function WarehousePortal({ user, onLogout }) {
         };
 
         if (isOffline) {
-            setSyncQueue([...syncQueue, { type: 'acknowledge', payload }]);
+            enqueueOfflineAction('acknowledge', payload);
             alert('📡 OFFLINE MODE: Arrival acknowledgement saved locally and will auto-sync when online.');
             return;
         }
@@ -753,7 +795,7 @@ export default function WarehousePortal({ user, onLogout }) {
             fetchPOs();
         } catch (error) {
             console.error(error);
-            setSyncQueue([...syncQueue, { type: 'acknowledge', payload }]);
+            enqueueOfflineAction('acknowledge', payload);
             alert('Failed to acknowledge arrival online. Action saved offline and queued for sync.');
         }
     };
@@ -808,8 +850,7 @@ export default function WarehousePortal({ user, onLogout }) {
         };
 
         if (isOffline) {
-            const newQueue = [...syncQueue, { type: 'reject', payload }];
-            setSyncQueue(newQueue);
+            enqueueOfflineAction('reject', payload);
             alert('📡 OFFLINE MODE: Shipment rejection saved locally and will auto-sync when online.');
             setSelectedPO(null);
             setViewMode('completed');
@@ -826,8 +867,7 @@ export default function WarehousePortal({ user, onLogout }) {
             fetchPOs();
         } catch (error) {
             console.error(error);
-            const newQueue = [...syncQueue, { type: 'reject', payload }];
-            setSyncQueue(newQueue);
+            enqueueOfflineAction('reject', payload);
             alert('Failed to reject shipment online. Rejection saved offline and queued for sync.');
             setSelectedPO(null);
             setViewMode('completed');
