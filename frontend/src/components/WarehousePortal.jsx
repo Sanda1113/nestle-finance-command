@@ -1270,7 +1270,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-2 gap-2.5 mb-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
                                 <button
                                     onClick={() => setScanning(true)}
                                     className="min-h-12 sm:min-h-11 px-3 text-sm sm:text-sm bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
@@ -1358,7 +1358,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                                         value={item.actualQtyReceived || ''}
                                                         placeholder="0"
                                                         onChange={(e) => handleQtyChange(idx, 0, e.target.value)}
-                                                        className={`w-full sm:w-16 min-w-[3.25rem] text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`}
+                                                        className={`w-full sm:w-16 min-w-12 text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`}
                                                     />
                                                     <button
                                                         onClick={() => handleQtyChange(idx, 1)}
