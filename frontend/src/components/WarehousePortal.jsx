@@ -283,6 +283,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
     // Prevent duplicate sync calls
     const syncingRef = useRef(false);
+    const queuePersistAlertShownRef = useRef(false);
 
     const latestState = useRef({ pos, selectedPO, receivedItems });
     useEffect(() => { latestState.current = { pos, selectedPO, receivedItems }; }, [pos, selectedPO, receivedItems]);
@@ -314,6 +315,33 @@ export default function WarehousePortal({ user, onLogout }) {
         }
     }, []);
 
+    const sanitizeItemsForOfflineQueue = useCallback((items = []) => {
+        if (!Array.isArray(items)) return [];
+        return items.map((item) => {
+            if (!item || typeof item !== 'object') return item;
+            return {
+                ...item,
+                hasPhoto: Boolean(item.hasPhoto || item.photoDataUrl),
+                photoDataUrl: ''
+            };
+        });
+    }, []);
+
+    const sanitizePayloadForOfflineQueue = useCallback((payload) => {
+        if (!payload || typeof payload !== 'object') return payload;
+        if (!Array.isArray(payload.itemsReceived)) return payload;
+        return {
+            ...payload,
+            itemsReceived: sanitizeItemsForOfflineQueue(payload.itemsReceived)
+        };
+    }, [sanitizeItemsForOfflineQueue]);
+
+    const enqueueOfflineAction = useCallback((type, payload) => {
+        const safeType = type === 'reject' || type === 'acknowledge' ? type : 'submit';
+        const safePayload = sanitizePayloadForOfflineQueue(payload);
+        setSyncQueue((prev) => [...prev, { type: safeType, payload: safePayload }]);
+    }, [sanitizePayloadForOfflineQueue]);
+
     useEffect(() => {
         if (isDarkMode) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
@@ -340,9 +368,19 @@ export default function WarehousePortal({ user, onLogout }) {
     useEffect(() => {
         if (syncQueue.length === 0) {
             localStorage.removeItem(SYNC_QUEUE_STORAGE_KEY);
+            queuePersistAlertShownRef.current = false;
             return;
         }
-        localStorage.setItem(SYNC_QUEUE_STORAGE_KEY, JSON.stringify(syncQueue));
+        try {
+            localStorage.setItem(SYNC_QUEUE_STORAGE_KEY, JSON.stringify(syncQueue));
+            queuePersistAlertShownRef.current = false;
+        } catch (error) {
+            console.error('Failed to persist offline queue to localStorage:', error);
+            if (!queuePersistAlertShownRef.current) {
+                queuePersistAlertShownRef.current = true;
+                alert('⚠️ Offline queue could not be fully saved on this device. Keep the app open until reconnection so queued actions can sync.');
+            }
+        }
     }, [syncQueue]);
 
     const fetchPOs = useCallback(async ({ preferCached = false } = {}) => {
@@ -710,8 +748,7 @@ export default function WarehousePortal({ user, onLogout }) {
         };
 
         if (isOffline) {
-            const newQueue = [...syncQueue, { type: 'submit', payload }];
-            setSyncQueue(newQueue);
+            enqueueOfflineAction('submit', payload);
             alert(`📡 OFFLINE MODE: GRN saved locally.\n📍 GPS Tag: ${gpsLocation}`);
             setSelectedPO(null);
             setViewMode('completed');
@@ -725,8 +762,7 @@ export default function WarehousePortal({ user, onLogout }) {
                 fetchPOs();
             } catch {
                 alert('Failed to log GRN. Saving offline.');
-                const newQueue = [...syncQueue, { type: 'submit', payload }];
-                setSyncQueue(newQueue);
+                enqueueOfflineAction('submit', payload);
                 setSelectedPO(null);
                 setViewMode('completed');
                 fetchPOs();
@@ -742,7 +778,7 @@ export default function WarehousePortal({ user, onLogout }) {
         };
 
         if (isOffline) {
-            setSyncQueue([...syncQueue, { type: 'acknowledge', payload }]);
+            enqueueOfflineAction('acknowledge', payload);
             alert('📡 OFFLINE MODE: Arrival acknowledgement saved locally and will auto-sync when online.');
             return;
         }
@@ -753,7 +789,7 @@ export default function WarehousePortal({ user, onLogout }) {
             fetchPOs();
         } catch (error) {
             console.error(error);
-            setSyncQueue([...syncQueue, { type: 'acknowledge', payload }]);
+            enqueueOfflineAction('acknowledge', payload);
             alert('Failed to acknowledge arrival online. Action saved offline and queued for sync.');
         }
     };
@@ -808,8 +844,7 @@ export default function WarehousePortal({ user, onLogout }) {
         };
 
         if (isOffline) {
-            const newQueue = [...syncQueue, { type: 'reject', payload }];
-            setSyncQueue(newQueue);
+            enqueueOfflineAction('reject', payload);
             alert('📡 OFFLINE MODE: Shipment rejection saved locally and will auto-sync when online.');
             setSelectedPO(null);
             setViewMode('completed');
@@ -826,8 +861,7 @@ export default function WarehousePortal({ user, onLogout }) {
             fetchPOs();
         } catch (error) {
             console.error(error);
-            const newQueue = [...syncQueue, { type: 'reject', payload }];
-            setSyncQueue(newQueue);
+            enqueueOfflineAction('reject', payload);
             alert('Failed to reject shipment online. Rejection saved offline and queued for sync.');
             setSelectedPO(null);
             setViewMode('completed');
