@@ -337,7 +337,13 @@ export default function WarehousePortal({ user, onLogout }) {
     }, [sanitizeItemsForOfflineQueue]);
 
     const enqueueOfflineAction = useCallback((type, payload) => {
-        const safeType = type === 'reject' || type === 'acknowledge' ? type : 'submit';
+        const safeType = type === 'submit' || type === 'reject' || type === 'acknowledge'
+            ? type
+            : null;
+        if (!safeType) {
+            console.warn(`Ignoring unsupported offline action type "${String(type)}".`);
+            return;
+        }
         const safePayload = sanitizePayloadForOfflineQueue(payload);
         setSyncQueue((prev) => [...prev, { type: safeType, payload: safePayload }]);
     }, [sanitizePayloadForOfflineQueue]);
@@ -378,7 +384,10 @@ export default function WarehousePortal({ user, onLogout }) {
             console.error('Failed to persist offline queue to localStorage:', error);
             if (!queuePersistAlertShownRef.current) {
                 queuePersistAlertShownRef.current = true;
-                alert('⚠️ Offline queue could not be fully saved on this device. Keep the app open until reconnection so queued actions can sync.');
+                const reason = error?.name === 'QuotaExceededError'
+                    ? 'Storage is full on this device.'
+                    : 'Browser storage is unavailable.';
+                alert(`⚠️ Offline queue could not be fully saved. ${reason} Keep the app open and reconnect to sync pending actions.`);
             }
         }
     }, [syncQueue]);
