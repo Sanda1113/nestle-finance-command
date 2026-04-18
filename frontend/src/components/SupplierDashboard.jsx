@@ -947,7 +947,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                                     userRole="Supplier"
                                                                     userEmail={user.email}
                                                                     contextData={{
-                                                                        status: tx.po.status || 'Active',
+                                                                        status: tx.po?.status || 'Active',
                                                                         type: 'Purchase Order Timeline'
                                                                     }}
                                                                 />

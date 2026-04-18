@@ -84,6 +84,18 @@ describe('Sprint2 Routes', () => {
         expect(res.body.data[0].po_data.warehouse_grn.shortageEvidence[0].photoDataUrl).toBe('');
     });
 
+    test('GET /api/sprint2/grn/pending-pos uses lean selection for non-warehouse scope', async () => {
+        jest.clearAllMocks();
+        const supabase = require('../db');
+        const mockQuery = supabase.from();
+
+        const res = await request(app).get('/api/sprint2/grn/pending-pos?includePhotos=false');
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(mockQuery.select).toHaveBeenCalledWith('id, po_number, supplier_email, status, created_at, total_amount');
+        expect(mockQuery.order).toHaveBeenCalledWith('id', { ascending: false });
+    });
+
     test('POST /api/sprint2/grn/reject rejects shortage shipment and cancels transaction', async () => {
         const res = await request(app)
             .post('/api/sprint2/grn/reject')

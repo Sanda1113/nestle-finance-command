@@ -519,15 +519,19 @@ router.get('/grn/pending-pos', async (req, res) => {
     try {
         const scope = String(req.query.scope || '').trim().toLowerCase();
         const includePhotos = req.query.includePhotos !== 'false';
+        const isWarehouseScope = scope === 'warehouse';
+        const selectFields = isWarehouseScope
+            ? 'id, po_number, supplier_email, status, created_at, po_data, total_amount'
+            : 'id, po_number, supplier_email, status, created_at, total_amount';
 
         let query = supabase
             .from('purchase_orders')
-            .select('id, po_number, supplier_email, status, created_at, po_data, total_amount')
-            .not('po_data', 'is', null)
-            .order('created_at', { ascending: false });
+            .select(selectFields)
+            .order('id', { ascending: false });
 
-        if (scope === 'warehouse') {
+        if (isWarehouseScope) {
             query = query
+                .not('po_data', 'is', null)
                 .in('status', [
                     'Delivered to Dock',
                     'Pending Warehouse GRN',
