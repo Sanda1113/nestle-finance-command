@@ -8,7 +8,7 @@ const POLL_INTERVAL_MS = 5000;
 const MAX_BACKOFF_MS = 60000;
 const REQUEST_TIMEOUT_MS = 10000;
 
-export default function AppNotifier({ role }) {
+export default function AppNotifier({ role, email }) {
     const [toasts, setToasts] = useState([]);
     const processedIds = useRef(new Set()); // Track IDs already shown
     const isInitialLoad = useRef(true); // Skip toasts on first fetch to prevent login spam
@@ -37,8 +37,10 @@ export default function AppNotifier({ role }) {
             }, targetDelay);
         };
         try {
+            const params = { role, _ts: Date.now() };
+            if (email) params.email = email;
             const res = await axios.get(`https://nestle-finance-command-production.up.railway.app/api/sprint2/notifications`, {
-                params: { role, _ts: Date.now() },
+                params,
                 timeout: REQUEST_TIMEOUT_MS,
                 headers: {
                     'Cache-Control': 'no-cache',
@@ -55,9 +57,6 @@ export default function AppNotifier({ role }) {
                 trulyNew.forEach(n => processedIds.current.add(n.id));
 
                 if (trulyNew.length > 0) {
-                    const idsToMark = trulyNew.map(n => n.id);
-                    await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/notifications/mark-read', { ids: idsToMark });
-
                     // On initial load, silently consume existing notifications to prevent spam on login
                     if (!isInitialLoad.current && isMountedRef.current) {
                         safePlayAudio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
