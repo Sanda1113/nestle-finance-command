@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User, FileText, Clock, DollarSign, Search } from 'lucide-react';
@@ -24,6 +24,10 @@ const safeParse = (val) => {
     const cleanStr = String(val).replace(/[^0-9.-]+/g, "");
     return parseFloat(cleanStr) || 0;
 };
+
+const DASHBOARD_POLL_INTERVAL_MS = 5000;
+const DASHBOARD_FETCH_TIMEOUT_MS = 15000;
+const DASHBOARD_IMMEDIATE_REFRESH_DEBOUNCE_MS = 800;
 
 const handlePrintDocument = (docType, docData) => {
     if (!docData) return alert("Document data not available.");
@@ -221,19 +225,33 @@ function ProcurementPortal({ user }) {
     const [supplierFilter, setSupplierFilter] = useState('All');
     const [processingBoqs, setProcessingBoqs] = useState({});
     const [expandedChat, setExpandedChat] = useState(null);
+    const isFetchingBoqsRef = useRef(false);
+    const lastImmediateRefreshAtRef = useRef(0);
 
-    const fetchBoqs = async (showLoading = true) => {
+    const fetchBoqs = useCallback(async (showLoading = true) => {
+        if (isFetchingBoqsRef.current) return;
+        isFetchingBoqsRef.current = true;
         if (showLoading) setLoading(true);
         try {
-            const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/boqs');
+            const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/boqs', {
+                params: { _ts: Date.now() },
+                timeout: DASHBOARD_FETCH_TIMEOUT_MS,
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    Pragma: 'no-cache'
+                }
+            });
             setBoqs(res.data.data || []);
-        } catch (err) { console.error(err); }
-        finally { if (showLoading) setLoading(false); }
-    };
+        } catch { /* ignore transient polling errors */ }
+        finally {
+            if (showLoading) setLoading(false);
+            isFetchingBoqsRef.current = false;
+        }
+    }, []);
 
     useEffect(() => {
         fetchBoqs(true);
-        const interval = setInterval(() => fetchBoqs(false), 5000);
+        const interval = setInterval(() => fetchBoqs(false), DASHBOARD_POLL_INTERVAL_MS);
 
         const handleSync = () => fetchBoqs(false);
         window.addEventListener('force-sync', handleSync);
@@ -242,7 +260,30 @@ function ProcurementPortal({ user }) {
             clearInterval(interval);
             window.removeEventListener('force-sync', handleSync);
         };
-    }, []);
+    }, [fetchBoqs]);
+
+    useEffect(() => {
+        const shouldRefreshImmediately = () => {
+            if (document.hidden) return false;
+            const now = Date.now();
+            if ((now - lastImmediateRefreshAtRef.current) <= DASHBOARD_IMMEDIATE_REFRESH_DEBOUNCE_MS) return false;
+            lastImmediateRefreshAtRef.current = now;
+            return true;
+        };
+
+        const refreshImmediately = () => {
+            if (shouldRefreshImmediately()) {
+                fetchBoqs(false);
+            }
+        };
+
+        window.addEventListener('focus', refreshImmediately);
+        document.addEventListener('visibilitychange', refreshImmediately);
+        return () => {
+            window.removeEventListener('focus', refreshImmediately);
+            document.removeEventListener('visibilitychange', refreshImmediately);
+        };
+    }, [fetchBoqs]);
 
     const generatePO = async (id) => {
         setProcessingBoqs(prev => ({ ...prev, [id]: true }));
@@ -449,29 +490,56 @@ function FinancePortal({ user }) {
     const [reviewSearchTerm, setReviewSearchTerm] = useState('');
     const [expandedRow, setExpandedRow] = useState(null);
     const [actionedRecords, setActionedRecords] = useState({});
+    const isFetchingDataRef = useRef(false);
+    const lastImmediateRefreshAtRef = useRef(0);
 
-    const fetchData = async (showLoading = true) => {
+    const fetchData = useCallback(async (showLoading = true) => {
+        if (isFetchingDataRef.current) return;
+        isFetchingDataRef.current = true;
         if (showLoading) setLoading(true);
         try {
             const [recRes, boqRes, poRes] = await Promise.all([
-                axios.get('https://nestle-finance-command-production.up.railway.app/api/reconciliations'),
-                axios.get('https://nestle-finance-command-production.up.railway.app/api/boqs'),
+                axios.get('https://nestle-finance-command-production.up.railway.app/api/reconciliations', {
+                    params: { _ts: Date.now() },
+                    timeout: DASHBOARD_FETCH_TIMEOUT_MS,
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        Pragma: 'no-cache'
+                    }
+                }),
+                axios.get('https://nestle-finance-command-production.up.railway.app/api/boqs', {
+                    params: { _ts: Date.now() },
+                    timeout: DASHBOARD_FETCH_TIMEOUT_MS,
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        Pragma: 'no-cache'
+                    }
+                }),
                 axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/pending-pos', {
                     params: {
-                        includePhotos: true
+                        includePhotos: true,
+                        _ts: Date.now()
+                    },
+                    timeout: DASHBOARD_FETCH_TIMEOUT_MS,
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        Pragma: 'no-cache'
                     }
                 })
             ]);
             setRecords(recRes.data.data || []);
             setBoqs(boqRes.data.data || []);
             setPOs(poRes.data.data || []);
-        } catch (err) { console.error(err); }
-        finally { if (showLoading) setLoading(false); }
-    };
+        } catch { /* ignore transient polling errors */ }
+        finally {
+            if (showLoading) setLoading(false);
+            isFetchingDataRef.current = false;
+        }
+    }, []);
 
     useEffect(() => {
         fetchData(true);
-        const interval = setInterval(() => fetchData(false), 5000);
+        const interval = setInterval(() => fetchData(false), DASHBOARD_POLL_INTERVAL_MS);
 
         const handleSync = () => fetchData(false);
         window.addEventListener('force-sync', handleSync);
@@ -480,7 +548,30 @@ function FinancePortal({ user }) {
             clearInterval(interval);
             window.removeEventListener('force-sync', handleSync);
         };
-    }, []);
+    }, [fetchData]);
+
+    useEffect(() => {
+        const shouldRefreshImmediately = () => {
+            if (document.hidden) return false;
+            const now = Date.now();
+            if ((now - lastImmediateRefreshAtRef.current) <= DASHBOARD_IMMEDIATE_REFRESH_DEBOUNCE_MS) return false;
+            lastImmediateRefreshAtRef.current = now;
+            return true;
+        };
+
+        const refreshImmediately = () => {
+            if (shouldRefreshImmediately()) {
+                fetchData(false);
+            }
+        };
+
+        window.addEventListener('focus', refreshImmediately);
+        document.addEventListener('visibilitychange', refreshImmediately);
+        return () => {
+            window.removeEventListener('focus', refreshImmediately);
+            document.removeEventListener('visibilitychange', refreshImmediately);
+        };
+    }, [fetchData]);
 
     const handleManualOverride = async (id, decision) => {
         const confirmMsg = decision === 'Approved'
@@ -744,26 +835,69 @@ function AnalyticsPortal() {
     const [stats, setStats] = useState({ total: 0, approved: 0, rejected: 0, value: 0 });
     const [allRecords, setAllRecords] = useState([]);
     const [loading, setLoading] = useState(true);
+    const isFetchingRef = useRef(false);
+    const lastImmediateRefreshAtRef = useRef(0);
+
+    const fetchData = useCallback(async (showLoading = true) => {
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
+        if (showLoading) setLoading(true);
+        try {
+            const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/reconciliations', {
+                params: { _ts: Date.now() },
+                timeout: DASHBOARD_FETCH_TIMEOUT_MS,
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    Pragma: 'no-cache'
+                }
+            });
+            const data = res.data.data || [];
+            setAllRecords(data);
+            const approved = data.filter(r => r.match_status === 'Approved').length;
+            const rejected = data.filter(r => r.match_status && r.match_status.includes('Reject')).length;
+            const totalValue = data.reduce((acc, curr) => acc + (Number(curr.invoice_total) || 0), 0);
+            setStats({ total: data.length, approved, rejected, value: totalValue });
+        } catch { /* ignore transient polling errors */ }
+        finally {
+            if (showLoading) setLoading(false);
+            isFetchingRef.current = false;
+        }
+    }, []);
 
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/reconciliations');
-                const data = res.data.data || [];
-                setAllRecords(data);
-                const approved = data.filter(r => r.match_status === 'Approved').length;
-                const rejected = data.filter(r => r.match_status && r.match_status.includes('Reject')).length;
-                const totalValue = data.reduce((acc, curr) => acc + (Number(curr.invoice_total) || 0), 0);
-                setStats({ total: data.length, approved, rejected, value: totalValue });
-            } catch (err) { console.error(err); } finally { setLoading(false); }
-        };
-        fetchData();
+        fetchData(true);
+        const interval = setInterval(() => fetchData(false), DASHBOARD_POLL_INTERVAL_MS);
 
-        const handleSync = () => fetchData();
+        const handleSync = () => fetchData(false);
         window.addEventListener('force-sync', handleSync);
-        return () => window.removeEventListener('force-sync', handleSync);
-    }, []);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('force-sync', handleSync);
+        };
+    }, [fetchData]);
+
+    useEffect(() => {
+        const shouldRefreshImmediately = () => {
+            if (document.hidden) return false;
+            const now = Date.now();
+            if ((now - lastImmediateRefreshAtRef.current) <= DASHBOARD_IMMEDIATE_REFRESH_DEBOUNCE_MS) return false;
+            lastImmediateRefreshAtRef.current = now;
+            return true;
+        };
+
+        const refreshImmediately = () => {
+            if (shouldRefreshImmediately()) {
+                fetchData(false);
+            }
+        };
+
+        window.addEventListener('focus', refreshImmediately);
+        document.addEventListener('visibilitychange', refreshImmediately);
+        return () => {
+            window.removeEventListener('focus', refreshImmediately);
+            document.removeEventListener('visibilitychange', refreshImmediately);
+        };
+    }, [fetchData]);
 
     const pieData = [
         { name: 'Approved', value: stats.approved },
