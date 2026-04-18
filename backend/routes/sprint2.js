@@ -6,6 +6,7 @@ const { sendSupplierEmail } = require('../mailer');
 const router = express.Router();
 const WAREHOUSE_SCOPE_MAX_RECORDS = 250;
 const DEFAULT_PENDING_POS_MAX_RECORDS = 500;
+const PENDING_POS_WITH_PHOTOS_MAX_RECORDS = 120;
 
 // Helper to generate Shipment ID (same as frontend)
 const getShipmentId = (poNum) => {
@@ -75,6 +76,14 @@ const escapeHtml = (value = '') => String(value)
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+
+const runBackgroundTask = (label, task) => {
+    Promise.resolve()
+        .then(task)
+        .catch((error) => {
+            console.error('Background task failed', { label, error });
+        });
+};
 
 // ==========================================
 // 🔔 NOTIFICATION ENDPOINTS
@@ -212,59 +221,67 @@ router.post('/grn/acknowledge', async (req, res) => {
     const { poNumber, ackedBy } = req.body;
     try {
         const shipmentId = getShipmentId(poNumber);
-        
+
         const { error: updateErr } = await supabase
             .from('purchase_orders')
             .update({ status: 'Truck at Bay - Pending Unload' })
             .eq('po_number', poNumber);
-        
+
         if (updateErr) throw updateErr;
 
-        const { data: po } = await supabase
-            .from('purchase_orders')
-            .select('supplier_email, total_amount')
-            .eq('po_number', poNumber)
-            .single();
-
-        if (po?.supplier_email) {
-            // Notify Supplier
-            await supabase.from('notifications').insert([{
-                user_email: po.supplier_email,
-                user_role: 'Supplier',
-                title: '🚚 Shipment Acknowledged',
-                message: `Warehouse has acknowledged arrival for Shipment ${shipmentId}.`,
-                link: `/logs?po=${poNumber}`,
-                is_read: false
-            }]);
-
-            // Detailed email
-            const detailedEmailBody = `
-                <p>Hello,</p>
-                <p>This is an automated confirmation that the Nestlé Warehouse team has successfully acknowledged the arrival of your transport vehicle at the delivery bay.</p>
-                <p><strong>Shipment Reference:</strong> ${shipmentId}</p>
-                <p><strong>Purchase Order:</strong> ${poNumber}</p>
-                <p>Your goods will now be systematically unloaded and inspected. Our warehouse staff will proceed to rigorously scan the delivered pallets to generate the official <strong>Goods Receipt Note (GRN)</strong>.</p>
-                <p>Once the goods have been fully inspected and the GRN is locked, you will receive another notification detailing the exact quantities received, including any detected shortages or discrepancies. You can monitor the real-time status of this shipment in your Supplier Dashboard.</p>
-            `;
-
-            await sendSupplierEmail(
-                po.supplier_email,
-                `Shipment Arrival Acknowledged – ${shipmentId}`,
-                detailedEmailBody,
-                { poNumber: poNumber, invoiceNumber: shipmentId, amount: po.total_amount, currency: 'USD' }
-            );
-        }
-
-        // Notify Finance
-        await supabase.from('notifications').insert([{
-            user_role: 'Finance',
-            title: '🚚 Shipment at Bay',
-            message: `Shipment ${shipmentId} (PO: ${poNumber}) has arrived at the dock and is pending GRN scan.`,
-            link: `/finance?search=${poNumber}`,
-            is_read: false
-        }]);
-
         res.json({ success: true });
+
+        runBackgroundTask(`acknowledge:${poNumber}`, async () => {
+            const { data: po, error: poErr } = await supabase
+                .from('purchase_orders')
+                .select('supplier_email, total_amount')
+                .eq('po_number', poNumber)
+                .single();
+            if (poErr) throw poErr;
+
+            const sideEffects = [
+                supabase.from('notifications').insert([{
+                    user_role: 'Finance',
+                    title: '🚚 Shipment at Bay',
+                    message: `Shipment ${shipmentId} (PO: ${poNumber}) has arrived at the dock and is pending GRN scan.`,
+                    link: `/finance?search=${poNumber}`,
+                    is_read: false
+                }])
+            ];
+
+            if (po?.supplier_email) {
+                sideEffects.push(
+                    supabase.from('notifications').insert([{
+                        user_email: po.supplier_email,
+                        user_role: 'Supplier',
+                        title: '🚚 Shipment Acknowledged',
+                        message: `Warehouse has acknowledged arrival for Shipment ${shipmentId}.`,
+                        link: `/logs?po=${poNumber}`,
+                        is_read: false
+                    }])
+                );
+
+                const detailedEmailBody = `
+                    <p>Hello,</p>
+                    <p>This is an automated confirmation that the Nestlé Warehouse team has successfully acknowledged the arrival of your transport vehicle at the delivery bay.</p>
+                    <p><strong>Shipment Reference:</strong> ${shipmentId}</p>
+                    <p><strong>Purchase Order:</strong> ${poNumber}</p>
+                    <p>Your goods will now be systematically unloaded and inspected. Our warehouse staff will proceed to rigorously scan the delivered pallets to generate the official <strong>Goods Receipt Note (GRN)</strong>.</p>
+                    <p>Once the goods have been fully inspected and the GRN is locked, you will receive another notification detailing the exact quantities received, including any detected shortages or discrepancies. You can monitor the real-time status of this shipment in your Supplier Dashboard.</p>
+                `;
+
+                sideEffects.push(
+                    sendSupplierEmail(
+                        po.supplier_email,
+                        `Shipment Arrival Acknowledged – ${shipmentId}`,
+                        detailedEmailBody,
+                        { poNumber: poNumber, invoiceNumber: shipmentId, amount: po.total_amount, currency: 'USD' }
+                    )
+                );
+            }
+
+            await Promise.allSettled(sideEffects);
+        });
     } catch (error) {
         console.error('Failed to acknowledge:', error);
         res.status(500).json({ error: 'Failed' });
@@ -276,6 +293,9 @@ router.post('/grn/acknowledge', async (req, res) => {
 // ==========================================
 router.post('/grn/submit', async (req, res) => {
     const { poNumber, receivedBy, itemsReceived, totalReceivedAmount, isPartial, gpsLocation } = req.body;
+    if (!Array.isArray(itemsReceived) || itemsReceived.length === 0) {
+        return res.status(400).json({ error: 'Invalid request: itemsReceived is required and must contain at least one item' });
+    }
     try {
         const { error: grnErr } = await supabase.from('grns').insert([
             {
@@ -290,7 +310,7 @@ router.post('/grn/submit', async (req, res) => {
         const newStatus = isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)';
 
         const shortageEvidence = buildShortageEvidence(
-            (itemsReceived || []).filter(item => item?.status === 'Shortage' || toSafeNumber(item?.actualQtyReceived) < toSafeNumber(item?.qty))
+            itemsReceived.filter(item => item?.status === 'Shortage' || toSafeNumber(item?.actualQtyReceived) < toSafeNumber(item?.qty))
         );
         const { data: poContext } = await supabase
             .from('purchase_orders')
@@ -306,7 +326,7 @@ router.post('/grn/submit', async (req, res) => {
                 totalReceivedAmount: toSafeNumber(totalReceivedAmount),
                 isPartial: Boolean(isPartial),
                 gpsLocation: gpsLocation || 'Location Unavailable',
-                itemsReceived: Array.isArray(itemsReceived) ? itemsReceived : [],
+                itemsReceived,
                 shortageEvidence
             }
         };
@@ -316,51 +336,61 @@ router.post('/grn/submit', async (req, res) => {
         const shortageCount = shortageEvidence.length;
         const photoEvidenceCount = shortageEvidence.filter(item => item.photoDataUrl).length;
 
-        await supabase.from('notifications').insert([
-            {
-                user_role: 'Finance',
-                title: '✅ GRN Completed',
-                message: `Warehouse finished scanning ${poNumber}. ${shortageCount > 0 ? `${shortageCount} shortage item(s) flagged${photoEvidenceCount > 0 ? ` with ${photoEvidenceCount} photo evidence attachment(s)` : ''}. ` : ''}Ready for final payout validation.`,
-                link: `/finance?recon=${poNumber}`,
-                is_read: false
-            }
-        ]);
-
-        if (poContext?.supplier_email) {
-            await supabase.from('notifications').insert([
-                {
-                    user_email: poContext.supplier_email,
-                    user_role: 'Supplier',
-                    title: '📦 Goods Received',
-                    message: `The warehouse has successfully scanned and received your goods for shipment ${getShipmentId(poNumber)}.`,
-                    link: `/logs?po=${poNumber}`,
-                    is_read: false
-                }
-            ]);
-
-            // Build detailed items summary
-            const itemsSummary = itemsReceived.map(item =>
-                `<li><strong>${item.description}</strong>: ${item.actualQtyReceived} of ${item.qty} units received (${item.status || 'Full Match'})</li>`
-            ).join('');
-
-            const emailBody = `
-                <p>The Nestlé Warehouse has successfully scanned and received your goods for shipment <strong>${getShipmentId(poNumber)}</strong> (PO: ${poNumber}).</p>
-                <p><strong>Receipt Summary:</strong></p>
-                <ul style="margin-left: 20px; padding-left: 0;">${itemsSummary}</ul>
-                <p><strong>Status:</strong> ${newStatus}</p>
-                <p><strong>Total Received Value:</strong> ${formatCurrency(totalReceivedAmount)}</p>
-                <p>Payment will be processed according to Net-30 terms from the date of receipt. You can track the full lifecycle in your Supplier Dashboard.</p>
-            `;
-
-            await sendSupplierEmail(
-                poContext.supplier_email,
-                `Goods Received – ${getShipmentId(poNumber)}`,
-                emailBody,
-                { poNumber, amount: totalReceivedAmount, currency: 'USD' }
-            );
-        }
-
         res.json({ success: true, message: 'GRN Logged Successfully.', gpsLocation });
+
+        runBackgroundTask(`submit:${poNumber}`, async () => {
+            const shipmentId = getShipmentId(poNumber);
+            const sideEffects = [
+                supabase.from('notifications').insert([
+                    {
+                        user_role: 'Finance',
+                        title: '✅ GRN Completed',
+                        message: `Warehouse finished scanning ${poNumber}. ${shortageCount > 0 ? `${shortageCount} shortage item(s) flagged${photoEvidenceCount > 0 ? ` with ${photoEvidenceCount} photo evidence attachment(s)` : ''}. ` : ''}Ready for final payout validation.`,
+                        link: `/finance?recon=${poNumber}`,
+                        is_read: false
+                    }
+                ])
+            ];
+
+            if (poContext?.supplier_email) {
+                sideEffects.push(
+                    supabase.from('notifications').insert([
+                        {
+                            user_email: poContext.supplier_email,
+                            user_role: 'Supplier',
+                            title: '📦 Goods Received',
+                            message: `The warehouse has successfully scanned and received your goods for shipment ${shipmentId}.`,
+                            link: `/logs?po=${poNumber}`,
+                            is_read: false
+                        }
+                    ])
+                );
+
+                const itemsSummary = itemsReceived.map(item =>
+                    `<li><strong>${item.description}</strong>: ${item.actualQtyReceived} of ${item.qty} units received (${item.status || 'Full Match'})</li>`
+                ).join('');
+
+                const emailBody = `
+                    <p>The Nestlé Warehouse has successfully scanned and received your goods for shipment <strong>${shipmentId}</strong> (PO: ${poNumber}).</p>
+                    <p><strong>Receipt Summary:</strong></p>
+                    <ul style="margin-left: 20px; padding-left: 0;">${itemsSummary}</ul>
+                    <p><strong>Status:</strong> ${newStatus}</p>
+                    <p><strong>Total Received Value:</strong> ${formatCurrency(totalReceivedAmount)}</p>
+                    <p>Payment will be processed according to Net-30 terms from the date of receipt. You can track the full lifecycle in your Supplier Dashboard.</p>
+                `;
+
+                sideEffects.push(
+                    sendSupplierEmail(
+                        poContext.supplier_email,
+                        `Goods Received – ${shipmentId}`,
+                        emailBody,
+                        { poNumber, amount: totalReceivedAmount, currency: 'USD' }
+                    )
+                );
+            }
+
+            await Promise.allSettled(sideEffects);
+        });
     } catch (error) {
         console.error('GRN submission failed:', error);
         res.status(500).json({ error: 'Failed to log GRN' });
@@ -451,64 +481,58 @@ router.post('/grn/reject', async (req, res) => {
             console.error('Unexpected reconciliation error during shipment rejection:', reconErr);
         }
 
-        try {
-            await supabase.from('disputes').insert([{
-                reference_number: poNumber,
-                sender_email: rejectedBy,
-                sender_role: 'Warehouse',
-                message: `WAREHOUSE REJECTION: Shipment ${shipmentId} rejected due to shortage. ${rejectionReason ? `Reason: ${rejectionReason}. ` : ''}Short items: ${shortageSummary}. Transaction canceled.`
-            }]);
-        } catch (disputeErr) {
-            console.error('Failed to log warehouse rejection dispute:', disputeErr);
-        }
+        res.json({ success: true, message: 'Shipment rejected and transaction canceled.' });
 
-        try {
-            await supabase.from('notifications').insert([{
-                user_role: 'Finance',
-                title: '❌ Shipment Rejected by Warehouse',
-                message: `Shipment ${shipmentId} (${poNumber}) was rejected for shortage. Updated quantities and photo evidence are available in the finance review context.`,
-                link: `/finance?recon=${poNumber}`,
-                is_read: false
-            }]);
-        } catch (financeNotifErr) {
-            console.error('Failed to create finance rejection notification:', financeNotifErr);
-        }
-
-        if (poContext?.supplier_email) {
-            try {
-                await supabase.from('notifications').insert([{
-                    user_email: poContext.supplier_email,
-                    user_role: 'Supplier',
-                    title: '❌ Shipment Rejected',
-                    message: `Shipment ${shipmentId} was rejected by warehouse due to shortages. Transaction canceled.`,
-                    link: `/logs?po=${poNumber}`,
+        runBackgroundTask(`reject:${poNumber}`, async () => {
+            const sideEffects = [
+                supabase.from('disputes').insert([{
+                    reference_number: poNumber,
+                    sender_email: rejectedBy,
+                    sender_role: 'Warehouse',
+                    message: `WAREHOUSE REJECTION: Shipment ${shipmentId} rejected due to shortage. ${rejectionReason ? `Reason: ${rejectionReason}. ` : ''}Short items: ${shortageSummary}. Transaction canceled.`
+                }]),
+                supabase.from('notifications').insert([{
+                    user_role: 'Finance',
+                    title: '❌ Shipment Rejected by Warehouse',
+                    message: `Shipment ${shipmentId} (${poNumber}) was rejected for shortage. Updated quantities and photo evidence are available in the finance review context.`,
+                    link: `/finance?recon=${poNumber}`,
                     is_read: false
-                }]);
-            } catch (supplierNotifErr) {
-                console.error('Failed to create supplier rejection notification:', supplierNotifErr);
-            }
+                }])
+            ];
 
-            const emailBody = `
-                <p>Your shipment <strong>${shipmentId}</strong> (PO: ${poNumber}) has been <strong>rejected by the warehouse</strong> due to a goods shortage.</p>
-                <p><strong>Transaction Status:</strong> Canceled</p>
-                ${rejectionReason ? `<p><strong>Reason:</strong> ${rejectionReason}</p>` : ''}
-                <p><strong>Shortage Summary:</strong> ${shortageSummary}</p>
-                <p>Please coordinate with the procurement/finance teams for next steps.</p>
-            `;
-
-            try {
-                await sendSupplierEmail(
-                    poContext.supplier_email,
-                    `Shipment Rejected – ${shipmentId}`,
-                    emailBody,
-                    { poNumber, amount: poContext.total_amount, currency: 'USD' }
+            if (poContext?.supplier_email) {
+                sideEffects.push(
+                    supabase.from('notifications').insert([{
+                        user_email: poContext.supplier_email,
+                        user_role: 'Supplier',
+                        title: '❌ Shipment Rejected',
+                        message: `Shipment ${shipmentId} was rejected by warehouse due to shortages. Transaction canceled.`,
+                        link: `/logs?po=${poNumber}`,
+                        is_read: false
+                    }])
                 );
-            } catch (supplierEmailErr) {
-                console.error('Failed to send supplier rejection email:', supplierEmailErr);
-            }
-        }
 
-        return res.json({ success: true, message: 'Shipment rejected and transaction canceled.' });
+                const emailBody = `
+                    <p>Your shipment <strong>${shipmentId}</strong> (PO: ${poNumber}) has been <strong>rejected by the warehouse</strong> due to a goods shortage.</p>
+                    <p><strong>Transaction Status:</strong> Canceled</p>
+                    ${rejectionReason ? `<p><strong>Reason:</strong> ${rejectionReason}</p>` : ''}
+                    <p><strong>Shortage Summary:</strong> ${shortageSummary}</p>
+                    <p>Please coordinate with the procurement/finance teams for next steps.</p>
+                `;
+
+                sideEffects.push(
+                    sendSupplierEmail(
+                        poContext.supplier_email,
+                        `Shipment Rejected – ${shipmentId}`,
+                        emailBody,
+                        { poNumber, amount: poContext.total_amount, currency: 'USD' }
+                    )
+                );
+            }
+
+            await Promise.allSettled(sideEffects);
+        });
+
     } catch (error) {
         console.error('Failed to reject shipment:', error);
         return res.status(500).json({ error: 'Failed to reject shipment' });
@@ -518,7 +542,8 @@ router.post('/grn/reject', async (req, res) => {
 router.get('/grn/pending-pos', async (req, res) => {
     try {
         const scope = String(req.query.scope || '').trim().toLowerCase();
-        const includePhotos = req.query.includePhotos !== 'false';
+        const includePhotosRaw = String(req.query.includePhotos || '').trim().toLowerCase();
+        const includePhotos = includePhotosRaw === 'true' || includePhotosRaw === '1' || includePhotosRaw === 'yes';
         const isWarehouseScope = scope === 'warehouse';
         const selectFields = (isWarehouseScope || includePhotos)
             ? 'id, po_number, supplier_email, status, created_at, po_data, total_amount'
@@ -542,6 +567,10 @@ router.get('/grn/pending-pos', async (req, res) => {
                 ])
                 .order('id', { ascending: false })
                 .limit(WAREHOUSE_SCOPE_MAX_RECORDS);
+        } else if (includePhotos) {
+            query = query
+                .order('created_at', { ascending: false })
+                .limit(PENDING_POS_WITH_PHOTOS_MAX_RECORDS);
         } else {
             query = query
                 .order('created_at', { ascending: false })
