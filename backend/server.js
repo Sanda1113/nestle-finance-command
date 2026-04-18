@@ -826,6 +826,11 @@ app.get('/api/supplier/pos/:email', async (req, res) => {
                 includePoData: false
             }));
         }
+        const { data, error } = await supabase
+            .from('purchase_orders')
+            .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email')
+            .eq('supplier_email', email)
+            .order('id', { ascending: false });
         if (error) throw error;
         const responseData = (data || []).map(item => ({
             id: item.id,

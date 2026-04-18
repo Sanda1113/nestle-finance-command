@@ -557,6 +557,33 @@ router.get('/grn/pending-pos', async (req, res) => {
         if (error?.code === '57014') {
             console.warn(`⚠️ pending-pos query timed out for scope=${scope || 'default'}. Retrying with limit=${timeoutFallbackLimit}.`);
             ({ data, error } = await buildPendingPOsQuery(timeoutFallbackLimit));
+        const isWarehouseScope = scope === 'warehouse';
+        const selectFields = isWarehouseScope
+            ? 'id, po_number, supplier_email, status, created_at, po_data, total_amount'
+            : 'id, po_number, supplier_email, status, created_at, total_amount';
+
+        let query = supabase
+            .from('purchase_orders')
+            .select(selectFields)
+            .not('po_data', 'is', null);
+
+        if (isWarehouseScope) {
+            query = query
+                .in('status', [
+                    'Delivered to Dock',
+                    'Pending Warehouse GRN',
+                    'Truck at Bay - Pending Unload',
+                    'Goods Received (GRN Logged)',
+                    'Partially Received (Awaiting Backorder)',
+                    'Transaction Cancelled (Shortage)',
+                    'Goods Cleared - Ready for Payout'
+                ])
+                .order('id', { ascending: false })
+                .limit(WAREHOUSE_SCOPE_MAX_RECORDS);
+        } else {
+            query = query
+                .order('created_at', { ascending: false })
+                .limit(DEFAULT_PENDING_POS_MAX_RECORDS);
         }
 
         if (error) {
