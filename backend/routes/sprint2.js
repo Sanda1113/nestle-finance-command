@@ -58,12 +58,7 @@ const stripShortagePhotoData = (poData) => {
 
     return {
         ...poData,
-        warehouse_rejection: poData.warehouse_rejection
-            ? {
-                ...poData.warehouse_rejection,
-                shortageEvidence: stripEvidencePhotos(poData.warehouse_rejection.shortageEvidence)
-            }
-            : poData.warehouse_rejection,
+        warehouse_rejection: poData.warehouse_rejection,
         warehouse_grn: poData.warehouse_grn
             ? {
                 ...poData.warehouse_grn,
