@@ -527,7 +527,7 @@ router.get('/grn/pending-pos', async (req, res) => {
 
         let query = supabase
             .from('purchase_orders')
-            .select('id, po_number, supplier_email, status, created_at, updated_at, po_data, total_amount')
+            .select('id, po_number, supplier_email, status, created_at, po_data, total_amount')
             .not('po_data', 'is', null)
             .order('created_at', { ascending: false });
 

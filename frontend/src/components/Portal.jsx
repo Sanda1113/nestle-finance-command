@@ -456,7 +456,11 @@ function FinancePortal({ user }) {
             const [recRes, boqRes, poRes] = await Promise.all([
                 axios.get('https://nestle-finance-command-production.up.railway.app/api/reconciliations'),
                 axios.get('https://nestle-finance-command-production.up.railway.app/api/boqs'),
-                axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/pending-pos')
+                axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/pending-pos', {
+                    params: {
+                        includePhotos: false
+                    }
+                })
             ]);
             setRecords(recRes.data.data || []);
             setBoqs(boqRes.data.data || []);
