@@ -24,7 +24,8 @@ const SYNC_QUEUE_STORAGE_KEY = 'grnSyncQueue';
 const OFFLINE_PO_STORAGE_KEY = 'offlinePOs';
 const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
 const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge'];
-const WAREHOUSE_POLL_INTERVAL_MS = 1000;
+const WAREHOUSE_POLL_INTERVAL_MS = 5000;
+const IMMEDIATE_REFRESH_DEBOUNCE_MS = 800;
 const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload']);
 const WAREHOUSE_COMPLETED_STATUSES = new Set([
     'Goods Received (GRN Logged)',
@@ -295,6 +296,8 @@ export default function WarehousePortal({ user, onLogout }) {
     // Prevent duplicate sync calls
     const syncingRef = useRef(false);
     const queuePersistAlertShownRef = useRef(false);
+    const isFetchingPOsRef = useRef(false);
+    const lastImmediateRefreshAtRef = useRef(0);
 
     const latestState = useRef({ pos, selectedPO, receivedItems });
     useEffect(() => { latestState.current = { pos, selectedPO, receivedItems }; }, [pos, selectedPO, receivedItems]);
@@ -510,6 +513,8 @@ export default function WarehousePortal({ user, onLogout }) {
     }, [syncQueue]);
 
     const fetchPOs = useCallback(async ({ preferCached = false } = {}) => {
+        if (isFetchingPOsRef.current) return;
+        isFetchingPOsRef.current = true;
         if (preferCached) {
             const cachedPOs = loadCachedPOs();
             if (cachedPOs.length > 0) setPOs(cachedPOs);
@@ -519,6 +524,7 @@ export default function WarehousePortal({ user, onLogout }) {
             setLoading(false);
             const cachedPOs = loadCachedPOs();
             if (cachedPOs.length > 0) setPOs(cachedPOs);
+            isFetchingPOsRef.current = false;
             return;
         }
         try {
@@ -545,7 +551,10 @@ export default function WarehousePortal({ user, onLogout }) {
             console.error(err);
             const cachedPOs = loadCachedPOs();
             if (cachedPOs.length > 0) setPOs(cachedPOs);
-        } finally { setLoading(false); }
+        } finally {
+            setLoading(false);
+            isFetchingPOsRef.current = false;
+        }
     }, [loadCachedPOs, persistPOCache]);
 
     useEffect(() => {
@@ -555,9 +564,17 @@ export default function WarehousePortal({ user, onLogout }) {
     }, [fetchPOs, isOffline]);
 
     useEffect(() => {
+        const shouldRefreshImmediately = () => {
+            if (document.hidden) return false;
+            const now = Date.now();
+            if ((now - lastImmediateRefreshAtRef.current) <= IMMEDIATE_REFRESH_DEBOUNCE_MS) return false;
+            lastImmediateRefreshAtRef.current = now;
+            return true;
+        };
+
         const refreshImmediately = () => {
-            if (!document.hidden) {
-                fetchPOs({ preferCached: true });
+            if (shouldRefreshImmediately()) {
+                fetchPOs();
             }
         };
 
