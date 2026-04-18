@@ -82,7 +82,13 @@ const logError = (context, error, additional = {}) => {
 const isMissingColumnError = (error, columns = []) => {
     if (!error || !columns.length) return false;
     const details = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`.toLowerCase();
-    const hasMissingColumnSignal = error.code === '42703' || error.code === 'PGRST204' || details.includes('schema cache') || details.includes('column');
+    const hasMissingTextSignal = details.includes('could not find')
+        || details.includes('does not exist')
+        || details.includes('not found');
+    const hasMissingColumnSignal = error.code === '42703'
+        || error.code === 'PGRST204'
+        || (details.includes('column') && hasMissingTextSignal)
+        || (details.includes('schema cache') && hasMissingTextSignal);
     return hasMissingColumnSignal && columns.some(col => details.includes(col.toLowerCase()));
 };
 
