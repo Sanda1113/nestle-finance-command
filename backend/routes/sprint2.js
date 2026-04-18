@@ -520,7 +520,7 @@ router.get('/grn/pending-pos', async (req, res) => {
         const scope = String(req.query.scope || '').trim().toLowerCase();
         const includePhotos = req.query.includePhotos !== 'false';
         const isWarehouseScope = scope === 'warehouse';
-        const selectFields = isWarehouseScope
+        const selectFields = (isWarehouseScope || includePhotos)
             ? 'id, po_number, supplier_email, status, created_at, po_data, total_amount'
             : 'id, po_number, supplier_email, status, created_at, total_amount';
 

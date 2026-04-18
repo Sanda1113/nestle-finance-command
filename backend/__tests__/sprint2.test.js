@@ -96,6 +96,32 @@ describe('Sprint2 Routes', () => {
         expect(mockQuery.order).toHaveBeenCalledWith('created_at', { ascending: false });
     });
 
+    test('GET /api/sprint2/grn/pending-pos includes po_data when includePhotos=true for finance review evidence', async () => {
+        jest.clearAllMocks();
+        const supabase = require('../db');
+        const mockQuery = supabase.from();
+        mockQuery.then.mockImplementationOnce((resolve) => resolve({
+            data: [{
+                id: 1,
+                po_number: 'PO-98765',
+                supplier_email: 'supplier@test.com',
+                status: 'Transaction Cancelled (Shortage)',
+                po_data: {
+                    warehouse_rejection: {
+                        shortageEvidence: [{ description: 'Milk Powder', photoDataUrl: 'data:image/jpeg;base64,abc' }]
+                    }
+                }
+            }],
+            error: null
+        }));
+
+        const res = await request(app).get('/api/sprint2/grn/pending-pos?includePhotos=true');
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(mockQuery.select).toHaveBeenCalledWith('id, po_number, supplier_email, status, created_at, po_data, total_amount');
+        expect(res.body.data[0].po_data.warehouse_rejection.shortageEvidence[0].photoDataUrl).toBe('data:image/jpeg;base64,abc');
+    });
+
     test('POST /api/sprint2/grn/reject rejects shortage shipment and cancels transaction', async () => {
         const res = await request(app)
             .post('/api/sprint2/grn/reject')

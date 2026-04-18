@@ -458,7 +458,7 @@ function FinancePortal({ user }) {
                 axios.get('https://nestle-finance-command-production.up.railway.app/api/boqs'),
                 axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/pending-pos', {
                     params: {
-                        includePhotos: false
+                        includePhotos: true
                     }
                 })
             ]);
