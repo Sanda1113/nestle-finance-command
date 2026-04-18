@@ -47,7 +47,7 @@ describe('Sprint2 Routes', () => {
         expect(res.body).toHaveProperty('success', true);
     });
 
-    test('GET /api/sprint2/grn/pending-pos supports warehouse scope and strips photos when requested', async () => {
+    test('GET /api/sprint2/grn/pending-pos supports warehouse scope and only strips GRN photos when requested', async () => {
         jest.clearAllMocks();
         const supabase = require('../db');
         const mockQuery = supabase.from();
@@ -80,7 +80,7 @@ describe('Sprint2 Routes', () => {
             'Truck at Bay - Pending Unload'
         ]));
         expect(mockQuery.limit).toHaveBeenCalledWith(250);
-        expect(res.body.data[0].po_data.warehouse_rejection.shortageEvidence[0].photoDataUrl).toBe('');
+        expect(res.body.data[0].po_data.warehouse_rejection.shortageEvidence[0].photoDataUrl).toBe('data:image/jpeg;base64,abc');
         expect(res.body.data[0].po_data.warehouse_grn.shortageEvidence[0].photoDataUrl).toBe('');
     });
 
