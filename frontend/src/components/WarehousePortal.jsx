@@ -25,6 +25,14 @@ const OFFLINE_PO_STORAGE_KEY = 'offlinePOs';
 const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
 const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge'];
 const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload']);
+const WAREHOUSE_COMPLETED_STATUSES = new Set([
+    'Goods Received (GRN Logged)',
+    'Partially Received (Awaiting Backorder)',
+    'Transaction Cancelled (Shortage)',
+    'Goods Cleared - Ready for Payout'
+]);
+const OFFLINE_PO_FALLBACK_MAX_RECORDS = 120;
+const OFFLINE_PO_FALLBACK_MAX_LINE_ITEMS = 200;
 
 // 📱 Mobile‑optimized Bottom Drawer Scanner
 const BarcodeScannerUI = ({ onScanSuccess, onClose }) => {
@@ -315,6 +323,76 @@ export default function WarehousePortal({ user, onLogout }) {
         }
     }, []);
 
+    const sanitizePODataForOfflineCache = useCallback((poData) => {
+        if (!poData || typeof poData !== 'object') return poData;
+        const sanitizeEvidence = (evidence) => {
+            if (!Array.isArray(evidence)) return evidence;
+            return evidence.map((item) => {
+                if (!item || typeof item !== 'object') return item;
+                return { ...item, photoDataUrl: '' };
+            });
+        };
+        return {
+            ...poData,
+            warehouse_rejection: poData.warehouse_rejection
+                ? {
+                    ...poData.warehouse_rejection,
+                    shortageEvidence: sanitizeEvidence(poData.warehouse_rejection.shortageEvidence)
+                }
+                : poData.warehouse_rejection,
+            warehouse_grn: poData.warehouse_grn
+                ? {
+                    ...poData.warehouse_grn,
+                    shortageEvidence: sanitizeEvidence(poData.warehouse_grn.shortageEvidence)
+                }
+                : poData.warehouse_grn
+        };
+    }, []);
+
+    const sanitizePOForOfflineCache = useCallback((po) => {
+        if (!po || typeof po !== 'object') return po;
+        return {
+            ...po,
+            po_data: sanitizePODataForOfflineCache(po.po_data)
+        };
+    }, [sanitizePODataForOfflineCache]);
+
+    const persistPOCache = useCallback((records) => {
+        const safeRecords = (Array.isArray(records) ? records : []).map(sanitizePOForOfflineCache);
+        let savedPrimaryCache = false;
+        try {
+            localStorage.setItem(OFFLINE_PO_STORAGE_KEY, JSON.stringify(safeRecords));
+            savedPrimaryCache = true;
+        } catch (error) {
+            if (error?.name !== 'QuotaExceededError') {
+                console.error('Failed to persist PO cache to localStorage:', error);
+                return;
+            }
+        }
+        if (savedPrimaryCache) return;
+
+        try {
+            const fallback = safeRecords
+                .filter((po) => {
+                    const status = String(po?.status || '');
+                    return WAREHOUSE_PROCESSABLE_STATUSES.has(status) || WAREHOUSE_COMPLETED_STATUSES.has(status);
+                })
+                .slice(0, OFFLINE_PO_FALLBACK_MAX_RECORDS)
+                .map((po) => ({
+                    ...po,
+                    po_data: {
+                        delivery_timestamp: po?.po_data?.delivery_timestamp || null,
+                        lineItems: Array.isArray(po?.po_data?.lineItems) ? po.po_data.lineItems.slice(0, OFFLINE_PO_FALLBACK_MAX_LINE_ITEMS) : [],
+                        warehouse_rejection: po?.po_data?.warehouse_rejection || null,
+                        warehouse_grn: po?.po_data?.warehouse_grn || null
+                    }
+                }));
+            localStorage.setItem(OFFLINE_PO_STORAGE_KEY, JSON.stringify(fallback));
+        } catch {
+            // ignore cache write failures
+        }
+    }, [sanitizePOForOfflineCache]);
+
     const updatePOStatusLocally = useCallback((poNumber, nextStatus, poDataPatch = {}) => {
         if (!poNumber || !nextStatus) {
             console.warn('Skipping local PO status update due to missing poNumber or status.', { poNumber, nextStatus });
@@ -332,14 +410,10 @@ export default function WarehousePortal({ user, onLogout }) {
                     }
                 };
             });
-            try {
-                localStorage.setItem(OFFLINE_PO_STORAGE_KEY, JSON.stringify(next));
-            } catch {
-                // ignore cache write failures
-            }
+            persistPOCache(next);
             return next;
         });
-    }, []);
+    }, [persistPOCache]);
 
     const buildWarehouseGRNPatch = (submittedBy, submittedAt, totalReceivedAmount, isPartial, gpsLocation) => ({
         warehouse_grn: {
@@ -447,18 +521,26 @@ export default function WarehousePortal({ user, onLogout }) {
             return;
         }
         try {
-            const res = await axios.get(`${API_BASE_URL}/grn/pending-pos`);
+            const res = await axios.get(`${API_BASE_URL}/grn/pending-pos`, {
+                params: {
+                    scope: 'warehouse',
+                    includePhotos: false
+                }
+            });
             const enhancedData = res.data.data.map(po => ({
-                ...po, trustScore: po.supplier_email.includes('nestle') ? 98 : Math.floor(Math.random() * (95 - 65 + 1) + 65)
+                ...po,
+                trustScore: String(po?.supplier_email || '').toLowerCase().includes('nestle')
+                    ? 98
+                    : Math.floor(Math.random() * (95 - 65 + 1) + 65)
             }));
             setPOs(enhancedData);
-            localStorage.setItem(OFFLINE_PO_STORAGE_KEY, JSON.stringify(enhancedData));
+            persistPOCache(enhancedData);
         } catch (err) {
             console.error(err);
             const cachedPOs = loadCachedPOs();
             if (cachedPOs.length > 0) setPOs(cachedPOs);
         } finally { setLoading(false); }
-    }, [loadCachedPOs]);
+    }, [loadCachedPOs, persistPOCache]);
 
     useEffect(() => {
         fetchPOs();

@@ -4,6 +4,8 @@ const supabase = require('../db');
 const { sendSupplierEmail } = require('../mailer');
 
 const router = express.Router();
+const WAREHOUSE_SCOPE_MAX_RECORDS = 250;
+const DEFAULT_PENDING_POS_MAX_RECORDS = 500;
 
 // Helper to generate Shipment ID (same as frontend)
 const getShipmentId = (poNum) => {
@@ -42,6 +44,33 @@ const buildShortageEvidence = (items = []) => {
             photoDataUrl: item?.photoDataUrl || ''
         };
     });
+};
+
+const stripShortagePhotoData = (poData) => {
+    if (!poData || typeof poData !== 'object') return poData;
+    const stripEvidencePhotos = (evidence) => {
+        if (!Array.isArray(evidence)) return evidence;
+        return evidence.map((item) => {
+            if (!item || typeof item !== 'object') return item;
+            return { ...item, photoDataUrl: '' };
+        });
+    };
+
+    return {
+        ...poData,
+        warehouse_rejection: poData.warehouse_rejection
+            ? {
+                ...poData.warehouse_rejection,
+                shortageEvidence: stripEvidencePhotos(poData.warehouse_rejection.shortageEvidence)
+            }
+            : poData.warehouse_rejection,
+        warehouse_grn: poData.warehouse_grn
+            ? {
+                ...poData.warehouse_grn,
+                shortageEvidence: stripEvidencePhotos(poData.warehouse_grn.shortageEvidence)
+            }
+            : poData.warehouse_grn
+    };
 };
 
 const normalizeEmail = (value = '') => String(value).trim().toLowerCase();
@@ -493,11 +522,32 @@ router.post('/grn/reject', async (req, res) => {
 
 router.get('/grn/pending-pos', async (req, res) => {
     try {
-        const { data, error } = await supabase
+        const scope = String(req.query.scope || '').trim().toLowerCase();
+        const includePhotos = req.query.includePhotos !== 'false';
+
+        let query = supabase
             .from('purchase_orders')
-            .select('*')
+            .select('id, po_number, supplier_email, status, created_at, updated_at, po_data, total_amount')
             .not('po_data', 'is', null)
             .order('created_at', { ascending: false });
+
+        if (scope === 'warehouse') {
+            query = query
+                .in('status', [
+                    'Delivered to Dock',
+                    'Pending Warehouse GRN',
+                    'Truck at Bay - Pending Unload',
+                    'Goods Received (GRN Logged)',
+                    'Partially Received (Awaiting Backorder)',
+                    'Transaction Cancelled (Shortage)',
+                    'Goods Cleared - Ready for Payout'
+                ])
+                .limit(WAREHOUSE_SCOPE_MAX_RECORDS);
+        } else {
+            query = query.limit(DEFAULT_PENDING_POS_MAX_RECORDS);
+        }
+
+        const { data, error } = await query;
 
         if (error) {
             console.error('❌ Failed to fetch pending POs:', error);
@@ -508,7 +558,15 @@ router.get('/grn/pending-pos', async (req, res) => {
             });
         }
 
-        res.json({ success: true, data });
+        const sourceData = data || [];
+        const responseData = includePhotos
+            ? sourceData
+            : sourceData.map((po) => ({
+                ...po,
+                po_data: stripShortagePhotoData(po.po_data)
+            }));
+
+        res.json({ success: true, data: responseData });
     } catch (error) {
         console.error('❌ Exception in pending-pos:', error);
         res.status(500).json({ error: 'Server error', details: error.message });
