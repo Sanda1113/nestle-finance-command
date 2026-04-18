@@ -513,7 +513,7 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
                 const { data: suppliers } = await supabase
                     .from('app_users')
                     .select('email')
-                    .eq('role', 'Supplier');
+                    .ilike('role', 'supplier');
 
                 if (suppliers && suppliers.length === 1) {
                     supplierEmail = suppliers[0].email;

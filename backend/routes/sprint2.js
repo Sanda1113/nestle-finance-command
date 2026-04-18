@@ -144,7 +144,7 @@ router.get('/notifications', async (req, res) => {
                     supabase
                     .from('notifications')
                     .select('*')
-                    .eq('user_email', email)
+                    .ilike('user_email', email)
                     .order('created_at', { ascending: false })
                     .limit(50)
                 ),
@@ -152,7 +152,7 @@ router.get('/notifications', async (req, res) => {
                     supabase
                     .from('notifications')
                     .select('*')
-                    .eq('user_role', role)
+                    .ilike('user_role', role)
                     .order('created_at', { ascending: false })
                     .limit(50)
                 )
@@ -171,9 +171,9 @@ router.get('/notifications', async (req, res) => {
 
         let query = supabase.from('notifications').select('*');
         if (email) {
-            query = query.eq('user_email', email);
+            query = query.ilike('user_email', email);
         } else {
-            query = query.eq('user_role', role);
+            query = query.ilike('user_role', role);
         }
 
         const { data, error } = await withSupabaseTimeout(
