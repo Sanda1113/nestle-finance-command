@@ -8,7 +8,7 @@ jest.mock('../db', () => {
         eq: jest.fn().mockReturnThis(),
         ilike: jest.fn().mockReturnThis(),
         order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+        limit: jest.fn().mockReturnThis(),
         single: jest.fn().mockResolvedValue({ data: { po_data: {}, supplier_email: 'test@example.com' }, error: null }),
         insert: jest.fn().mockReturnThis(),
         update: jest.fn().mockReturnThis(),
@@ -119,7 +119,7 @@ describe('Sprint2 Routes', () => {
         jest.clearAllMocks();
         const supabase = require('../db');
         const mockQuery = supabase.from();
-        mockQuery.limit.mockResolvedValueOnce({ data: null, error: { message: 'reconciliation lookup failed' } });
+        mockQuery.limit.mockImplementationOnce(() => Promise.resolve({ data: null, error: { message: 'reconciliation lookup failed' } }));
 
         const res = await request(app)
             .post('/api/sprint2/grn/reject')
