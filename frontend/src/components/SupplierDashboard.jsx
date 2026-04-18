@@ -73,7 +73,8 @@ export default function SupplierDashboard({ user, onLogout }) {
 
             if (isMountedRef.current) {
                 if (posRes.status === 'fulfilled') {
-                    const sortedPOs = (posRes.value.data.data || []).sort((a, b) => {
+                    const safePOs = (posRes.value?.data?.data || []).filter((item) => item && typeof item === 'object');
+                    const sortedPOs = safePOs.sort((a, b) => {
                         const aTime = a.created_at ? new Date(a.created_at).getTime() : Number.NEGATIVE_INFINITY;
                         const bTime = b.created_at ? new Date(b.created_at).getTime() : Number.NEGATIVE_INFINITY;
                         const dateDiff = bTime - aTime;
@@ -86,13 +87,13 @@ export default function SupplierDashboard({ user, onLogout }) {
                     setMyPOs(sortedPOs);
                 }
                 if (logsRes.status === 'fulfilled') {
-                    setMyLogs(logsRes.value.data.logs || []);
+                    setMyLogs((logsRes.value?.data?.logs || []).filter((item) => item && typeof item === 'object'));
                 }
                 if (reconsRes.status === 'fulfilled') {
-                    setMyRecons(reconsRes.value.data.data || []);
+                    setMyRecons((reconsRes.value?.data?.data || []).filter((item) => item && typeof item === 'object'));
                 }
                 if (boqsRes.status === 'fulfilled') {
-                    setMyBoqs(boqsRes.value.data.data || []);
+                    setMyBoqs((boqsRes.value?.data?.data || []).filter((item) => item && typeof item === 'object'));
                 }
             }
 

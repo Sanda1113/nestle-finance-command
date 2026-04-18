@@ -462,9 +462,9 @@ function FinancePortal({ user }) {
                     }
                 })
             ]);
-            setRecords(recRes.data.data || []);
-            setBoqs(boqRes.data.data || []);
-            setPOs(poRes.data.data || []);
+            setRecords((recRes.data.data || []).filter((item) => item && typeof item === 'object'));
+            setBoqs((boqRes.data.data || []).filter((item) => item && typeof item === 'object'));
+            setPOs((poRes.data.data || []).filter((item) => item && typeof item === 'object'));
         } catch (err) { console.error(err); }
         finally { if (showLoading) setLoading(false); }
     };

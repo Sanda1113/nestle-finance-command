@@ -61,6 +61,8 @@ if (missingEnvVars.length > 0) {
 }
 
 const upload = multer({ storage: multer.memoryStorage() });
+const SUPPLIER_PO_MAX_RECORDS = 300;
+const SUPPLIER_PO_TIMEOUT_FALLBACK_MAX_RECORDS = 120;
 
 // ==========================================
 // 🛡️ ERROR LOGGING HELPER
@@ -77,6 +79,33 @@ const logError = (context, error, additional = {}) => {
     if (process.env.NODE_ENV !== 'production' && error.stack) {
         console.error(`   Stack: ${error.stack}`);
     }
+};
+
+const stripShortagePhotoData = (poData) => {
+    if (!poData || typeof poData !== 'object') return poData;
+    const stripEvidencePhotos = (evidence) => {
+        if (!Array.isArray(evidence)) return evidence;
+        return evidence.map((item) => {
+            if (!item || typeof item !== 'object') return item;
+            return { ...item, photoDataUrl: '' };
+        });
+    };
+
+    return {
+        ...poData,
+        warehouse_rejection: poData.warehouse_rejection
+            ? {
+                ...poData.warehouse_rejection,
+                shortageEvidence: stripEvidencePhotos(poData.warehouse_rejection.shortageEvidence)
+            }
+            : poData.warehouse_rejection,
+        warehouse_grn: poData.warehouse_grn
+            ? {
+                ...poData.warehouse_grn,
+                shortageEvidence: stripEvidencePhotos(poData.warehouse_grn.shortageEvidence)
+            }
+            : poData.warehouse_grn
+    };
 };
 
 // ==========================================
@@ -774,11 +803,29 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
 app.get('/api/supplier/pos/:email', async (req, res) => {
     const { email } = req.params;
     try {
-        const { data, error } = await supabase
-            .from('purchase_orders')
-            .select('*')
-            .eq('supplier_email', email)
-            .order('id', { ascending: false });
+        const buildSupplierPoQuery = ({ maxRecords, includePoData }) => {
+            const selectColumns = includePoData
+                ? 'id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email, po_data'
+                : 'id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email';
+            return supabase
+                .from('purchase_orders')
+                .select(selectColumns)
+                .eq('supplier_email', email)
+                .order('id', { ascending: false })
+                .limit(maxRecords);
+        };
+
+        let { data, error } = await buildSupplierPoQuery({
+            maxRecords: SUPPLIER_PO_MAX_RECORDS,
+            includePoData: true
+        });
+        if (error?.code === '57014') {
+            console.warn(`⚠️ supplier/pos query timed out for ${email}. Retrying lightweight fallback.`);
+            ({ data, error } = await buildSupplierPoQuery({
+                maxRecords: SUPPLIER_PO_TIMEOUT_FALLBACK_MAX_RECORDS,
+                includePoData: false
+            }));
+        }
         if (error) throw error;
         const responseData = (data || []).map(item => ({
             id: item.id,
@@ -788,7 +835,8 @@ app.get('/api/supplier/pos/:email', async (req, res) => {
             created_at: item.created_at,
             updated_at: item.updated_at || item.created_at || null,
             is_downloaded: item.is_downloaded,
-            supplier_email: item.supplier_email
+            supplier_email: item.supplier_email,
+            po_data: item.po_data ? stripShortagePhotoData(item.po_data) : null
         }));
         res.json({ success: true, data: responseData });
     } catch (error) {

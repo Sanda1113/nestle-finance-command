@@ -6,6 +6,8 @@ const { sendSupplierEmail } = require('../mailer');
 const router = express.Router();
 const WAREHOUSE_SCOPE_MAX_RECORDS = 250;
 const DEFAULT_PENDING_POS_MAX_RECORDS = 500;
+const WAREHOUSE_SCOPE_TIMEOUT_FALLBACK_MAX_RECORDS = 80;
+const DEFAULT_PENDING_TIMEOUT_FALLBACK_MAX_RECORDS = 120;
 
 // Helper to generate Shipment ID (same as frontend)
 const getShipmentId = (poNum) => {
@@ -519,30 +521,43 @@ router.get('/grn/pending-pos', async (req, res) => {
     try {
         const scope = String(req.query.scope || '').trim().toLowerCase();
         const includePhotos = req.query.includePhotos !== 'false';
+        const buildPendingPosQuery = (maxRecords) => {
+            let query = supabase
+                .from('purchase_orders')
+                .select('id, po_number, supplier_email, status, created_at, po_data, total_amount')
+                .not('po_data', 'is', null)
+                .order('created_at', { ascending: false });
 
-        let query = supabase
-            .from('purchase_orders')
-            .select('id, po_number, supplier_email, status, created_at, po_data, total_amount')
-            .not('po_data', 'is', null)
-            .order('created_at', { ascending: false });
+            if (scope === 'warehouse') {
+                query = query
+                    .in('status', [
+                        'Delivered to Dock',
+                        'Pending Warehouse GRN',
+                        'Truck at Bay - Pending Unload',
+                        'Goods Received (GRN Logged)',
+                        'Partially Received (Awaiting Backorder)',
+                        'Transaction Cancelled (Shortage)',
+                        'Goods Cleared - Ready for Payout'
+                    ])
+                    .limit(maxRecords);
+            } else {
+                query = query.limit(maxRecords);
+            }
+            return query;
+        };
 
-        if (scope === 'warehouse') {
-            query = query
-                .in('status', [
-                    'Delivered to Dock',
-                    'Pending Warehouse GRN',
-                    'Truck at Bay - Pending Unload',
-                    'Goods Received (GRN Logged)',
-                    'Partially Received (Awaiting Backorder)',
-                    'Transaction Cancelled (Shortage)',
-                    'Goods Cleared - Ready for Payout'
-                ])
-                .limit(WAREHOUSE_SCOPE_MAX_RECORDS);
-        } else {
-            query = query.limit(DEFAULT_PENDING_POS_MAX_RECORDS);
+        const primaryLimit = scope === 'warehouse'
+            ? WAREHOUSE_SCOPE_MAX_RECORDS
+            : DEFAULT_PENDING_POS_MAX_RECORDS;
+        const timeoutFallbackLimit = scope === 'warehouse'
+            ? WAREHOUSE_SCOPE_TIMEOUT_FALLBACK_MAX_RECORDS
+            : DEFAULT_PENDING_TIMEOUT_FALLBACK_MAX_RECORDS;
+
+        let { data, error } = await buildPendingPosQuery(primaryLimit);
+        if (error?.code === '57014') {
+            console.warn(`⚠️ pending-pos query timed out for scope=${scope || 'default'}. Retrying with limit=${timeoutFallbackLimit}.`);
+            ({ data, error } = await buildPendingPosQuery(timeoutFallbackLimit));
         }
-
-        const { data, error } = await query;
 
         if (error) {
             console.error('❌ Failed to fetch pending POs:', error);
