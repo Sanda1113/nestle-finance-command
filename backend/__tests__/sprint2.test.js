@@ -278,3 +278,142 @@ describe('Sprint2 Routes', () => {
         );
     });
 });
+
+// ==========================================
+// 📧 Supplier email delivery – all update paths
+// ==========================================
+describe('Supplier email notifications on update events', () => {
+    // Flush enough microtask ticks to let background tasks and nested async calls settle
+    const flushAll = async () => {
+        for (let i = 0; i < 30; i++) {
+            await Promise.resolve(); // eslint-disable-line no-await-in-loop
+        }
+    };
+
+    let sendSupplierEmail;
+    beforeEach(() => {
+        sendSupplierEmail = require('../mailer').sendSupplierEmail;
+        sendSupplierEmail.mockClear();
+    });
+
+    test('grn/acknowledge sends shipment-arrival email to supplier', async () => {
+        const res = await request(app)
+            .post('/api/sprint2/grn/acknowledge')
+            .send({ poNumber: 'PO-12345', ackedBy: 'warehouse@test.com' });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+
+        // Background task runs asynchronously – flush the microtask queue
+        await flushAll();
+
+        expect(sendSupplierEmail).toHaveBeenCalledWith(
+            'test@example.com',
+            expect.stringContaining('Shipment Arrival Acknowledged'),
+            expect.any(String),
+            expect.objectContaining({ poNumber: 'PO-12345' })
+        );
+    });
+
+    test('grn/submit sends goods-received email to supplier', async () => {
+        const res = await request(app)
+            .post('/api/sprint2/grn/submit')
+            .send({
+                poNumber: 'PO-12345',
+                receivedBy: 'warehouse@test.com',
+                itemsReceived: [
+                    { description: 'Milk Powder', qty: 10, actualQtyReceived: 10, status: 'Full Match' }
+                ],
+                totalReceivedAmount: 5000,
+                isPartial: false
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+
+        await flushAll();
+
+        expect(sendSupplierEmail).toHaveBeenCalledWith(
+            'test@example.com',
+            expect.stringContaining('Goods Received'),
+            expect.any(String),
+            expect.objectContaining({ poNumber: 'PO-12345' })
+        );
+    });
+
+    test('grn/reject sends rejection email to supplier', async () => {
+        const res = await request(app)
+            .post('/api/sprint2/grn/reject')
+            .send({
+                poNumber: 'PO-12345',
+                rejectedBy: 'warehouse@test.com',
+                rejectionReason: 'Shortage of items',
+                itemsReceived: [
+                    { description: 'Milk Powder', qty: 10, actualQtyReceived: 7, status: 'Shortage' }
+                ]
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+
+        await flushAll();
+
+        expect(sendSupplierEmail).toHaveBeenCalledWith(
+            'test@example.com',
+            expect.stringContaining('Shipment Rejected'),
+            expect.any(String),
+            expect.objectContaining({ poNumber: 'PO-12345' })
+        );
+    });
+
+    test('grn/clear sends goods-cleared email to supplier', async () => {
+        const res = await request(app)
+            .post('/api/sprint2/grn/clear')
+            .send({ poNumber: 'PO-12345', clearedBy: 'warehouse@test.com' });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+
+        // grn/clear sends email synchronously within the request – no extra flush needed
+        expect(sendSupplierEmail).toHaveBeenCalledWith(
+            'test@example.com',
+            expect.stringContaining('Goods Cleared'),
+            expect.any(String),
+            expect.objectContaining({ poNumber: 'PO-12345' })
+        );
+    });
+
+    test('disputes/send with Finance role sends message email to supplier', async () => {
+        const res = await request(app)
+            .post('/api/sprint2/disputes/send')
+            .send({
+                referenceNumber: 'PO-12345',
+                senderEmail: 'finance@test.com',
+                senderRole: 'Finance',
+                message: 'Please review the invoice discrepancy.'
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+
+        expect(sendSupplierEmail).toHaveBeenCalledWith(
+            'test@example.com',
+            expect.stringContaining('PO-12345'),
+            expect.any(String)
+        );
+    });
+
+    test('disputes/send with Supplier role does NOT send external email', async () => {
+        const res = await request(app)
+            .post('/api/sprint2/disputes/send')
+            .send({
+                referenceNumber: 'PO-12345',
+                senderEmail: 'supplier@test.com',
+                senderRole: 'Supplier',
+                message: 'I have a question about my invoice.'
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(sendSupplierEmail).not.toHaveBeenCalled();
+    });
+});
