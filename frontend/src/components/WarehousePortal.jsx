@@ -24,6 +24,7 @@ const SYNC_QUEUE_STORAGE_KEY = 'grnSyncQueue';
 const OFFLINE_PO_STORAGE_KEY = 'offlinePOs';
 const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
 const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge'];
+const WAREHOUSE_POLL_INTERVAL_MS = 1000;
 const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload']);
 const WAREHOUSE_COMPLETED_STATUSES = new Set([
     'Goods Received (GRN Logged)',
@@ -524,7 +525,12 @@ export default function WarehousePortal({ user, onLogout }) {
             const res = await axios.get(`${API_BASE_URL}/grn/pending-pos`, {
                 params: {
                     scope: 'warehouse',
-                    includePhotos: false
+                    includePhotos: false,
+                    _ts: Date.now()
+                },
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    Pragma: 'no-cache'
                 }
             });
             const enhancedData = res.data.data.map(po => ({
@@ -544,9 +550,24 @@ export default function WarehousePortal({ user, onLogout }) {
 
     useEffect(() => {
         fetchPOs();
-        const interval = setInterval(() => fetchPOs(), 5000);
+        const interval = setInterval(() => fetchPOs(), WAREHOUSE_POLL_INTERVAL_MS);
         return () => clearInterval(interval);
     }, [fetchPOs, isOffline]);
+
+    useEffect(() => {
+        const refreshImmediately = () => {
+            if (!document.hidden) {
+                fetchPOs({ preferCached: true });
+            }
+        };
+
+        window.addEventListener('focus', refreshImmediately);
+        document.addEventListener('visibilitychange', refreshImmediately);
+        return () => {
+            window.removeEventListener('focus', refreshImmediately);
+            document.removeEventListener('visibilitychange', refreshImmediately);
+        };
+    }, [fetchPOs]);
 
     const syncPendingGRNs = useCallback(async () => {
         if (syncingRef.current) return;
