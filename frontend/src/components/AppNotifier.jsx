@@ -24,19 +24,18 @@ export default function AppNotifier({ role }) {
         }
     }, []);
 
-    const scheduleNextPoll = useCallback((delayMs = POLL_INTERVAL_MS) => {
-        clearPollTimer();
-        if (!isMountedRef.current) return;
-        const targetDelay = document.hidden ? Math.max(delayMs, 15000) : delayMs;
-        pollTimerRef.current = setTimeout(() => {
-            fetchNotifications();
-        }, targetDelay);
-    }, [clearPollTimer]);
-
     const fetchNotifications = useCallback(async () => {
         if (!role) return;
         if (isFetchingRef.current) return;
         isFetchingRef.current = true;
+        const scheduleNextPoll = (delayMs = POLL_INTERVAL_MS) => {
+            clearPollTimer();
+            if (!isMountedRef.current) return;
+            const targetDelay = document.hidden ? Math.max(delayMs, 15000) : delayMs;
+            pollTimerRef.current = setTimeout(() => {
+                fetchNotifications();
+            }, targetDelay);
+        };
         try {
             const res = await axios.get(`https://nestle-finance-command-production.up.railway.app/api/sprint2/notifications`, {
                 params: { role, _ts: Date.now() },
@@ -76,7 +75,7 @@ export default function AppNotifier({ role }) {
             isInitialLoad.current = false;
             isFetchingRef.current = false;
         }
-    }, [role, scheduleNextPoll]);
+    }, [clearPollTimer, role]);
 
     useEffect(() => {
         isMountedRef.current = true;

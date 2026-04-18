@@ -22,19 +22,18 @@ export default function NotificationBell({ email, role, onNavigate }) {
         }
     }, []);
 
-    const scheduleNextPoll = useCallback((delayMs = POLL_INTERVAL_MS) => {
-        clearPollTimer();
-        if (!isMountedRef.current) return;
-        const targetDelay = document.hidden ? Math.max(delayMs, 15000) : delayMs;
-        pollTimerRef.current = setTimeout(() => {
-            fetchNotifications();
-        }, targetDelay);
-    }, [clearPollTimer]);
-
     const fetchNotifications = useCallback(async () => {
         if (!email && !role) return;
         if (isFetchingRef.current) return;
         isFetchingRef.current = true;
+        const scheduleNextPoll = (delayMs = POLL_INTERVAL_MS) => {
+            clearPollTimer();
+            if (!isMountedRef.current) return;
+            const targetDelay = document.hidden ? Math.max(delayMs, 15000) : delayMs;
+            pollTimerRef.current = setTimeout(() => {
+                fetchNotifications();
+            }, targetDelay);
+        };
         try {
             const params = {};
             if (email) params.email = email;
@@ -63,7 +62,7 @@ export default function NotificationBell({ email, role, onNavigate }) {
         } finally {
             isFetchingRef.current = false;
         }
-    }, [email, role, scheduleNextPoll]);
+    }, [clearPollTimer, email, role]);
 
     useEffect(() => {
         isMountedRef.current = true;

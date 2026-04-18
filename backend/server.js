@@ -105,7 +105,10 @@ const withSupabaseTimeout = async (queryBuilder, timeoutMs = SUPABASE_REQUEST_TI
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        return await queryBuilder.abortSignal(controller.signal);
+        if (queryBuilder && typeof queryBuilder.abortSignal === 'function') {
+            return await queryBuilder.abortSignal(controller.signal);
+        }
+        return await queryBuilder;
     } catch (error) {
         if (error?.name === 'AbortError') {
             const timeoutError = new Error(`Supabase request timed out after ${timeoutMs}ms`);
