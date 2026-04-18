@@ -81,7 +81,7 @@ const runBackgroundTask = (label, task) => {
     Promise.resolve()
         .then(task)
         .catch((error) => {
-            console.error(`Background task failed (${label}):`, error);
+            console.error('Background task failed', { label, error });
         });
 };
 
@@ -293,6 +293,9 @@ router.post('/grn/acknowledge', async (req, res) => {
 // ==========================================
 router.post('/grn/submit', async (req, res) => {
     const { poNumber, receivedBy, itemsReceived, totalReceivedAmount, isPartial, gpsLocation } = req.body;
+    if (!Array.isArray(itemsReceived) || itemsReceived.length === 0) {
+        return res.status(400).json({ error: 'Invalid request: itemsReceived is required and must contain at least one item' });
+    }
     try {
         const { error: grnErr } = await supabase.from('grns').insert([
             {
@@ -307,7 +310,7 @@ router.post('/grn/submit', async (req, res) => {
         const newStatus = isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)';
 
         const shortageEvidence = buildShortageEvidence(
-            (itemsReceived || []).filter(item => item?.status === 'Shortage' || toSafeNumber(item?.actualQtyReceived) < toSafeNumber(item?.qty))
+            itemsReceived.filter(item => item?.status === 'Shortage' || toSafeNumber(item?.actualQtyReceived) < toSafeNumber(item?.qty))
         );
         const { data: poContext } = await supabase
             .from('purchase_orders')
@@ -323,7 +326,7 @@ router.post('/grn/submit', async (req, res) => {
                 totalReceivedAmount: toSafeNumber(totalReceivedAmount),
                 isPartial: Boolean(isPartial),
                 gpsLocation: gpsLocation || 'Location Unavailable',
-                itemsReceived: Array.isArray(itemsReceived) ? itemsReceived : [],
+                itemsReceived,
                 shortageEvidence
             }
         };
@@ -363,8 +366,7 @@ router.post('/grn/submit', async (req, res) => {
                     ])
                 );
 
-                const safeItemsReceived = Array.isArray(itemsReceived) ? itemsReceived : [];
-                const itemsSummary = safeItemsReceived.map(item =>
+                const itemsSummary = itemsReceived.map(item =>
                     `<li><strong>${item.description}</strong>: ${item.actualQtyReceived} of ${item.qty} units received (${item.status || 'Full Match'})</li>`
                 ).join('');
 
@@ -531,7 +533,6 @@ router.post('/grn/reject', async (req, res) => {
             await Promise.allSettled(sideEffects);
         });
 
-        return;
     } catch (error) {
         console.error('Failed to reject shipment:', error);
         return res.status(500).json({ error: 'Failed to reject shipment' });
