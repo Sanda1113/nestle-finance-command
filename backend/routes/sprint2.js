@@ -521,7 +521,7 @@ router.get('/grn/pending-pos', async (req, res) => {
     try {
         const scope = String(req.query.scope || '').trim().toLowerCase();
         const includePhotos = req.query.includePhotos !== 'false';
-        const buildPendingPosQuery = (maxRecords) => {
+        const buildPendingPOsQuery = (maxRecords) => {
             let query = supabase
                 .from('purchase_orders')
                 .select('id, po_number, supplier_email, status, created_at, po_data, total_amount')
@@ -553,10 +553,10 @@ router.get('/grn/pending-pos', async (req, res) => {
             ? WAREHOUSE_SCOPE_TIMEOUT_FALLBACK_MAX_RECORDS
             : DEFAULT_PENDING_TIMEOUT_FALLBACK_MAX_RECORDS;
 
-        let { data, error } = await buildPendingPosQuery(primaryLimit);
+        let { data, error } = await buildPendingPOsQuery(primaryLimit);
         if (error?.code === '57014') {
             console.warn(`⚠️ pending-pos query timed out for scope=${scope || 'default'}. Retrying with limit=${timeoutFallbackLimit}.`);
-            ({ data, error } = await buildPendingPosQuery(timeoutFallbackLimit));
+            ({ data, error } = await buildPendingPOsQuery(timeoutFallbackLimit));
         }
 
         if (error) {

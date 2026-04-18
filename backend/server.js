@@ -803,7 +803,7 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
 app.get('/api/supplier/pos/:email', async (req, res) => {
     const { email } = req.params;
     try {
-        const buildSupplierPoQuery = ({ maxRecords, includePoData }) => {
+        const buildSupplierPOQuery = ({ maxRecords, includePoData }) => {
             const selectColumns = includePoData
                 ? 'id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email, po_data'
                 : 'id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email';
@@ -815,13 +815,13 @@ app.get('/api/supplier/pos/:email', async (req, res) => {
                 .limit(maxRecords);
         };
 
-        let { data, error } = await buildSupplierPoQuery({
+        let { data, error } = await buildSupplierPOQuery({
             maxRecords: SUPPLIER_PO_MAX_RECORDS,
             includePoData: true
         });
         if (error?.code === '57014') {
             console.warn(`⚠️ supplier/pos query timed out for ${email}. Retrying lightweight fallback.`);
-            ({ data, error } = await buildSupplierPoQuery({
+            ({ data, error } = await buildSupplierPOQuery({
                 maxRecords: SUPPLIER_PO_TIMEOUT_FALLBACK_MAX_RECORDS,
                 includePoData: false
             }));
