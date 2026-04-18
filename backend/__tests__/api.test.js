@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('../server');
+const supabase = require('../db');
 
 jest.mock('../db', () => {
     const mockQuery = {
@@ -25,6 +26,19 @@ jest.mock('../mailer', () => ({
 }));
 
 describe('Nestle Finance API', () => {
+    const createQueryMock = (result) => ({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+        single: jest.fn().mockResolvedValue({ data: { po_data: {}, supplier_email: 'test@example.com' }, error: null }),
+        insert: jest.fn().mockReturnThis(),
+        update: jest.fn().mockReturnThis(),
+        in: jest.fn().mockResolvedValue({ error: null }),
+        not: jest.fn().mockReturnThis(),
+        then: jest.fn((resolve) => resolve(result)),
+    });
+
     test('GET / returns online status', async () => {
         const res = await request(app).get('/');
         expect(res.statusCode).toBe(200);
@@ -62,6 +76,37 @@ describe('Nestle Finance API', () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty('success', true);
         expect(Array.isArray(res.body.data)).toBe(true);
+    });
+
+    test('GET /api/supplier/pos/:email falls back when optional columns are missing', async () => {
+        supabase.from
+            .mockReturnValueOnce(createQueryMock({
+                data: null,
+                error: {
+                    code: 'PGRST204',
+                    message: "Could not find the 'updated_at' column of 'purchase_orders' in the schema cache",
+                },
+            }))
+            .mockReturnValueOnce(createQueryMock({
+                data: [{
+                    id: 12,
+                    po_number: 'PO-12',
+                    total_amount: 1500,
+                    status: 'Generated',
+                    created_at: '2026-01-10T10:00:00.000Z',
+                    supplier_email: 'test@example.com'
+                }],
+                error: null
+            }));
+
+        const res = await request(app).get('/api/supplier/pos/test%40example.com');
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(res.body.data[0]).toMatchObject({
+            id: 12,
+            po_number: 'PO-12',
+            is_downloaded: false
+        });
     });
 
     test('POST /api/extract-invoice without file returns 400', async () => {
