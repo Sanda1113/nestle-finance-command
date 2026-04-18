@@ -96,6 +96,18 @@ describe('Sprint2 Routes', () => {
         expect(mockQuery.order).toHaveBeenCalledWith('created_at', { ascending: false });
     });
 
+    test('GET /api/sprint2/grn/pending-pos defaults includePhotos to false when not provided', async () => {
+        jest.clearAllMocks();
+        const supabase = require('../db');
+        const mockQuery = supabase.from();
+
+        const res = await request(app).get('/api/sprint2/grn/pending-pos');
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(mockQuery.select).toHaveBeenCalledWith('id, po_number, supplier_email, status, created_at, total_amount');
+        expect(mockQuery.limit).toHaveBeenCalledWith(500);
+    });
+
     test('GET /api/sprint2/grn/pending-pos includes po_data when includePhotos=true for finance review evidence', async () => {
         jest.clearAllMocks();
         const supabase = require('../db');
@@ -119,6 +131,7 @@ describe('Sprint2 Routes', () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty('success', true);
         expect(mockQuery.select).toHaveBeenCalledWith('id, po_number, supplier_email, status, created_at, po_data, total_amount');
+        expect(mockQuery.limit).toHaveBeenCalledWith(120);
         expect(res.body.data[0].po_data.warehouse_rejection.shortageEvidence[0].photoDataUrl).toBe('data:image/jpeg;base64,abc');
     });
 
