@@ -30,9 +30,17 @@ export default function Login({ onLogin }) {
             const realError = err.response?.data?.details || err.response?.data?.error || err.message;
             console.error("Full Backend Error:", err.response?.data);
 
+            let displayError = '❌ Invalid email or password.';
+            
+            if (err.response?.status >= 500) {
+                displayError = '❌ Server Error: Database or backend is unreachable (500).';
+            } else if (err.response?.status !== 401 && err.response?.data?.error) {
+                displayError = `❌ ${err.response.data.error}`;
+            }
+
             setError(isLoginView
-                ? '❌ Invalid email or password.'
-                : `❌ Registration failed: ${realError}` // Shows exactly what Supabase is complaining about
+                ? displayError
+                : `❌ Registration failed: ${typeof realError === 'string' && realError.includes('<html') ? 'Server is down.' : realError}`
             );
         } finally {
             setLoading(false);
