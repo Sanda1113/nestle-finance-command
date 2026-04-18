@@ -79,6 +79,13 @@ const logError = (context, error, additional = {}) => {
     }
 };
 
+const isMissingColumnError = (error, columns = []) => {
+    if (!error || !columns.length) return false;
+    const details = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`.toLowerCase();
+    const hasMissingColumnSignal = error.code === '42703' || error.code === 'PGRST204' || details.includes('schema cache') || details.includes('column');
+    return hasMissingColumnSignal && columns.some(col => details.includes(col.toLowerCase()));
+};
+
 // ==========================================
 // 🧠 MINDEE MAP TO JSON CONVERTER
 // ==========================================
@@ -774,11 +781,20 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
 app.get('/api/supplier/pos/:email', async (req, res) => {
     const { email } = req.params;
     try {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
             .from('purchase_orders')
             .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email')
             .eq('supplier_email', email)
             .order('id', { ascending: false });
+
+        if (error && isMissingColumnError(error, ['updated_at', 'is_downloaded'])) {
+            ({ data, error } = await supabase
+                .from('purchase_orders')
+                .select('id, po_number, total_amount, status, created_at, supplier_email')
+                .eq('supplier_email', email)
+                .order('id', { ascending: false }));
+        }
+
         if (error) throw error;
         const responseData = (data || []).map(item => ({
             id: item.id,
@@ -787,7 +803,7 @@ app.get('/api/supplier/pos/:email', async (req, res) => {
             status: item.status,
             created_at: item.created_at,
             updated_at: item.updated_at || item.created_at || null,
-            is_downloaded: item.is_downloaded,
+            is_downloaded: Boolean(item.is_downloaded),
             supplier_email: item.supplier_email
         }));
         res.json({ success: true, data: responseData });
