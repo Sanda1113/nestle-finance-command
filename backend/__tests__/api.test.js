@@ -1,4 +1,5 @@
 const request = require('supertest');
+const bcrypt = require('bcryptjs');
 const app = require('../server');
 const supabase = require('../db');
 
@@ -125,6 +126,55 @@ describe('Nestle Finance API', () => {
             .post('/api/save-boq')
             .send({ boqData: null });
         expect(res.statusCode).toBe(500);
+    });
+
+    test('POST /api/auth/register normalizes email/role before insert', async () => {
+        const registerQueryMock = createQueryMock({ data: null, error: null });
+        supabase.from.mockReturnValueOnce(registerQueryMock);
+
+        const res = await request(app)
+            .post('/api/auth/register')
+            .send({
+                email: '  TEST.USER@Example.com ',
+                password: 'Secret123!',
+                role: ' Finance '
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(registerQueryMock.insert).toHaveBeenCalledWith([
+            {
+                email: 'test.user@example.com',
+                password_hash: expect.any(String),
+                role: 'finance'
+            }
+        ]);
+    });
+
+    test('POST /api/auth/login succeeds with trimmed/case-insensitive email and matching duplicate account password', async () => {
+        const wrongPasswordHash = await bcrypt.hash('wrong-pass', 10);
+        const validPasswordHash = await bcrypt.hash('CorrectPass!42', 10);
+
+        supabase.from
+            .mockReturnValueOnce(createQueryMock({ data: [], error: null }))
+            .mockReturnValueOnce(createQueryMock({
+                data: [
+                    { id: 1, email: 'User@Example.com', role: 'supplier', password_hash: wrongPasswordHash },
+                    { id: 2, email: 'user@example.com', role: 'supplier', password_hash: validPasswordHash }
+                ],
+                error: null
+            }));
+
+        const res = await request(app)
+            .post('/api/auth/login')
+            .send({
+                email: '  USER@example.com ',
+                password: 'CorrectPass!42'
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(res.body).toHaveProperty('user.email', 'user@example.com');
     });
 });
 

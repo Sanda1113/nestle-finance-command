@@ -10,10 +10,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-nestle-key-2026';
 router.post('/register', async (req, res) => {
     const { email, password, role } = req.body;
     try {
-        const salt = await bcrypt.genSalt(10);
-        const password_hash = await bcrypt.hash(password, salt);
+        const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+        const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
+        const normalizedPassword = typeof password === 'string' ? password : '';
+        if (!normalizedEmail || !normalizedPassword || !normalizedRole) {
+            return res.status(400).json({ error: 'Email, password, and role are required' });
+        }
 
-        const { error } = await supabase.from('app_users').insert([{ email, password_hash, role }]);
+        const salt = await bcrypt.genSalt(10);
+        const password_hash = await bcrypt.hash(normalizedPassword, salt);
+
+        const { error } = await supabase.from('app_users').insert([{ email: normalizedEmail, password_hash, role: normalizedRole }]);
         if (error) throw error;
 
         res.json({ success: true, message: 'User registered successfully' });
@@ -26,12 +33,36 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
-        const { data: users, error } = await supabase.from('app_users').select('*').eq('email', email);
-        if (error || users.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+        const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+        const normalizedPassword = typeof password === 'string' ? password : '';
+        if (!normalizedEmail || !normalizedPassword) {
+            return res.status(400).json({ error: 'Email and password are required' });
+        }
 
-        const user = users[0];
-        const isMatch = await bcrypt.compare(password, user.password_hash);
-        if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
+        let { data: users, error } = await supabase.from('app_users').select('*').eq('email', normalizedEmail);
+        if (error) throw error;
+
+        if (!users || users.length === 0) {
+            const { data: caseInsensitiveUsers, error: caseInsensitiveError } = await supabase
+                .from('app_users')
+                .select('*')
+                .ilike('email', normalizedEmail);
+            if (caseInsensitiveError) throw caseInsensitiveError;
+            users = caseInsensitiveUsers || [];
+        }
+
+        if (users.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+
+        let user = null;
+        for (const candidate of users) {
+            if (!candidate?.password_hash) continue;
+            const isMatch = await bcrypt.compare(normalizedPassword, candidate.password_hash);
+            if (isMatch) {
+                user = candidate;
+                break;
+            }
+        }
+        if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
         const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '1d' });
 
