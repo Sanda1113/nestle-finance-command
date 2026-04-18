@@ -9,7 +9,7 @@ jest.mock('../db', () => {
         eq: jest.fn().mockReturnThis(),
         ilike: jest.fn().mockReturnThis(),
         order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+        limit: jest.fn().mockReturnThis(),
         single: jest.fn().mockResolvedValue({ data: { po_data: {}, supplier_email: 'test@example.com' }, error: null }),
         insert: jest.fn().mockReturnThis(),
         update: jest.fn().mockReturnThis(),
@@ -35,7 +35,7 @@ describe('Nestle Finance API', () => {
         eq: jest.fn().mockReturnThis(),
         ilike: jest.fn().mockReturnThis(),
         order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+        limit: jest.fn().mockReturnThis(),
         single: jest.fn().mockResolvedValue({ data: { po_data: {}, supplier_email: 'test@example.com' }, error: null }),
         insert: jest.fn().mockReturnThis(),
         update: jest.fn().mockReturnThis(),
@@ -129,8 +129,11 @@ describe('Nestle Finance API', () => {
     });
 
     test('POST /api/auth/register normalizes email/role before insert', async () => {
+        const existingUserCheckQueryMock = createQueryMock({ data: [], error: null });
         const registerQueryMock = createQueryMock({ data: null, error: null });
-        supabase.from.mockReturnValueOnce(registerQueryMock);
+        supabase.from
+            .mockReturnValueOnce(existingUserCheckQueryMock)
+            .mockReturnValueOnce(registerQueryMock);
 
         const res = await request(app)
             .post('/api/auth/register')
@@ -151,15 +154,13 @@ describe('Nestle Finance API', () => {
         ]);
     });
 
-    test('POST /api/auth/login succeeds with trimmed/case-insensitive email and matching duplicate account password', async () => {
-        const wrongPasswordHash = await bcrypt.hash('wrong-pass', 10);
+    test('POST /api/auth/login succeeds with trimmed/case-insensitive email', async () => {
         const validPasswordHash = await bcrypt.hash('CorrectPass!42', 10);
 
         supabase.from
             .mockReturnValueOnce(createQueryMock({ data: [], error: null }))
             .mockReturnValueOnce(createQueryMock({
                 data: [
-                    { id: 1, email: 'User@Example.com', role: 'supplier', password_hash: wrongPasswordHash },
                     { id: 2, email: 'user@example.com', role: 'supplier', password_hash: validPasswordHash }
                 ],
                 error: null

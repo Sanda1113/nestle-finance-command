@@ -17,6 +17,16 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ error: 'Email, password, and role are required' });
         }
 
+        const { data: existingUsers, error: existingUserError } = await supabase
+            .from('app_users')
+            .select('id')
+            .ilike('email', normalizedEmail)
+            .limit(1);
+        if (existingUserError) throw existingUserError;
+        if (existingUsers?.length) {
+            return res.status(409).json({ error: 'Account already exists' });
+        }
+
         const salt = await bcrypt.genSalt(10);
         const password_hash = await bcrypt.hash(normalizedPassword, salt);
 
@@ -39,30 +49,33 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ error: 'Email and password are required' });
         }
 
-        let { data: users, error } = await supabase.from('app_users').select('*').eq('email', normalizedEmail);
+        let { data: users, error } = await supabase
+            .from('app_users')
+            .select('*')
+            .eq('email', normalizedEmail)
+            .limit(1);
         if (error) throw error;
 
         if (!users || users.length === 0) {
             const { data: caseInsensitiveUsers, error: caseInsensitiveError } = await supabase
                 .from('app_users')
                 .select('*')
-                .ilike('email', normalizedEmail);
+                .ilike('email', normalizedEmail)
+                .limit(1);
             if (caseInsensitiveError) throw caseInsensitiveError;
             users = caseInsensitiveUsers || [];
         }
 
         if (users.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
 
-        let user = null;
-        for (const candidate of users) {
-            if (!candidate?.password_hash) continue;
-            const isMatch = await bcrypt.compare(normalizedPassword, candidate.password_hash);
-            if (isMatch) {
-                user = candidate;
-                break;
-            }
+        const user = users[0];
+        if (!user?.password_hash) {
+            console.error('❌ User record missing password_hash');
+            return res.status(500).json({ error: 'Authentication system error' });
         }
-        if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+        const isMatch = await bcrypt.compare(normalizedPassword, user.password_hash);
+        if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
 
         const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '1d' });
 
