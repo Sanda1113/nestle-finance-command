@@ -12,7 +12,7 @@ jest.mock('../db', () => {
         single: jest.fn().mockResolvedValue({ data: { po_data: {}, supplier_email: 'test@example.com' }, error: null }),
         insert: jest.fn().mockReturnThis(),
         update: jest.fn().mockReturnThis(),
-        in: jest.fn().mockResolvedValue({ error: null }),
+        in: jest.fn().mockReturnThis(),
         not: jest.fn().mockReturnThis(),
         then: jest.fn((resolve) => resolve({ data: [], error: null })),
     };
@@ -45,6 +45,43 @@ describe('Sprint2 Routes', () => {
             .send({ poNumber: 'PO-12345' });
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty('success', true);
+    });
+
+    test('GET /api/sprint2/grn/pending-pos supports warehouse scope and strips photos when requested', async () => {
+        jest.clearAllMocks();
+        const supabase = require('../db');
+        const mockQuery = supabase.from();
+        mockQuery.then.mockImplementationOnce((resolve) => resolve({
+            data: [{
+                id: 1,
+                po_number: 'PO-12345',
+                supplier_email: 'supplier@test.com',
+                status: 'Delivered to Dock',
+                po_data: {
+                    lineItems: [{ description: 'Milk Powder', qty: 10 }],
+                    warehouse_rejection: {
+                        shortageEvidence: [{ description: 'Milk Powder', photoDataUrl: 'data:image/jpeg;base64,abc' }]
+                    },
+                    warehouse_grn: {
+                        shortageEvidence: [{ description: 'Milk Powder', photoDataUrl: 'data:image/jpeg;base64,def' }]
+                    }
+                }
+            }],
+            error: null
+        }));
+
+        const res = await request(app).get('/api/sprint2/grn/pending-pos?scope=warehouse&includePhotos=false');
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(Array.isArray(res.body.data)).toBe(true);
+        expect(mockQuery.in).toHaveBeenCalledWith('status', expect.arrayContaining([
+            'Delivered to Dock',
+            'Pending Warehouse GRN',
+            'Truck at Bay - Pending Unload'
+        ]));
+        expect(mockQuery.limit).toHaveBeenCalledWith(250);
+        expect(res.body.data[0].po_data.warehouse_rejection.shortageEvidence[0].photoDataUrl).toBe('');
+        expect(res.body.data[0].po_data.warehouse_grn.shortageEvidence[0].photoDataUrl).toBe('');
     });
 
     test('POST /api/sprint2/grn/reject rejects shortage shipment and cancels transaction', async () => {
