@@ -25,6 +25,14 @@ const OFFLINE_PO_STORAGE_KEY = 'offlinePOs';
 const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
 const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge'];
 const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload']);
+const WAREHOUSE_COMPLETED_STATUSES = new Set([
+    'Goods Received (GRN Logged)',
+    'Partially Received (Awaiting Backorder)',
+    'Transaction Cancelled (Shortage)',
+    'Goods Cleared - Ready for Payout'
+]);
+const OFFLINE_PO_FALLBACK_MAX_RECORDS = 120;
+const OFFLINE_PO_FALLBACK_MAX_LINE_ITEMS = 200;
 
 // 📱 Mobile‑optimized Bottom Drawer Scanner
 const BarcodeScannerUI = ({ onScanSuccess, onClose }) => {
@@ -351,25 +359,32 @@ export default function WarehousePortal({ user, onLogout }) {
 
     const persistPOCache = useCallback((records) => {
         const safeRecords = (Array.isArray(records) ? records : []).map(sanitizePOForOfflineCache);
+        let savedPrimaryCache = false;
         try {
             localStorage.setItem(OFFLINE_PO_STORAGE_KEY, JSON.stringify(safeRecords));
-            return;
+            savedPrimaryCache = true;
         } catch (error) {
-            if (error?.name !== 'QuotaExceededError') return;
+            if (error?.name !== 'QuotaExceededError') {
+                console.error('Failed to persist PO cache to localStorage:', error);
+                return;
+            }
         }
+        if (savedPrimaryCache) return;
 
         try {
             const fallback = safeRecords
                 .filter((po) => {
                     const status = String(po?.status || '');
-                    return WAREHOUSE_PROCESSABLE_STATUSES.has(status) || status.includes('Received') || status.includes('Cancelled');
+                    return WAREHOUSE_PROCESSABLE_STATUSES.has(status) || WAREHOUSE_COMPLETED_STATUSES.has(status);
                 })
-                .slice(0, 120)
+                .slice(0, OFFLINE_PO_FALLBACK_MAX_RECORDS)
                 .map((po) => ({
                     ...po,
                     po_data: {
                         delivery_timestamp: po?.po_data?.delivery_timestamp || null,
-                        lineItems: Array.isArray(po?.po_data?.lineItems) ? po.po_data.lineItems.slice(0, 200) : []
+                        lineItems: Array.isArray(po?.po_data?.lineItems) ? po.po_data.lineItems.slice(0, OFFLINE_PO_FALLBACK_MAX_LINE_ITEMS) : [],
+                        warehouse_rejection: po?.po_data?.warehouse_rejection || null,
+                        warehouse_grn: po?.po_data?.warehouse_grn || null
                     }
                 }));
             localStorage.setItem(OFFLINE_PO_STORAGE_KEY, JSON.stringify(fallback));

@@ -4,6 +4,8 @@ const supabase = require('../db');
 const { sendSupplierEmail } = require('../mailer');
 
 const router = express.Router();
+const WAREHOUSE_SCOPE_MAX_RECORDS = 250;
+const DEFAULT_PENDING_POS_MAX_RECORDS = 500;
 
 // Helper to generate Shipment ID (same as frontend)
 const getShipmentId = (poNum) => {
@@ -540,9 +542,9 @@ router.get('/grn/pending-pos', async (req, res) => {
                     'Transaction Cancelled (Shortage)',
                     'Goods Cleared - Ready for Payout'
                 ])
-                .limit(250);
+                .limit(WAREHOUSE_SCOPE_MAX_RECORDS);
         } else {
-            query = query.limit(500);
+            query = query.limit(DEFAULT_PENDING_POS_MAX_RECORDS);
         }
 
         const { data, error } = await query;
@@ -556,10 +558,10 @@ router.get('/grn/pending-pos', async (req, res) => {
             });
         }
 
-        const normalizedData = Array.isArray(data) ? data : [];
+        const sourceData = data || [];
         const responseData = includePhotos
-            ? normalizedData
-            : normalizedData.map((po) => ({
+            ? sourceData
+            : sourceData.map((po) => ({
                 ...po,
                 po_data: stripShortagePhotoData(po.po_data)
             }));

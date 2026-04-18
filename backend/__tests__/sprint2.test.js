@@ -119,7 +119,7 @@ describe('Sprint2 Routes', () => {
         jest.clearAllMocks();
         const supabase = require('../db');
         const mockQuery = supabase.from();
-        mockQuery.limit.mockImplementationOnce(() => Promise.resolve({ data: null, error: { message: 'reconciliation lookup failed' } }));
+        mockQuery.limit.mockResolvedValueOnce({ data: null, error: { message: 'reconciliation lookup failed' } });
 
         const res = await request(app)
             .post('/api/sprint2/grn/reject')
