@@ -283,10 +283,14 @@ describe('Sprint2 Routes', () => {
 // 📧 Supplier email delivery – all update paths
 // ==========================================
 describe('Supplier email notifications on update events', () => {
-    // Flush enough microtask ticks to let background tasks and nested async calls settle
+    // Flush enough microtask ticks to let background tasks and nested async calls settle.
+    // Intentionally awaits in a loop to drain the microtask queue incrementally so that
+    // runBackgroundTask (Promise.resolve().then(task)) and its internal async steps all
+    // complete before the test assertion runs.
     const flushAll = async () => {
         for (let i = 0; i < 30; i++) {
-            await Promise.resolve(); // eslint-disable-line no-await-in-loop
+            // eslint-disable-next-line no-await-in-loop
+            await Promise.resolve();
         }
     };
 
