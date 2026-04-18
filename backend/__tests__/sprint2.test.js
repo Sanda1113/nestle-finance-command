@@ -93,7 +93,7 @@ describe('Sprint2 Routes', () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty('success', true);
         expect(mockQuery.select).toHaveBeenCalledWith('id, po_number, supplier_email, status, created_at, total_amount');
-        expect(mockQuery.order).toHaveBeenCalledWith('id', { ascending: false });
+        expect(mockQuery.order).toHaveBeenCalledWith('created_at', { ascending: false });
     });
 
     test('POST /api/sprint2/grn/reject rejects shortage shipment and cancels transaction', async () => {

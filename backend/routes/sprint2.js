@@ -527,11 +527,10 @@ router.get('/grn/pending-pos', async (req, res) => {
         let query = supabase
             .from('purchase_orders')
             .select(selectFields)
-            .order('id', { ascending: false });
+            .not('po_data', 'is', null);
 
         if (isWarehouseScope) {
             query = query
-                .not('po_data', 'is', null)
                 .in('status', [
                     'Delivered to Dock',
                     'Pending Warehouse GRN',
@@ -541,9 +540,12 @@ router.get('/grn/pending-pos', async (req, res) => {
                     'Transaction Cancelled (Shortage)',
                     'Goods Cleared - Ready for Payout'
                 ])
+                .order('id', { ascending: false })
                 .limit(WAREHOUSE_SCOPE_MAX_RECORDS);
         } else {
-            query = query.limit(DEFAULT_PENDING_POS_MAX_RECORDS);
+            query = query
+                .order('created_at', { ascending: false })
+                .limit(DEFAULT_PENDING_POS_MAX_RECORDS);
         }
 
         const { data, error } = await query;
