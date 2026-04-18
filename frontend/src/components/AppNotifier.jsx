@@ -67,8 +67,10 @@ export default function AppNotifier({ role }) {
             }
             retryDelayRef.current = POLL_INTERVAL_MS;
             scheduleNextPoll(POLL_INTERVAL_MS);
-        } catch {
-            // Ignore background polling errors
+        } catch (error) {
+            if (import.meta.env.DEV) {
+                console.warn('App notifier polling request failed:', error?.message || error);
+            }
             retryDelayRef.current = Math.min(retryDelayRef.current * 2, MAX_BACKOFF_MS);
             scheduleNextPoll(retryDelayRef.current);
         } finally {

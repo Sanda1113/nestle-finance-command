@@ -56,7 +56,10 @@ export default function NotificationBell({ email, role, onNavigate }) {
             }
             retryDelayRef.current = POLL_INTERVAL_MS;
             scheduleNextPoll(POLL_INTERVAL_MS);
-        } catch {
+        } catch (error) {
+            if (import.meta.env.DEV) {
+                console.warn('Notification polling request failed:', error?.message || error);
+            }
             retryDelayRef.current = Math.min(retryDelayRef.current * 2, MAX_BACKOFF_MS);
             scheduleNextPoll(retryDelayRef.current);
         } finally {

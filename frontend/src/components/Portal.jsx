@@ -242,7 +242,11 @@ function ProcurementPortal({ user }) {
                 }
             });
             setBoqs(res.data.data || []);
-        } catch { /* ignore transient polling errors */ }
+        } catch (error) {
+            if (import.meta.env.DEV) {
+                console.warn('Procurement polling request failed:', error?.message || error);
+            }
+        }
         finally {
             if (showLoading) setLoading(false);
             isFetchingBoqsRef.current = false;
@@ -530,7 +534,11 @@ function FinancePortal({ user }) {
             setRecords(recRes.data.data || []);
             setBoqs(boqRes.data.data || []);
             setPOs(poRes.data.data || []);
-        } catch { /* ignore transient polling errors */ }
+        } catch (error) {
+            if (import.meta.env.DEV) {
+                console.warn('Finance polling request failed:', error?.message || error);
+            }
+        }
         finally {
             if (showLoading) setLoading(false);
             isFetchingDataRef.current = false;
@@ -857,7 +865,11 @@ function AnalyticsPortal() {
             const rejected = data.filter(r => r.match_status && r.match_status.includes('Reject')).length;
             const totalValue = data.reduce((acc, curr) => acc + (Number(curr.invoice_total) || 0), 0);
             setStats({ total: data.length, approved, rejected, value: totalValue });
-        } catch { /* ignore transient polling errors */ }
+        } catch (error) {
+            if (import.meta.env.DEV) {
+                console.warn('Analytics polling request failed:', error?.message || error);
+            }
+        }
         finally {
             if (showLoading) setLoading(false);
             isFetchingRef.current = false;
