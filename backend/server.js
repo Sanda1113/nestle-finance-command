@@ -15,12 +15,27 @@ if (process.env.NODE_ENV !== 'production') {
 
 const app = express();
 const port = process.env.PORT || 8080;
+const MAX_LOG_FIELD_LENGTH = 400;
+const SUPABASE_REQUEST_TIMEOUT_MS = 12000;
+
+const HIGH_FREQUENCY_LOG_PATHS = [
+    '/api/sprint2/notifications',
+    '/api/supplier/pos/',
+    '/api/supplier/logs/',
+    '/api/reconciliations'
+];
+
+const shouldSkipRequestLog = (req, statusCode, duration) => {
+    if (statusCode >= 400 || duration >= 10000) return false;
+    return HIGH_FREQUENCY_LOG_PATHS.some(path => req.originalUrl.startsWith(path));
+};
 
 // 🔍 Request logging middleware
 app.use((req, res, next) => {
     const start = Date.now();
     res.on('finish', () => {
         const duration = Date.now() - start;
+        if (shouldSkipRequestLog(req, res.statusCode, duration)) return;
         console.log(`${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
     });
     next();
@@ -65,17 +80,44 @@ const upload = multer({ storage: multer.memoryStorage() });
 // ==========================================
 // 🛡️ ERROR LOGGING HELPER
 // ==========================================
+const truncateLogField = (value, maxLength = MAX_LOG_FIELD_LENGTH) => {
+    if (value === undefined || value === null) return '';
+    const text = String(value);
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, maxLength)}… [truncated]`;
+};
+
 const logError = (context, error, additional = {}) => {
     console.error(`\n❌ ERROR [${context}]`);
-    console.error(`   Message: ${error.message}`);
+    console.error(`   Message: ${truncateLogField(error?.message || 'Unknown error')}`);
     if (error.code) console.error(`   Code: ${error.code}`);
-    if (error.details) console.error(`   Details: ${error.details}`);
-    if (error.hint) console.error(`   Hint: ${error.hint}`);
+    if (error.details) console.error(`   Details: ${truncateLogField(error.details)}`);
+    if (error.hint) console.error(`   Hint: ${truncateLogField(error.hint)}`);
     if (Object.keys(additional).length) {
         console.error(`   Context:`, JSON.stringify(additional, null, 2));
     }
-    if (process.env.NODE_ENV !== 'production' && error.stack) {
-        console.error(`   Stack: ${error.stack}`);
+    if (process.env.NODE_ENV !== 'production' && error?.stack) {
+        console.error(`   Stack: ${truncateLogField(error.stack, 1200)}`);
+    }
+};
+
+const withSupabaseTimeout = async (queryBuilder, timeoutMs = SUPABASE_REQUEST_TIMEOUT_MS) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        if (queryBuilder && typeof queryBuilder.abortSignal === 'function') {
+            return await queryBuilder.abortSignal(controller.signal);
+        }
+        return await queryBuilder;
+    } catch (error) {
+        if (error?.name === 'AbortError') {
+            const timeoutError = new Error(`Supabase request timed out after ${timeoutMs}ms`);
+            timeoutError.code = 'SUPABASE_TIMEOUT';
+            throw timeoutError;
+        }
+        throw error;
+    } finally {
+        clearTimeout(timer);
     }
 };
 
@@ -787,18 +829,22 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
 app.get('/api/supplier/pos/:email', async (req, res) => {
     const { email } = req.params;
     try {
-        let { data, error } = await supabase
-            .from('purchase_orders')
-            .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email')
-            .eq('supplier_email', email)
-            .order('id', { ascending: false });
+        let { data, error } = await withSupabaseTimeout(
+            supabase
+                .from('purchase_orders')
+                .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email')
+                .eq('supplier_email', email)
+                .order('id', { ascending: false })
+        );
 
         if (error && isMissingColumnError(error, ['updated_at', 'is_downloaded'])) {
-            ({ data, error } = await supabase
-                .from('purchase_orders')
-                .select('id, po_number, total_amount, status, created_at, supplier_email')
-                .eq('supplier_email', email)
-                .order('id', { ascending: false }));
+            ({ data, error } = await withSupabaseTimeout(
+                supabase
+                    .from('purchase_orders')
+                    .select('id, po_number, total_amount, status, created_at, supplier_email')
+                    .eq('supplier_email', email)
+                    .order('id', { ascending: false })
+            ));
         }
 
         if (error) throw error;

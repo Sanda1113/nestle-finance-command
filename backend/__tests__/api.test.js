@@ -6,6 +6,7 @@ jest.mock('../db', () => {
     const mockQuery = {
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
+        ilike: jest.fn().mockReturnThis(),
         order: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue({ data: [], error: null }),
         single: jest.fn().mockResolvedValue({ data: { po_data: {}, supplier_email: 'test@example.com' }, error: null }),
@@ -13,6 +14,8 @@ jest.mock('../db', () => {
         update: jest.fn().mockReturnThis(),
         in: jest.fn().mockResolvedValue({ error: null }),
         not: jest.fn().mockReturnThis(),
+        // catch is needed when production code chains .insert(...).catch(...) before awaiting
+        catch: jest.fn().mockReturnThis(),
         then: jest.fn((resolve) => resolve({ data: [], error: null })),
     };
 
@@ -29,6 +32,7 @@ describe('Nestle Finance API', () => {
     const createQueryMock = (result) => ({
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
+        ilike: jest.fn().mockReturnThis(),
         order: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue({ data: [], error: null }),
         single: jest.fn().mockResolvedValue({ data: { po_data: {}, supplier_email: 'test@example.com' }, error: null }),
@@ -36,6 +40,7 @@ describe('Nestle Finance API', () => {
         update: jest.fn().mockReturnThis(),
         in: jest.fn().mockResolvedValue({ error: null }),
         not: jest.fn().mockReturnThis(),
+        catch: jest.fn().mockReturnThis(),
         then: jest.fn((resolve) => resolve(result)),
     });
 
@@ -120,5 +125,102 @@ describe('Nestle Finance API', () => {
             .post('/api/save-boq')
             .send({ boqData: null });
         expect(res.statusCode).toBe(500);
+    });
+});
+
+// ==========================================
+// 📧 Supplier email delivery – server.js update paths
+// ==========================================
+describe('Supplier email notifications on finance/procurement updates', () => {
+    let sendSupplierEmail;
+    beforeEach(() => {
+        sendSupplierEmail = require('../mailer').sendSupplierEmail;
+        sendSupplierEmail.mockClear();
+    });
+
+    test('POST /api/boqs/:id/reject sends rejection email to supplier', async () => {
+        const res = await request(app)
+            .post('/api/boqs/42/reject')
+            .send({ reason: 'Price too high' });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(sendSupplierEmail).toHaveBeenCalledWith(
+            'test@example.com',
+            'BOQ Rejected',
+            expect.any(String),
+            expect.any(Object)
+        );
+    });
+
+    test('POST /api/boqs/:id/generate-po sends PO-generated email to supplier', async () => {
+        const res = await request(app)
+            .post('/api/boqs/42/generate-po')
+            .send({});
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(sendSupplierEmail).toHaveBeenCalledWith(
+            'test@example.com',
+            expect.stringContaining('Purchase Order Generated'),
+            expect.any(String),
+            expect.any(Object)
+        );
+    });
+
+    test('POST /api/reconciliations/:id/notify sends status email to supplier', async () => {
+        const res = await request(app)
+            .post('/api/reconciliations/123/notify')
+            .send({
+                supplierEmail: 'supplier@test.com',
+                newStatus: 'Approved',
+                invoiceNumber: 'INV-001',
+                poNumber: 'PO-001'
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(sendSupplierEmail).toHaveBeenCalledWith(
+            'supplier@test.com',
+            expect.stringContaining('Approved'),
+            expect.any(String),
+            expect.objectContaining({ invoiceNumber: 'INV-001', poNumber: 'PO-001' })
+        );
+    });
+
+    test('POST /api/reconciliations/:id/notify sends rejection email to supplier', async () => {
+        const res = await request(app)
+            .post('/api/reconciliations/456/notify')
+            .send({
+                supplierEmail: 'supplier@test.com',
+                newStatus: 'Rejected',
+                invoiceNumber: 'INV-002',
+                poNumber: 'PO-002'
+            });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        expect(sendSupplierEmail).toHaveBeenCalledWith(
+            'supplier@test.com',
+            expect.stringContaining('Rejected'),
+            expect.any(String),
+            expect.objectContaining({ invoiceNumber: 'INV-002', poNumber: 'PO-002' })
+        );
+    });
+
+    test('PATCH /api/reconciliations/:id resolves supplier email and sends status email', async () => {
+        const res = await request(app)
+            .patch('/api/reconciliations/789')
+            .send({ newStatus: 'Approved' });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('success', true);
+        // The mock single() returns supplier_email: 'test@example.com' – direct fallback path
+        expect(sendSupplierEmail).toHaveBeenCalledWith(
+            'test@example.com',
+            expect.stringContaining('PO & Invoice'),
+            expect.any(String),
+            expect.any(Object)
+        );
     });
 });

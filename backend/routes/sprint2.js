@@ -7,6 +7,8 @@ const router = express.Router();
 const WAREHOUSE_SCOPE_MAX_RECORDS = 250;
 const DEFAULT_PENDING_POS_MAX_RECORDS = 500;
 const PENDING_POS_WITH_PHOTOS_MAX_RECORDS = 120;
+const SUPABASE_REQUEST_TIMEOUT_MS = 12000;
+const MAX_LOG_FIELD_LENGTH = 400;
 
 // Helper to generate Shipment ID (same as frontend)
 const getShipmentId = (poNum) => {
@@ -77,11 +79,52 @@ const escapeHtml = (value = '') => String(value)
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
+const truncateLogField = (value, maxLength = MAX_LOG_FIELD_LENGTH) => {
+    if (value === undefined || value === null) return '';
+    const text = String(value);
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, maxLength)}… [truncated]`;
+};
+
+const buildErrorSummary = (error) => ({
+    message: truncateLogField(error?.message || 'Unknown error'),
+    code: error?.code || '',
+    details: truncateLogField(error?.details || ''),
+    hint: truncateLogField(error?.hint || '')
+});
+
+const logRouteError = (context, error, additional = {}) => {
+    console.error(`❌ ERROR [${context}]`, {
+        ...buildErrorSummary(error),
+        ...additional
+    });
+};
+
+const withSupabaseTimeout = async (queryBuilder, timeoutMs = SUPABASE_REQUEST_TIMEOUT_MS) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        if (queryBuilder && typeof queryBuilder.abortSignal === 'function') {
+            return await queryBuilder.abortSignal(controller.signal);
+        }
+        return await queryBuilder;
+    } catch (error) {
+        if (error?.name === 'AbortError') {
+            const timeoutError = new Error(`Supabase request timed out after ${timeoutMs}ms`);
+            timeoutError.code = 'SUPABASE_TIMEOUT';
+            throw timeoutError;
+        }
+        throw error;
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
 const runBackgroundTask = (label, task) => {
     Promise.resolve()
         .then(task)
         .catch((error) => {
-            console.error('Background task failed', { label, error });
+            logRouteError('Background task failed', error, { label });
         });
 };
 
@@ -97,18 +140,22 @@ router.get('/notifications', async (req, res) => {
 
         if (email && role) {
             const [emailResult, roleResult] = await Promise.all([
-                supabase
+                withSupabaseTimeout(
+                    supabase
                     .from('notifications')
                     .select('*')
                     .eq('user_email', email)
                     .order('created_at', { ascending: false })
-                    .limit(50),
-                supabase
+                    .limit(50)
+                ),
+                withSupabaseTimeout(
+                    supabase
                     .from('notifications')
                     .select('*')
                     .eq('user_role', role)
                     .order('created_at', { ascending: false })
                     .limit(50)
+                )
             ]);
 
             if (emailResult.error) throw emailResult.error;
@@ -129,14 +176,16 @@ router.get('/notifications', async (req, res) => {
             query = query.eq('user_role', role);
         }
 
-        const { data, error } = await query
-            .order('created_at', { ascending: false })
-            .limit(50);
+        const { data, error } = await withSupabaseTimeout(
+            query
+                .order('created_at', { ascending: false })
+                .limit(50)
+        );
 
         if (error) throw error;
         res.json({ success: true, notifications: data });
     } catch (error) {
-        console.error('Failed to fetch notifications:', error);
+        logRouteError('Failed to fetch notifications', error, { email, role });
         res.status(500).json({ error: 'Failed to fetch notifications' });
     }
 });
@@ -144,10 +193,12 @@ router.get('/notifications', async (req, res) => {
 router.post('/notifications/mark-read', async (req, res) => {
     const { ids } = req.body;
     try {
-        await supabase.from('notifications').update({ is_read: true }).in('id', ids);
+        await withSupabaseTimeout(
+            supabase.from('notifications').update({ is_read: true }).in('id', ids)
+        );
         res.json({ success: true });
     } catch (error) {
-        console.error('Failed to mark notifications as read:', error);
+        logRouteError('Failed to mark notifications as read', error, { count: Array.isArray(ids) ? ids.length : 0 });
         res.status(500).json({ error: 'Failed to update' });
     }
 });

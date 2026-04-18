@@ -1,33 +1,96 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Bell, BellRing } from 'lucide-react';
+
+const POLL_INTERVAL_MS = 5000;
+const MAX_BACKOFF_MS = 60000;
+const REQUEST_TIMEOUT_MS = 10000;
 
 export default function NotificationBell({ email, role, onNavigate }) {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
+    const isMountedRef = useRef(true);
+    const isFetchingRef = useRef(false);
+    const pollTimerRef = useRef(null);
+    const retryDelayRef = useRef(POLL_INTERVAL_MS);
 
-    const fetchNotifications = async () => {
+    const clearPollTimer = useCallback(() => {
+        if (pollTimerRef.current) {
+            clearTimeout(pollTimerRef.current);
+            pollTimerRef.current = null;
+        }
+    }, []);
+
+    const fetchNotifications = useCallback(async () => {
+        if (!email && !role) return;
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
+        const scheduleNextPoll = (delayMs = POLL_INTERVAL_MS) => {
+            clearPollTimer();
+            if (!isMountedRef.current) return;
+            const targetDelay = document.hidden ? Math.max(delayMs, 15000) : delayMs;
+            pollTimerRef.current = setTimeout(() => {
+                fetchNotifications();
+            }, targetDelay);
+        };
         try {
             const params = {};
             if (email) params.email = email;
             if (role) params.role = role;
-            const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/notifications', { params });
+            const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/notifications', {
+                params: {
+                    ...params,
+                    _ts: Date.now()
+                },
+                timeout: REQUEST_TIMEOUT_MS,
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    Pragma: 'no-cache'
+                }
+            });
             const data = res.data.notifications || [];
-            setNotifications(data);
-            setUnreadCount(data.filter(n => !n.is_read).length);
-        } catch { /* ignore polling errors */ }
-    };
+            if (isMountedRef.current) {
+                setNotifications(data);
+                setUnreadCount(data.filter(n => !n.is_read).length);
+            }
+            retryDelayRef.current = POLL_INTERVAL_MS;
+            scheduleNextPoll(POLL_INTERVAL_MS);
+        } catch (error) {
+            if (import.meta.env.DEV) {
+                console.warn('Notification polling request failed:', error?.message || error);
+            }
+            retryDelayRef.current = Math.min(retryDelayRef.current * 2, MAX_BACKOFF_MS);
+            scheduleNextPoll(retryDelayRef.current);
+        } finally {
+            isFetchingRef.current = false;
+        }
+    }, [clearPollTimer, email, role]);
 
     useEffect(() => {
+        isMountedRef.current = true;
+        retryDelayRef.current = POLL_INTERVAL_MS;
         fetchNotifications();
-        const interval = setInterval(fetchNotifications, 10000);
-        return () => clearInterval(interval);
-    }, [email, role]);
+        const handleVisible = () => {
+            if (!document.hidden) {
+                retryDelayRef.current = POLL_INTERVAL_MS;
+                fetchNotifications();
+            }
+        };
+        window.addEventListener('focus', handleVisible);
+        document.addEventListener('visibilitychange', handleVisible);
+        return () => {
+            isMountedRef.current = false;
+            clearPollTimer();
+            window.removeEventListener('focus', handleVisible);
+            document.removeEventListener('visibilitychange', handleVisible);
+        };
+    }, [clearPollTimer, fetchNotifications]);
 
     const markAsRead = async (ids) => {
         try {
             await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/notifications/mark-read', { ids });
+            retryDelayRef.current = POLL_INTERVAL_MS;
             fetchNotifications();
         } catch { /* ignore mark-read errors */ }
     };
