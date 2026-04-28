@@ -520,45 +520,34 @@ function FinancePortal({ user }) {
         isFetchingDataRef.current = true;
         if (showLoading) setLoading(true);
         try {
-            const [recRes, boqRes, poRes] = await Promise.all([
-                axios.get('https://nestle-finance-command-production.up.railway.app/api/reconciliations', {
-                    params: { _ts: Date.now() },
-                    timeout: DASHBOARD_FETCH_TIMEOUT_MS,
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        Pragma: 'no-cache'
-                    }
-                }),
-                axios.get('https://nestle-finance-command-production.up.railway.app/api/boqs', {
-                    params: { _ts: Date.now() },
-                    timeout: DASHBOARD_FETCH_TIMEOUT_MS,
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        Pragma: 'no-cache'
-                    }
-                }),
-                axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/pending-pos', {
-                    params: {
-                        includePhotos: true,
-                        _ts: Date.now()
-                    },
-                    timeout: DASHBOARD_FETCH_TIMEOUT_MS,
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        Pragma: 'no-cache'
-                    }
-                })
-            ]);
-            setRecords(recRes.data.data || []);
-            setBoqs(boqRes.data.data || []);
-            setPOs(poRes.data.data || []);
-        } catch (error) {
-            if (import.meta.env.DEV) {
-                console.warn('Finance polling request failed:', error?.message || error);
-            }
-        }
-        finally {
-            if (showLoading) setLoading(false);
+            const p1 = axios.get('https://nestle-finance-command-production.up.railway.app/api/reconciliations', {
+                params: { _ts: Date.now() },
+                timeout: DASHBOARD_FETCH_TIMEOUT_MS,
+                headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
+            }).then(res => {
+                setRecords(res.data.data || []);
+                if (showLoading) setLoading(false);
+            }).catch(error => {
+                if (import.meta.env.DEV) console.warn('Finance polling request failed (reconciliations):', error);
+                if (showLoading) setLoading(false);
+            });
+
+            const p2 = axios.get('https://nestle-finance-command-production.up.railway.app/api/boqs', {
+                params: { _ts: Date.now() },
+                timeout: DASHBOARD_FETCH_TIMEOUT_MS,
+                headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
+            }).then(res => setBoqs(res.data.data || []))
+              .catch(error => { if (import.meta.env.DEV) console.warn('Finance polling request failed (boqs):', error); });
+
+            const p3 = axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/pending-pos', {
+                params: { includePhotos: true, _ts: Date.now() },
+                timeout: DASHBOARD_FETCH_TIMEOUT_MS,
+                headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
+            }).then(res => setPOs(res.data.data || []))
+              .catch(error => { if (import.meta.env.DEV) console.warn('Finance polling request failed (pos):', error); });
+
+            await Promise.all([p1, p2, p3]);
+        } finally {
             isFetchingDataRef.current = false;
         }
     }, []);
