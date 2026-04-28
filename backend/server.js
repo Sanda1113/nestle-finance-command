@@ -1,4 +1,8 @@
 // server.js
+if (process.env.NODE_ENV !== 'production') {
+    require('dotenv').config();
+}
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -8,10 +12,6 @@ const authRoutes = require('./routes/auth');
 const xlsx = require('xlsx');
 const sprint2Routes = require('./routes/sprint2');
 const { sendSupplierEmail } = require('./mailer');
-
-if (process.env.NODE_ENV !== 'production') {
-    require('dotenv').config();
-}
 
 const app = express();
 require('./payoutReminder');

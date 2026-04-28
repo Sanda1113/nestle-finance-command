@@ -1,7 +1,7 @@
 // backend/mailer.js
 const { Resend } = require('resend');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const DEFAULT_PORTAL_BASE_URL = 'https://www.nestlefinancecommand.com';
 
 const getPortalBaseUrl = () => {
@@ -74,6 +74,11 @@ const buildEmailHtml = (title, body, refs = {}) => {
 const sendSupplierEmail = async (toEmail, subject, htmlBody, refs = {}) => {
     if (!toEmail) {
         console.warn('⚠️ No recipient email provided');
+        return false;
+    }
+
+    if (!resend) {
+        console.warn('⚠️ RESEND_API_KEY is not set. Email not sent.');
         return false;
     }
 

@@ -1,10 +1,7 @@
 const cron = require('node-cron');
-const { createClient } = require('@supabase/supabase-js');
+const supabase = require('./db');
 const { Resend } = require('resend');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 async function runPayoutReminders() {
