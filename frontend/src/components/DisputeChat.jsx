@@ -243,7 +243,7 @@ Approach:
                         {chatMode === 'ai' ? <Cpu className="w-5 h-5" /> : <MessageSquareWarning className="w-5 h-5" />}
                     </div>
                     <div>
-                        <h4 className="font-black text-slate-800 dark:text-white tracking-tight">{chatMode === 'ai' ? 'AI Assistant' : 'Finance Support Hub'}</h4>
+                        <h4 className="font-black text-slate-800 dark:text-white tracking-tight">{chatMode === 'ai' ? 'AI Chat' : (userRole === 'Supplier' ? 'Supplier Support Hub' : 'Finance Support Hub')}</h4>
                         <div className="flex items-center gap-2 mt-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                             <span>REF: {referenceNumber}</span>
                             {chatMode === 'human' && (
@@ -300,8 +300,12 @@ Approach:
                 {activeMessages.length === 0 && chatMode === 'human' && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 opacity-60">
                         <div className="w-20 h-20 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4"><MessageSquareWarning className="w-10 h-10 text-slate-400" /></div>
-                        <p className="text-sm font-bold text-slate-600 dark:text-slate-300">Start Communication Thread</p>
-                        <p className="text-xs text-slate-400 mt-2 max-w-[250px]">Messages sent here are recorded in the official audit ledger.</p>
+                        <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
+                            {userRole === 'Supplier' ? 'Need help? Start a chat' : 'Start Communication Thread'}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-2 max-w-[250px]">
+                            {userRole === 'Supplier' ? 'Your messages are secure and reviewed by our support team.' : 'Messages sent here are recorded in the official audit ledger.'}
+                        </p>
                     </div>
                 )}
 

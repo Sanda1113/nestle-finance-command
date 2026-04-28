@@ -44,7 +44,7 @@ export default function LiveChat({ userEmail, userRole }) {
     const [aiMessages, setAiMessages] = useState([{
         id: 'ai-welcome',
         role: 'assistant',
-        content: `Hi! I'm the Nestlé AI Assistant. I can answer questions about supply chain, purchase orders, invoices, payment terms, logistics, and more. How can I help you?`
+        content: `Hi! I'm the Nestlé AI Chat. I can answer questions about supply chain, purchase orders, invoices, payment terms, logistics, and more. How can I help you?`
     }]);
     const [aiInput, setAiInput] = useState('');
     const [aiThinking, setAiThinking] = useState(false);
@@ -201,7 +201,7 @@ export default function LiveChat({ userEmail, userRole }) {
                         className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-purple-400 border-b-2 border-purple-500"
                     >
                         <Bot className="w-3.5 h-3.5" />
-                        AI Assistant
+                        AI Chat
                     </button>
                 </div>
 
@@ -289,7 +289,7 @@ export default function LiveChat({ userEmail, userRole }) {
                         className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
                     >
                         <Bot className="w-3.5 h-3.5" />
-                        AI Assistant
+                        AI Chat
                     </button>
                 </div>
                 <div className="px-4 py-3 border-b border-slate-700 bg-slate-800">
@@ -352,10 +352,10 @@ export default function LiveChat({ userEmail, userRole }) {
                 <button
                     onClick={() => setChatTab('ai')}
                     className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 text-xs font-semibold transition-colors"
-                    title="Switch to AI Assistant"
+                    title="Switch to AI Chat"
                 >
                     <Bot className="w-3.5 h-3.5" />
-                    AI
+                    AI Chat
                 </button>
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" title="Connected"></span>
             </div>
