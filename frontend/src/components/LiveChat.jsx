@@ -189,19 +189,18 @@ export default function LiveChat({ userEmail, userRole }) {
         return (
             <div className="flex flex-col h-full bg-slate-900 text-white">
                 {/* Tab bar */}
-                <div className="flex border-b border-slate-700 bg-slate-800 shrink-0">
+                {/* Tab bar */}
+                <div className="flex border-b border-slate-700 bg-slate-800/80 shrink-0">
                     <button
                         onClick={() => setChatTab('live')}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold transition-colors text-slate-400 hover:bg-slate-700/50"
                     >
-                        <Users className="w-3.5 h-3.5" />
-                        Live Chat
+                        <User className="w-4 h-4" /> Live Support
                     </button>
                     <button
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-purple-400 border-b-2 border-purple-500"
+                        className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold transition-colors text-purple-400 border-b-2 border-purple-500 bg-slate-800"
                     >
-                        <Bot className="w-3.5 h-3.5" />
-                        AI Chat
+                        <Bot className="w-4 h-4" /> AI Chat
                     </button>
                 </div>
 
@@ -286,19 +285,18 @@ export default function LiveChat({ userEmail, userRole }) {
         return (
             <div className="flex flex-col h-full bg-slate-900 text-white">
                 {/* Tab bar */}
-                <div className="flex border-b border-slate-700 bg-slate-800 shrink-0">
+                {/* Tab bar */}
+                <div className="flex border-b border-slate-700 bg-slate-800/80 shrink-0">
                     <button
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-blue-400 border-b-2 border-blue-500"
+                        className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold transition-colors text-blue-400 border-b-2 border-blue-500 bg-slate-800"
                     >
-                        <Users className="w-3.5 h-3.5" />
-                        Live Chat
+                        <User className="w-4 h-4" /> Live Support
                     </button>
                     <button
                         onClick={() => setChatTab('ai')}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold transition-colors text-slate-400 hover:bg-slate-700/50"
                     >
-                        <Bot className="w-3.5 h-3.5" />
-                        AI Chat
+                        <Bot className="w-4 h-4" /> AI Chat
                     </button>
                 </div>
                 <div className="px-4 py-3 border-b border-slate-700 bg-slate-800">

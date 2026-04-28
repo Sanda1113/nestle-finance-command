@@ -11,6 +11,7 @@ import AppNotifier from './AppNotifier';
 import NotificationBell from './NotificationBell';
 import FloatingChat from './FloatingChat';
 import { safePlayAudio } from '../utils/safeAudio';
+import { supabase } from '../utils/supabaseClient';
 
 const getShipmentId = (poNum) => {
     if (!poNum || typeof poNum !== 'string') return 'SHP-PENDING';
@@ -292,6 +293,9 @@ export default function WarehousePortal({ user, onLogout }) {
     const [isDarkMode, setIsDarkMode] = useState(true);
     const [isClearing, setIsClearing] = useState(false);
     const [isRejecting, setIsRejecting] = useState(false);
+    const [dialog, setDialog] = useState(null);
+    const [offlineQueueWarning, setOfflineQueueWarning] = useState(null);
+    const [gpsWarning, setGpsWarning] = useState(false);
 
     // Prevent duplicate sync calls
     const syncingRef = useRef(false);
@@ -507,7 +511,7 @@ export default function WarehousePortal({ user, onLogout }) {
                 const reason = error?.name === 'QuotaExceededError'
                     ? 'Storage is full on this device.'
                     : 'Browser storage is unavailable.';
-                alert(`⚠️ Offline queue could not be fully saved. ${reason} Keep the app open and reconnect to sync pending actions; closing the app before reconnect may lose unsaved actions.`);
+                setOfflineQueueWarning(`⚠️ Offline queue could not be fully saved. ${reason} Keep the app open and reconnect to sync pending actions.`);
             }
         }
     }, [syncQueue]);
@@ -559,8 +563,21 @@ export default function WarehousePortal({ user, onLogout }) {
 
     useEffect(() => {
         fetchPOs();
-        const interval = setInterval(() => fetchPOs(), WAREHOUSE_POLL_INTERVAL_MS);
-        return () => clearInterval(interval);
+
+        if (isOffline) return;
+
+        const channel = supabase
+            .channel('warehouse_pos')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'purchase_orders' },
+                () => fetchPOs()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [fetchPOs, isOffline]);
 
     useEffect(() => {
@@ -632,13 +649,13 @@ export default function WarehousePortal({ user, onLogout }) {
             setSyncQueue([]);
             localStorage.removeItem(SYNC_QUEUE_STORAGE_KEY);
             if (droppedInvalidCount > 0) {
-                alert(`📡 Offline queue cleaned and synced. ${droppedInvalidCount} invalid action(s) were removed.`);
+                setDialog({ title: "Offline Queue Cleaned", message: `📡 Offline queue cleaned and synced. ${droppedInvalidCount} invalid action(s) were removed.`, type: "alert" });
             } else {
-                alert('📡 All offline shipment actions have been synced successfully.');
+                setDialog({ title: "Sync Complete", message: '📡 All offline shipment actions have been synced successfully.', type: "alert" });
             }
         } else {
             setSyncQueue(failedItems);
-            alert(`⚠️ ${failedItems.length} offline action(s) failed to sync.${droppedInvalidCount > 0 ? ` ${droppedInvalidCount} invalid action(s) were removed.` : ''} Failed items will remain in the queue for retry.`);
+            setDialog({ title: "Sync Issues", message: `⚠️ ${failedItems.length} offline action(s) failed to sync.${droppedInvalidCount > 0 ? ` ${droppedInvalidCount} invalid action(s) were removed.` : ''} Failed items will remain in the queue for retry.`, type: "alert" });
         }
 
         setIsSyncing(false);
@@ -683,7 +700,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
             if (matchedPO) {
                 if (matchedPO.status && matchedPO.status.includes('Received')) {
-                    alert(`📦 Shipment ${getShipmentId(matchedPO.po_number)} found, but it has already been COMPLETED and locked.`);
+                    setDialog({ title: "Already Completed", message: `📦 Shipment ${getShipmentId(matchedPO.po_number)} found, but it has already been COMPLETED and locked.`, type: "alert" });
                 } else {
                     setSearchTerm(scannedText);
                     setViewMode('pending');
@@ -888,25 +905,33 @@ export default function WarehousePortal({ user, onLogout }) {
 
     const submitGRN = async () => {
         const unverifiedShortages = receivedItems.filter(i => i.status === 'Shortage' && !i.reasonCode);
-        if (unverifiedShortages.length > 0) return alert('⚠️ Strict Audit Mode: Reason Code required for all shortages.');
+        if (unverifiedShortages.length > 0) return setDialog({ title: "Validation Error", message: "⚠️ Strict Audit Mode: Reason Code required for all shortages.", type: "alert" });
 
         const missingFMCG = receivedItems.filter(i => i.actualQtyReceived > 0 && (!i.batchNumber || !i.expiryDate));
-        if (missingFMCG.length > 0) return alert('⚠️ FMCG Compliance Error: Batch & Expiry required for food items.');
+        if (missingFMCG.length > 0) return setDialog({ title: "Compliance Error", message: "⚠️ FMCG Compliance Error: Batch & Expiry required for food items.", type: "alert" });
 
         let totalAmount = 0;
         let isPartial = false;
+        let shortageCount = 0;
 
         receivedItems.forEach(item => {
             totalAmount += parseFloat(item.actualQtyReceived) * parseFloat(item.unitPrice);
-            if (item.status === 'Shortage' || item.status === 'Pending Scan') isPartial = true;
+            if (item.status === 'Shortage' || item.status === 'Pending Scan') {
+                isPartial = true;
+                shortageCount++;
+            }
         });
 
         let gpsLocation = "Location Unavailable";
+        setGpsWarning(false);
         if ("geolocation" in navigator) {
             try {
                 const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 }));
                 gpsLocation = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
-            } catch { console.log("GPS Denied/Failed"); }
+            } catch { 
+                console.log("GPS Denied/Failed");
+                setGpsWarning(true);
+            }
         }
 
         const payload = {
@@ -919,90 +944,113 @@ export default function WarehousePortal({ user, onLogout }) {
         };
         const submittedAt = new Date().toISOString();
 
-        if (isOffline) {
-            enqueueOfflineAction('submit', payload);
-            updatePOStatusLocally(
-                selectedPO.po_number,
-                isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)',
-                buildWarehouseGRNPatch(user.email, submittedAt, totalAmount, isPartial, gpsLocation)
-            );
-            alert(`📡 OFFLINE MODE: GRN saved locally.\n📍 GPS Tag: ${gpsLocation}`);
-            setSelectedPO(null);
-            setViewMode('completed');
-            fetchPOs();
-        } else {
-            try {
-                await axios.post(`${API_BASE_URL}/grn/submit`, payload);
-                updatePOStatusLocally(
-                    selectedPO.po_number,
-                    isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)',
-                    buildWarehouseGRNPatch(user.email, submittedAt, totalAmount, isPartial, gpsLocation)
-                );
-                alert(`✅ Secure GRN Logged. GPS Coordinates Captured. Pipeline updated.`);
-                setSelectedPO(null);
-                setViewMode('completed');
-                fetchPOs();
-            } catch {
-                alert('Failed to log GRN. Saving offline.');
+        const doSubmit = async () => {
+            if (isOffline) {
                 enqueueOfflineAction('submit', payload);
                 updatePOStatusLocally(
                     selectedPO.po_number,
                     isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)',
                     buildWarehouseGRNPatch(user.email, submittedAt, totalAmount, isPartial, gpsLocation)
                 );
+                setDialog({ title: "Offline Save", message: `📡 OFFLINE MODE: GRN saved locally.\n📍 GPS Tag: ${gpsLocation}`, type: "alert" });
                 setSelectedPO(null);
                 setViewMode('completed');
                 fetchPOs();
+            } else {
+                try {
+                    await axios.post(`${API_BASE_URL}/grn/submit`, payload);
+                    updatePOStatusLocally(
+                        selectedPO.po_number,
+                        isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)',
+                        buildWarehouseGRNPatch(user.email, submittedAt, totalAmount, isPartial, gpsLocation)
+                    );
+                    setDialog({ title: "Success", message: `✅ Secure GRN Logged. GPS Coordinates Captured. Pipeline updated.`, type: "alert" });
+                    setSelectedPO(null);
+                    setViewMode('completed');
+                    fetchPOs();
+                } catch {
+                    enqueueOfflineAction('submit', payload);
+                    updatePOStatusLocally(
+                        selectedPO.po_number,
+                        isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)',
+                        buildWarehouseGRNPatch(user.email, submittedAt, totalAmount, isPartial, gpsLocation)
+                    );
+                    setDialog({ title: "Offline Save", message: 'Failed to log GRN. Saved offline and queued for sync.', type: "alert" });
+                    setSelectedPO(null);
+                    setViewMode('completed');
+                    fetchPOs();
+                }
             }
-        }
+        };
+
+        setDialog({
+            title: "Review & Confirm GRN",
+            message: `You are about to submit the GRN for Shipment ${getShipmentId(selectedPO.po_number)}. Items received: ${receivedItems.length}. Shortages detected: ${shortageCount}. Total value: $${totalAmount.toFixed(2)}. GPS: ${gpsLocation}.`,
+            type: "confirm",
+            onConfirm: () => {
+                setDialog(null);
+                doSubmit();
+            }
+        });
     };
 
     const handleAcknowledgeArrival = async (po) => {
-        if (!window.confirm('Acknowledge that this truck has arrived at the bay?')) return;
-        const payload = {
-            poNumber: po.po_number,
-            ackedBy: user.email
-        };
+        setDialog({
+            title: "Acknowledge Arrival",
+            message: "Acknowledge that this truck has arrived at the bay?",
+            type: "confirm",
+            onConfirm: async () => {
+                setDialog(null);
+                const payload = { poNumber: po.po_number, ackedBy: user.email };
 
-        if (isOffline) {
-            enqueueOfflineAction('acknowledge', payload);
-            updatePOStatusLocally(po.po_number, 'Truck at Bay - Pending Unload');
-            alert('📡 OFFLINE MODE: Arrival acknowledgement saved locally and will auto-sync when online.');
-            return;
-        }
+                if (isOffline) {
+                    enqueueOfflineAction('acknowledge', payload);
+                    updatePOStatusLocally(po.po_number, 'Truck at Bay - Pending Unload');
+                    setDialog({ title: "Offline Save", message: '📡 OFFLINE MODE: Arrival acknowledgement saved locally and will auto-sync when online.', type: "alert" });
+                    return;
+                }
 
-        try {
-            await axios.post(`${API_BASE_URL}/grn/acknowledge`, payload);
-            updatePOStatusLocally(po.po_number, 'Truck at Bay - Pending Unload');
-            alert('✅ Arrival Acknowledged. Supplier has been notified.');
-            fetchPOs();
-        } catch (error) {
-            console.error(error);
-            enqueueOfflineAction('acknowledge', payload);
-            updatePOStatusLocally(po.po_number, 'Truck at Bay - Pending Unload');
-            alert('Failed to acknowledge arrival online. Action saved offline and queued for sync.');
-        }
+                try {
+                    await axios.post(`${API_BASE_URL}/grn/acknowledge`, payload);
+                    updatePOStatusLocally(po.po_number, 'Truck at Bay - Pending Unload');
+                    setDialog({ title: "Success", message: '✅ Arrival Acknowledged. Supplier has been notified.', type: "alert" });
+                    fetchPOs();
+                } catch (error) {
+                    console.error(error);
+                    enqueueOfflineAction('acknowledge', payload);
+                    updatePOStatusLocally(po.po_number, 'Truck at Bay - Pending Unload');
+                    setDialog({ title: "Offline Save", message: 'Failed to acknowledge arrival online. Action saved offline and queued for sync.', type: "alert" });
+                }
+            }
+        });
     };
 
     const handleClearGoods = async () => {
         if (!selectedPO) return;
-        if (!window.confirm('Confirm that all goods have been inspected and are ready for payout?')) return;
-        setIsClearing(true);
-        try {
-            await axios.post(`${API_BASE_URL}/grn/clear`, {
-                poNumber: selectedPO.po_number,
-                clearedBy: user.email
-            });
-            updatePOStatusLocally(selectedPO.po_number, 'Goods Cleared - Ready for Payout');
-            alert('✅ Goods marked as cleared. Finance has been notified.');
-            setSelectedPO(null);
-            setViewMode('completed');
-            fetchPOs();
-        } catch {
-            alert('Failed to clear goods.');
-        } finally {
-            setIsClearing(false);
-        }
+        setDialog({
+            title: "Clear Goods",
+            message: "Confirm that all goods have been inspected and are ready for payout?",
+            type: "confirm",
+            onConfirm: async () => {
+                setDialog(null);
+                setIsClearing(true);
+                try {
+                    await axios.post(`${API_BASE_URL}/grn/clear`, {
+                        poNumber: selectedPO.po_number,
+                        clearedBy: user.email
+                    });
+                    updatePOStatusLocally(selectedPO.po_number, 'Goods Cleared - Ready for Payout');
+                    setDialog({ title: "Success", message: '✅ Goods marked as cleared. Finance has been notified.', type: "alert" });
+                    setSelectedPO(null);
+                    setViewMode('completed');
+                    fetchPOs();
+                } catch {
+                    setDialog({ title: "Error", message: 'Failed to clear goods.', type: "alert" });
+                } finally {
+                    setIsClearing(false);
+                }
+            }
+        });
     };
 
     const handleRejectShipment = async () => {
@@ -1011,71 +1059,74 @@ export default function WarehousePortal({ user, onLogout }) {
             item.status === 'Shortage' || Number(item.actualQtyReceived || 0) < Number(item.qty || 0)
         );
         if (shortageItems.length === 0) {
-            alert('Shipment can only be rejected when a shortage is detected.');
+            setDialog({ title: "Validation Error", message: 'Shipment can only be rejected when a shortage is detected.', type: "alert" });
             return;
         }
 
-        const reasonInput = window.prompt('Reason for rejection (required):');
-        if (reasonInput === null) return;
+        setDialog({
+            title: "Reject Shipment",
+            message: "Reason for rejection (required):",
+            type: "prompt",
+            onConfirm: async (reasonInput) => {
+                const reason = (reasonInput || '').trim();
+                if (!reason) {
+                    setDialog({ title: "Validation Error", message: 'Please provide a rejection reason.', type: "alert" });
+                    return;
+                }
+                
+                setDialog(null);
+                setIsRejecting(true);
+                const payload = {
+                    poNumber: selectedPO.po_number,
+                    rejectedBy: user.email,
+                    itemsReceived: receivedItems,
+                    rejectionReason: reason
+                };
+                const rejectedAt = new Date().toISOString();
 
-        const reason = reasonInput.trim();
-        if (!reason) {
-            alert('Please provide a rejection reason.');
-            return;
-        }
+                if (isOffline) {
+                    enqueueOfflineAction('reject', payload);
+                    updatePOStatusLocally(
+                        selectedPO.po_number,
+                        'Transaction Cancelled (Shortage)',
+                        buildWarehouseRejectionPatch(user.email, rejectedAt, reason)
+                    );
+                    setDialog({ title: "Offline Save", message: '📡 OFFLINE MODE: Shipment rejection saved locally and will auto-sync when online.', type: "alert" });
+                    setSelectedPO(null);
+                    setViewMode('completed');
+                    fetchPOs();
+                    setIsRejecting(false);
+                    return;
+                }
 
-        if (!window.confirm('Reject this shipment and cancel the entire transaction?')) return;
-
-        setIsRejecting(true);
-        const payload = {
-            poNumber: selectedPO.po_number,
-            rejectedBy: user.email,
-            itemsReceived: receivedItems,
-            rejectionReason: reason
-        };
-        const rejectedAt = new Date().toISOString();
-
-        if (isOffline) {
-            enqueueOfflineAction('reject', payload);
-            updatePOStatusLocally(
-                selectedPO.po_number,
-                'Transaction Cancelled (Shortage)',
-                buildWarehouseRejectionPatch(user.email, rejectedAt, reason)
-            );
-            alert('📡 OFFLINE MODE: Shipment rejection saved locally and will auto-sync when online.');
-            setSelectedPO(null);
-            setViewMode('completed');
-            fetchPOs();
-            setIsRejecting(false);
-            return;
-        }
-
-        try {
-            await axios.post(`${API_BASE_URL}/grn/reject`, payload);
-            updatePOStatusLocally(
-                selectedPO.po_number,
-                'Transaction Cancelled (Shortage)',
-                buildWarehouseRejectionPatch(user.email, rejectedAt, reason)
-            );
-            alert('❌ Shipment rejected due to shortage. Transaction canceled.');
-            setSelectedPO(null);
-            setViewMode('completed');
-            fetchPOs();
-        } catch (error) {
-            console.error(error);
-            enqueueOfflineAction('reject', payload);
-            updatePOStatusLocally(
-                selectedPO.po_number,
-                'Transaction Cancelled (Shortage)',
-                buildWarehouseRejectionPatch(user.email, rejectedAt, reason)
-            );
-            alert('Failed to reject shipment online. Rejection saved offline and queued for sync.');
-            setSelectedPO(null);
-            setViewMode('completed');
-            fetchPOs();
-        } finally {
-            setIsRejecting(false);
-        }
+                try {
+                    await axios.post(`${API_BASE_URL}/grn/reject`, payload);
+                    updatePOStatusLocally(
+                        selectedPO.po_number,
+                        'Transaction Cancelled (Shortage)',
+                        buildWarehouseRejectionPatch(user.email, rejectedAt, reason)
+                    );
+                    setDialog({ title: "Success", message: '❌ Shipment rejected due to shortage. Transaction canceled.', type: "alert" });
+                    setSelectedPO(null);
+                    setViewMode('completed');
+                    fetchPOs();
+                } catch (error) {
+                    console.error(error);
+                    enqueueOfflineAction('reject', payload);
+                    updatePOStatusLocally(
+                        selectedPO.po_number,
+                        'Transaction Cancelled (Shortage)',
+                        buildWarehouseRejectionPatch(user.email, rejectedAt, reason)
+                    );
+                    setDialog({ title: "Offline Save", message: 'Failed to reject shipment online. Rejection saved offline and queued for sync.', type: "alert" });
+                    setSelectedPO(null);
+                    setViewMode('completed');
+                    fetchPOs();
+                } finally {
+                    setIsRejecting(false);
+                }
+            }
+        });
     };
 
     const rawPendingList = pos.filter(po => {
@@ -1285,6 +1336,29 @@ export default function WarehousePortal({ user, onLogout }) {
                     </button>
                 )}
 
+                {offlineQueueWarning && (
+                    <div className="mb-4 w-full bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 p-4 rounded-xl flex items-start gap-3">
+                        <AlertCircle className="w-6 h-6 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <p className="text-amber-800 dark:text-amber-200 text-sm font-medium">{offlineQueueWarning}</p>
+                        </div>
+                        <button onClick={() => setOfflineQueueWarning(null)} className="text-amber-600 dark:text-amber-500 hover:text-amber-800">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                )}
+                {gpsWarning && (
+                    <div className="mb-4 w-full bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 p-4 rounded-xl flex items-start gap-3">
+                        <MapPin className="w-6 h-6 text-red-600 dark:text-red-500 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <p className="text-red-800 dark:text-red-200 text-sm font-medium">GPS Location Failed. Please verify your location manually before submitting.</p>
+                        </div>
+                        <button onClick={() => setGpsWarning(false)} className="text-red-600 dark:text-red-500 hover:text-red-800">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-2 mb-4">
                     <div>
                         <h2 className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-2">
@@ -1404,7 +1478,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                     return (
                                         <div
                                             key={po.id}
-                                            onClick={() => !isCompleted && handleSelectPO(po)}
+                                            onClick={() => handleSelectPO(po)}
                                             className={`group bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border ${isCompleted ? 'border-emerald-500/50' : 'border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl cursor-pointer'} transition-all relative overflow-hidden`}
                                         >
                                             {isCompleted && (
@@ -1527,12 +1601,14 @@ export default function WarehousePortal({ user, onLogout }) {
                             </div>
 
                             <div className="hidden lg:block mt-auto space-y-3 pt-4">
-                                <button
-                                    onClick={submitGRN}
-                                    className="w-full min-h-12 px-4 text-base bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]"
-                                >
-                                    <CheckCircle2 className="w-5 h-5" /> Confirm Goods Received (Sign GRN)
-                                </button>
+                                {(!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled'))) && (
+                                    <button
+                                        onClick={submitGRN}
+                                        className="w-full min-h-12 px-4 text-base bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]"
+                                    >
+                                        <CheckCircle2 className="w-5 h-5" /> Confirm Goods Received (Sign GRN)
+                                    </button>
+                                )}
                                 {canClear && (
                                     <button
                                         onClick={handleClearGoods}
@@ -1543,7 +1619,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                         {isClearing ? 'Clearing...' : 'Clear Goods for Payout'}
                                     </button>
                                 )}
-                                {canRejectForShortage && (
+                                {canRejectForShortage && (!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled'))) && (
                                     <button
                                         onClick={handleRejectShipment}
                                         disabled={isRejecting}
@@ -1587,26 +1663,33 @@ export default function WarehousePortal({ user, onLogout }) {
                                                     <p className="text-[10px] text-blue-400 font-mono mt-1">Barcode: {item.expectedBarcode}</p>
                                                 </div>
 
-                                                <div className="flex items-center justify-between sm:justify-start gap-1.5 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto">
-                                                    <button
-                                                        onClick={() => handleQtyChange(idx, -1)}
-                                                        className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
-                                                    >
-                                                        -
-                                                    </button>
-                                                    <input
-                                                        type="number"
-                                                        value={item.actualQtyReceived || ''}
-                                                        placeholder="0"
-                                                        onChange={(e) => handleQtyChange(idx, 0, e.target.value)}
-                                                        className={`w-full sm:w-16 min-w-12 text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`}
-                                                    />
-                                                    <button
-                                                        onClick={() => handleQtyChange(idx, 1)}
-                                                        className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
-                                                    >
-                                                        +
-                                                    </button>
+                                                <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto mt-3 sm:mt-0">
+                                                    <div className="flex items-center justify-between sm:justify-start gap-1.5 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto">
+                                                        <button
+                                                            onClick={() => handleQtyChange(idx, -1)}
+                                                            className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
+                                                        >
+                                                            -
+                                                        </button>
+                                                        <input
+                                                            type="number"
+                                                            value={item.actualQtyReceived || ''}
+                                                            placeholder="0"
+                                                            onChange={(e) => handleQtyChange(idx, 0, e.target.value)}
+                                                            className={`w-full sm:w-16 min-w-12 text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`}
+                                                        />
+                                                        <button
+                                                            onClick={() => handleQtyChange(idx, 1)}
+                                                            className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
+                                                        >
+                                                            +
+                                                        </button>
+                                                    </div>
+                                                    {!blindMode && (item.actualQtyReceived > 0 || isShort || isOver) && (
+                                                        <div className={`w-full text-center sm:text-right text-[10px] font-black uppercase px-2 py-1 rounded-md ${isShort ? 'text-red-600 bg-red-100 dark:bg-red-900/30' : isOver ? 'text-amber-600 bg-amber-100 dark:bg-amber-900/30' : 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30'}`}>
+                                                            {isShort ? `Shortage: ${(item.actualQtyReceived || 0) - item.qty}` : isOver ? `Overage: +${(item.actualQtyReceived || 0) - item.qty}` : 'Exact Match'}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -1645,6 +1728,10 @@ export default function WarehousePortal({ user, onLogout }) {
                                                         <option value="Missing from Truck">Missing from Truck</option>
                                                         <option value="Damaged in Transit">Damaged in Transit (Rejected)</option>
                                                         <option value="Supplier Backordered">Supplier Backordered</option>
+                                                        <option value="Wrong Item Delivered">Wrong Item Delivered</option>
+                                                        <option value="Expired on Arrival">Expired on Arrival</option>
+                                                        <option value="Customs Hold">Customs Hold</option>
+                                                        <option value="Quantity Mismatch on Label">Quantity Mismatch on Label</option>
                                                     </select>
 
                                                     <div className="flex items-center justify-between w-full sm:w-auto sm:ml-auto">
@@ -1673,12 +1760,14 @@ export default function WarehousePortal({ user, onLogout }) {
                             className="sticky bottom-0 left-0 w-full lg:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
                             style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
                         >
-                            <button
-                                onClick={submitGRN}
-                                className="w-full min-h-12 px-4 text-base sm:text-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98]"
-                            >
-                                <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> Confirm Goods Received (Sign GRN)
-                            </button>
+                            {(!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled'))) && (
+                                <button
+                                    onClick={submitGRN}
+                                    className="w-full min-h-12 px-4 text-base sm:text-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98]"
+                                >
+                                    <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> Confirm Goods Received (Sign GRN)
+                                </button>
+                            )}
                             {canClear && (
                                 <button
                                     onClick={handleClearGoods}
@@ -1689,7 +1778,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                     {isClearing ? 'Clearing...' : 'Clear Goods for Payout'}
                                 </button>
                             )}
-                            {canRejectForShortage && (
+                            {canRejectForShortage && (!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled'))) && (
                                 <button
                                     onClick={handleRejectShipment}
                                     disabled={isRejecting}
@@ -1707,6 +1796,46 @@ export default function WarehousePortal({ user, onLogout }) {
             <AppNotifier role="Warehouse" />
 
             <FloatingChat userEmail={user?.email || 'WarehouseOp'} userRole="Warehouse" />
+
+            {dialog && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-700 animate-in zoom-in-95 duration-200">
+                        <h3 className="text-lg font-bold text-white mb-2">{dialog.title}</h3>
+                        <p className="text-slate-300 text-sm mb-6 whitespace-pre-wrap">{dialog.message}</p>
+                        
+                        {dialog.type === 'prompt' && (
+                            <input 
+                                type="text"
+                                id="dialogPromptInput"
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white mb-6"
+                                placeholder="Enter reason..."
+                                autoFocus
+                            />
+                        )}
+
+                        <div className="flex gap-3 justify-end">
+                            {(dialog.type === 'confirm' || dialog.type === 'prompt') && (
+                                <button onClick={() => setDialog(null)} className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:bg-slate-700 transition-colors">Cancel</button>
+                            )}
+                            <button 
+                                onClick={() => {
+                                    if (dialog.type === 'prompt') {
+                                        const val = document.getElementById('dialogPromptInput')?.value;
+                                        dialog.onConfirm(val);
+                                    } else if (dialog.onConfirm) {
+                                        dialog.onConfirm();
+                                    } else {
+                                        setDialog(null);
+                                    }
+                                }} 
+                                className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                            >
+                                {(dialog.type === 'confirm' || dialog.type === 'prompt') ? 'Confirm' : 'OK'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

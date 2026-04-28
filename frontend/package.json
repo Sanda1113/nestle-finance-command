@@ -13,6 +13,7 @@
     "test:ci": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --ci --watchAll=false"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.105.0",
     "axios": "^1.13.6",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.577.0",

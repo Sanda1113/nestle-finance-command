@@ -12,7 +12,7 @@ export default function FloatingChat({ userEmail, userRole }) {
                     <div className="bg-slate-800 p-3 flex justify-between items-center border-b border-slate-700 shrink-0">
                         <div className="flex items-center gap-2">
                             <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
-                            <span className="font-bold text-slate-100 text-sm tracking-wide">AI Chat</span>
+                            <span className="font-bold text-slate-100 text-sm tracking-wide">{userRole === 'Supplier' ? 'Supplier Support Hub' : 'Support Hub'}</span>
                         </div>
                         <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-600 rounded-full p-1.5 transition-colors">
                             <X className="w-4 h-4" />

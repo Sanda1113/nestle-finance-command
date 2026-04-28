@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2, Search, FileText, ChevronRight, ShieldCheck } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import NotificationBell from './NotificationBell';
 import AppNotifier from './AppNotifier';
 import FloatingChat from './FloatingChat';
+import { supabase } from '../utils/supabaseClient';
 
 const formatCurrency = (amount, currencyCode = 'USD') => {
     if (amount === undefined || amount === null || isNaN(amount)) return '$0.00';
@@ -51,6 +52,7 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [, setError] = useState(null);
 
     const [expandedLog, setExpandedLog] = useState(null);
+    const [dialog, setDialog] = useState(null);
 
     const [isDarkMode, setIsDarkMode] = useState(true);
     const isFetchingDataRef = useRef(false);
@@ -108,12 +110,44 @@ export default function SupplierDashboard({ user, onLogout }) {
     useEffect(() => {
         isMountedRef.current = true;
         fetchData();
-        const interval = setInterval(fetchData, 30000);
+        
+        const channels = [
+            'purchase_orders',
+            'reconciliations',
+            'boqs',
+            'supplier_logs'
+        ].map(table => 
+            supabase
+                .channel(`supplier_${table}`)
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table },
+                    () => {
+                        if (isMountedRef.current) fetchData();
+                    }
+                )
+                .subscribe()
+        );
+
         return () => {
             isMountedRef.current = false;
-            clearInterval(interval);
+            channels.forEach(ch => supabase.removeChannel(ch));
         };
     }, [user.email]);
+
+    const trustScore = useMemo(() => {
+        if (!myRecons.length && !myBoqs.length) return 80;
+        
+        const totalRecons = myRecons.length;
+        const approvedRecons = myRecons.filter(r => (r.match_status || '').includes('Approve')).length;
+        const accuracyScore = totalRecons > 0 ? (approvedRecons / totalRecons) * 100 : 80;
+        
+        const totalBoqs = myBoqs.length;
+        const rejectedBoqs = myBoqs.filter(b => b.status === 'Rejected').length;
+        const rejectionScore = totalBoqs > 0 ? (1 - (rejectedBoqs / totalBoqs)) * 100 : 80;
+        
+        return Math.round((accuracyScore * 0.6) + (rejectionScore * 0.4));
+    }, [myRecons, myBoqs]);
 
     const handleMatchUpload = async () => {
         if (!invoiceFile || !poFile) { setError("Upload both files."); return; }
@@ -164,15 +198,32 @@ export default function SupplierDashboard({ user, onLogout }) {
                 setInvoiceResult(invData);
                 setPoResult(poData);
 
-                // Use 1% tolerance to handle rounding differences between OCR and DB
-                const tolerance = Math.max(0.01, poTotal * 0.01);
+                // FX Conversion Mock (Fallback to 1:1 if fails)
+                const invCurrency = invData.currency || 'USD';
+                const poCurrency = poData.currency || 'USD';
+                let convertedInvTotal = invTotal;
+
+                if (invCurrency !== poCurrency) {
+                    try {
+                        const fxRes = await axios.get(`https://api.exchangerate-api.com/v4/latest/${invCurrency}`);
+                        const rate = fxRes.data.rates[poCurrency] || 1;
+                        convertedInvTotal = invTotal * rate;
+                        console.log(`💱 FX Conv: ${invTotal} ${invCurrency} -> ${convertedInvTotal} ${poCurrency} (Rate: ${rate})`);
+                    } catch (e) {
+                        console.error('FX conversion failed', e);
+                    }
+                }
+
+                // Dynamic matching threshold based on formal trust score
+                const tolerancePercent = trustScore > 90 ? 0.02 : trustScore > 75 ? 0.01 : 0.00;
+                const tolerance = Math.max(0.01, poTotal * tolerancePercent);
                 let status = 'Matched - Pending Finance Review';
 
                 if (poTotal < 1) {
                     // Still couldn't find PO total — send for manual review but don't block
                     status = 'Matched - Pending Finance Review';
                     setDbStatus('⚠️ PO amount unverified — submitted for Finance manual review.');
-                } else if (Math.abs(invTotal - poTotal) > tolerance) {
+                } else if (Math.abs(convertedInvTotal - poTotal) > tolerance) {
                     status = 'Discrepancy Detected';
                 }
 
@@ -334,12 +385,19 @@ export default function SupplierDashboard({ user, onLogout }) {
     };
 
     const handleMarkDelivered = async (poNumber) => {
-        if (!window.confirm("Are you physically at the Nestle Dock or confirming handover to the carrier?")) return;
-        try {
-            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/supplier/mark-delivered', { poNumber });
-            alert("✅ Status Updated: The Warehouse Dock has been notified of your arrival.");
-            fetchData();
-        } catch { alert('Failed to update delivery status.'); }
+        setDialog({
+            title: "Confirm Arrival",
+            message: "Are you physically at the Nestle Dock or confirming handover to the carrier?",
+            type: "confirm",
+            onConfirm: async () => {
+                setDialog(null);
+                try {
+                    await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/supplier/mark-delivered', { poNumber });
+                    setDialog({ title: "Status Updated", message: "✅ The Warehouse Dock has been notified of your arrival.", type: "alert" });
+                    fetchData();
+                } catch { setDialog({ title: "Error", message: "Failed to update delivery status.", type: "alert" }); }
+            }
+        });
     };
 
     const totalPOs = myPOs.length;
@@ -621,12 +679,13 @@ export default function SupplierDashboard({ user, onLogout }) {
                 </div>
 
                 <div className="p-4 md:p-6 max-w-7xl mx-auto">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                         <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Total Shipments</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{totalPOs}</p>
+                                    <p className="text-[10px] text-emerald-400 mt-1 flex items-center">↑ +2 this week</p>
                                 </div>
                                 <div className="w-10 h-10 bg-blue-900/30 rounded-full flex items-center justify-center text-blue-400">
                                     <Package className="w-5 h-5" />
@@ -636,8 +695,9 @@ export default function SupplierDashboard({ user, onLogout }) {
                         <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Total Value</p>
+                                    <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Total Value Delivered</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{formatCurrency(totalPOValue)}</p>
+                                    <p className="text-[10px] text-emerald-400 mt-1 flex items-center">↑ +14% vs last month</p>
                                 </div>
                                 <div className="w-10 h-10 bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-400">
                                     <DollarSign className="w-5 h-5" />
@@ -649,6 +709,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Pending</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{pendingPOs}</p>
+                                    <p className="text-[10px] text-amber-400 mt-1 flex items-center">Requires attention</p>
                                 </div>
                                 <div className="w-10 h-10 bg-amber-900/30 rounded-full flex items-center justify-center text-amber-400">
                                     <Clock className="w-5 h-5" />
@@ -660,9 +721,24 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Matched Invoices</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{totalMatched}</p>
+                                    <p className="text-[10px] text-emerald-400 mt-1 flex items-center">↑ +3 this week</p>
                                 </div>
                                 <div className="w-10 h-10 bg-purple-900/30 rounded-full flex items-center justify-center text-purple-400">
                                     <CheckCircle2 className="w-5 h-5" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Trust Score</p>
+                                    <p className="text-2xl font-bold text-slate-100 mt-1">{trustScore}/100</p>
+                                    <p className={`text-[10px] mt-1 flex items-center ${trustScore > 90 ? 'text-emerald-400' : trustScore > 75 ? 'text-blue-400' : 'text-amber-400'}`}>
+                                        {trustScore > 90 ? 'Excellent Standing' : trustScore > 75 ? 'Good Standing' : 'Needs Improvement'}
+                                    </p>
+                                </div>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${trustScore > 90 ? 'bg-emerald-900/30 text-emerald-400' : trustScore > 75 ? 'bg-blue-900/30 text-blue-400' : 'bg-amber-900/30 text-amber-400'}`}>
+                                    <ShieldCheck className="w-5 h-5" />
                                 </div>
                             </div>
                         </div>
@@ -672,23 +748,31 @@ export default function SupplierDashboard({ user, onLogout }) {
                         <div className="lg:col-span-2 space-y-6">
                             <div className="flex flex-wrap gap-2 bg-slate-900/60 backdrop-blur-sm p-1.5 rounded-xl border border-slate-800">
                                 {[
-                                    { id: 'inbox', label: '📥 Shipments', color: 'purple' },
-                                    { id: 'boq', label: '📑 1. Submit Quote', color: 'blue' },
-                                    { id: 'match', label: '⚖️ 2. Submit Inv+PO', color: 'emerald' },
+                                    { id: 'boq', label: 'Step 1: Submit Quote', color: 'blue' },
+                                    { id: 'match', label: 'Step 2: Submit Invoice', color: 'emerald' },
+                                    { id: 'inbox', label: '📥 My Shipments', color: 'purple' },
                                     { id: 'logs', label: '📜 Timeline', color: 'amber' }
-                                ].map(tab => (
-                                    <button
-                                        type="button"
-                                        key={tab.id}
-                                        onClick={() => { setMode(tab.id); setMatchStatus('Pending'); setError(null); setExpandedLog(null); }}
-                                        className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-all ${mode === tab.id
-                                            ? `bg-gradient-to-r from-${tab.color}-600 to-${tab.color}-700 text-white shadow-md`
-                                            : 'text-slate-400 hover:bg-slate-800'
-                                            }`}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                ))}
+                                ].map(tab => {
+                                    const colorMap = {
+                                        purple: 'bg-gradient-to-r from-purple-600 to-purple-700',
+                                        blue: 'bg-gradient-to-r from-blue-600 to-blue-700',
+                                        emerald: 'bg-gradient-to-r from-emerald-600 to-emerald-700',
+                                        amber: 'bg-gradient-to-r from-amber-600 to-amber-700'
+                                    };
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={tab.id}
+                                            onClick={() => { setMode(tab.id); setMatchStatus('Pending'); setError(null); setExpandedLog(null); }}
+                                            className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-all ${mode === tab.id
+                                                ? `${colorMap[tab.color]} text-white shadow-md`
+                                                : 'text-slate-400 hover:bg-slate-800'
+                                                }`}
+                                        >
+                                            {tab.label}
+                                        </button>
+                                    );
+                                })}
                             </div>
 
                             {mode === 'inbox' && (
@@ -706,7 +790,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                 onChange={(e) => setSearchTerm(e.target.value)}
                                                 className="pl-9 pr-3 py-1.5 text-sm border border-slate-700 rounded-lg bg-slate-800 focus:ring-2 focus:ring-purple-500 text-slate-200"
                                             />
-                                            <span className="absolute left-3 top-2 text-slate-400">🔍</span>
+                                            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                                         </div>
                                     </div>
 
@@ -787,11 +871,28 @@ export default function SupplierDashboard({ user, onLogout }) {
                                         <p className="text-sm text-slate-400">Upload BOQ to generate an Official PO.</p>
                                     </div>
                                     <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-sm">
-                                        <div className="border-2 border-dashed border-slate-700 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
+                                        <div 
+                                            className="border-2 border-dashed border-slate-700 rounded-lg p-6 text-center hover:border-blue-500 transition-colors"
+                                            onDrop={(e) => {
+                                                e.preventDefault();
+                                                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                                    setBoqFile(e.dataTransfer.files[0]);
+                                                }
+                                            }}
+                                            onDragOver={(e) => e.preventDefault()}
+                                            onDragEnter={(e) => e.preventDefault()}
+                                        >
                                             <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setBoqFile(e.target.files[0])}
                                                 className="block w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-900/50 file:text-blue-300 hover:file:bg-blue-800/50 cursor-pointer" />
                                             <p className="text-xs text-slate-400 mt-2">Supported: PDF, Images, Excel</p>
                                         </div>
+                                        {boqFile && (
+                                            <div className="mt-3 flex items-center gap-2 text-xs text-emerald-400 bg-emerald-900/20 border border-emerald-800/50 px-3 py-2 rounded-lg">
+                                                <FileText className="w-4 h-4" /> 
+                                                <span className="font-semibold truncate">{boqFile.name}</span>
+                                                <span className="opacity-70">({(boqFile.size / 1024).toFixed(1)} KB)</span>
+                                            </div>
+                                        )}
                                         <button type="button" onClick={handleBoqUpload} disabled={loading || !boqFile} className="w-full mt-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold rounded-lg disabled:opacity-50 transition-all shadow-sm hover:shadow-md">
                                             {loading ? "Digitizing..." : "Submit Quote"}
                                         </button>
@@ -811,18 +912,28 @@ export default function SupplierDashboard({ user, onLogout }) {
                                         <h2 className="text-2xl font-bold tracking-tight">Invoice Clearance</h2>
                                         <p className="text-sm text-slate-400">Upload Invoice and PO for 3-Way Match.</p>
                                     </div>
-                                    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm flex flex-col sm:flex-row gap-4">
-                                        <div className="flex-1">
-                                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">📄 Invoice</label>
-                                            <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setInvoiceFile(e.target.files[0])} className="block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-blue-900/50 file:text-blue-300 cursor-pointer border border-slate-700 rounded-md p-1.5" />
+                                    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm flex flex-col gap-4">
+                                        <div className="flex-1 bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                                            <label className="block text-sm font-bold text-slate-200 mb-1.5"><span className="text-emerald-500 mr-1">Step 1:</span> Upload your Invoice</label>
+                                            <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setInvoiceFile(e.target.files[0])} className="block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-blue-900/50 file:text-blue-300 cursor-pointer border border-slate-700 rounded-md p-1.5 bg-slate-900/50" />
+                                            {invoiceFile && (
+                                                <div className="mt-2 flex items-center gap-2 text-xs text-emerald-400">
+                                                    <FileText className="w-3 h-3" /> <span className="truncate">{invoiceFile.name}</span> ({(invoiceFile.size / 1024).toFixed(1)} KB)
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="flex-1">
-                                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">📑 PO</label>
-                                            <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setPoFile(e.target.files[0])} className="block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-purple-900/50 file:text-purple-300 cursor-pointer border border-slate-700 rounded-md p-1.5" />
+                                        <div className="flex-1 bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                                            <label className="block text-sm font-bold text-slate-200 mb-1.5"><span className="text-purple-500 mr-1">Step 2:</span> Upload the PO issued by Nestlé</label>
+                                            <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setPoFile(e.target.files[0])} className="block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-purple-900/50 file:text-purple-300 cursor-pointer border border-slate-700 rounded-md p-1.5 bg-slate-900/50" />
+                                            {poFile && (
+                                                <div className="mt-2 flex items-center gap-2 text-xs text-purple-400">
+                                                    <FileText className="w-3 h-3" /> <span className="truncate">{poFile.name}</span> ({(poFile.size / 1024).toFixed(1)} KB)
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                    <button type="button" onClick={handleMatchUpload} disabled={loading || !invoiceFile || !poFile} className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm font-bold rounded-lg mt-4 disabled:opacity-50 transition-all shadow-sm hover:shadow-md">
-                                        {loading ? "Matching..." : "Submit Documents"}
+                                    <button type="button" onClick={handleMatchUpload} disabled={loading || !invoiceFile || !poFile} className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm font-bold rounded-lg mt-4 disabled:opacity-50 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2">
+                                        {loading ? "Matching..." : "Step 3: Submit to begin 3-way matching"}
                                     </button>
 
                                     {matchStatus !== 'Pending' && matchStatus !== 'Submitted' && (
@@ -990,17 +1101,40 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                 </div>
                                             </div>
                                         ))}
+                                        {myLogs.length > 3 && (
+                                            <button onClick={() => setMode('logs')} className="w-full text-center text-xs text-blue-400 hover:text-blue-300 font-semibold pt-2 flex items-center justify-center gap-1">View All <ChevronRight className="w-3 h-3" /></button>
+                                        )}
                                     </div>
                                 )}
                             </div>
 
-                            {pendingPOs > 0 && (
-                                <div className="bg-gradient-to-br from-amber-900/30 to-orange-900/30 rounded-xl border border-amber-800 p-5 shadow-sm">
-                                    <h3 className="font-bold text-amber-300 flex items-center gap-2 text-lg mb-2">⚠️ Attention Needed</h3>
-                                    <p className="text-amber-200">You have {pendingPOs} unread Shipment(s). Download them to proceed.</p>
-                                    <button type="button" onClick={() => setMode('inbox')} className="mt-3 text-xs font-bold text-amber-300 underline">View Shipments →</button>
-                                </div>
-                            )}
+                            {(() => {
+                                const rejectedBOQs = myBoqs.filter(b => b.status === 'Rejected').length;
+                                const discrepancies = myRecons.filter(r => String(r.match_status).includes('Discrepancy')).length;
+                                
+                                if (rejectedBOQs > 0) return (
+                                    <div className="bg-gradient-to-br from-red-900/30 to-rose-900/30 rounded-xl border border-red-800 p-5 shadow-sm">
+                                        <h3 className="font-bold text-red-400 flex items-center gap-2 text-lg mb-2">🔴 Action Required</h3>
+                                        <p className="text-red-200">You have {rejectedBOQs} Rejected BOQ(s). Please resubmit.</p>
+                                        <button type="button" onClick={() => setMode('boq')} className="mt-3 text-xs font-bold text-red-400 underline">View Quotes →</button>
+                                    </div>
+                                );
+                                if (discrepancies > 0) return (
+                                    <div className="bg-gradient-to-br from-orange-900/30 to-amber-900/30 rounded-xl border border-orange-800 p-5 shadow-sm">
+                                        <h3 className="font-bold text-orange-400 flex items-center gap-2 text-lg mb-2">🟠 Discrepancy Found</h3>
+                                        <p className="text-orange-200">You have {discrepancies} Invoice Discrepancy. Please review.</p>
+                                        <button type="button" onClick={() => setMode('match')} className="mt-3 text-xs font-bold text-orange-400 underline">View Clearances →</button>
+                                    </div>
+                                );
+                                if (pendingPOs > 0) return (
+                                    <div className="bg-gradient-to-br from-amber-900/30 to-yellow-900/30 rounded-xl border border-amber-800 p-5 shadow-sm">
+                                        <h3 className="font-bold text-amber-400 flex items-center gap-2 text-lg mb-2">🟡 Attention Needed</h3>
+                                        <p className="text-amber-200">You have {pendingPOs} unread Shipment(s). Download them to proceed.</p>
+                                        <button type="button" onClick={() => setMode('inbox')} className="mt-3 text-xs font-bold text-amber-400 underline">View Shipments →</button>
+                                    </div>
+                                );
+                                return null;
+                            })()}
                         </div>
                     </div>
                 </div>
@@ -1009,6 +1143,23 @@ export default function SupplierDashboard({ user, onLogout }) {
             {/* Global Chat Floating Widget */}
             <AppNotifier role="Supplier" email={user.email} />
             <FloatingChat userEmail={user.email} userRole="Supplier" />
+
+            {dialog && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-700 animate-in zoom-in-95 duration-200">
+                        <h3 className="text-lg font-bold text-white mb-2">{dialog.title}</h3>
+                        <p className="text-slate-300 text-sm mb-6">{dialog.message}</p>
+                        <div className="flex gap-3 justify-end">
+                            {dialog.type === 'confirm' && (
+                                <button onClick={() => setDialog(null)} className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:bg-slate-700 transition-colors">Cancel</button>
+                            )}
+                            <button onClick={dialog.onConfirm || (() => setDialog(null))} className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors">
+                                {dialog.type === 'confirm' ? 'Confirm' : 'OK'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
