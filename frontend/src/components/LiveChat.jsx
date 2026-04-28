@@ -206,39 +206,48 @@ export default function LiveChat({ userEmail, userRole }) {
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                    {aiMessages.map((msg) => (
-                        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            {msg.role === 'assistant' && (
-                                <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center mr-2 flex-shrink-0 mt-1">
-                                    <Bot className="w-3.5 h-3.5 text-white" />
+                <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-slate-950/50">
+                    {aiMessages.map((msg, idx) => {
+                        const isMe = msg.role === 'user';
+                        const showAvatar = idx === 0 || aiMessages[idx - 1].role !== msg.role;
+                        
+                        return (
+                            <div key={msg.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`flex max-w-[85%] gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                    <div className="w-8 shrink-0 flex flex-col items-center">
+                                        {showAvatar ? (
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md ${isMe ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-purple-500 to-indigo-600'}`}>
+                                                {!isMe ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                                            </div>
+                                        ) : <div className="w-8 h-8"></div>}
+                                    </div>
+                                    <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                        {showAvatar && (
+                                            <span className="text-[10px] font-bold text-slate-400 mb-1.5 px-1 uppercase tracking-wider">
+                                                {isMe ? 'You' : 'AI Chat'}
+                                            </span>
+                                        )}
+                                        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm whitespace-pre-wrap ${isMe ? 'bg-emerald-600 text-white rounded-tr-sm' : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-sm'}`}>
+                                            {msg.content}
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
-                            <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 shadow text-sm leading-relaxed ${
-                                msg.role === 'user'
-                                    ? `${roleColor} text-white rounded-br-sm`
-                                    : 'bg-slate-700 text-slate-100 rounded-bl-sm'
-                            }`}>
-                                {msg.content}
                             </div>
-                            {msg.role === 'user' && (
-                                <div className="w-6 h-6 rounded-full bg-slate-600 flex items-center justify-center ml-2 flex-shrink-0 mt-1">
-                                    <User className="w-3.5 h-3.5 text-white" />
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                        );
+                    })}
                     {aiThinking && (
-                        <div className="flex justify-start">
-                            <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center mr-2 flex-shrink-0 mt-1">
-                                <Bot className="w-3.5 h-3.5 text-white" />
-                            </div>
-                            <div className="bg-slate-700 rounded-2xl rounded-bl-sm px-4 py-3 text-slate-400 text-sm">
-                                <span className="inline-flex gap-1">
-                                    <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                                    <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                                    <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                                </span>
+                        <div className="flex w-full justify-start">
+                            <div className="flex max-w-[85%] gap-3 flex-row">
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md bg-gradient-to-br from-purple-500 to-indigo-600 shrink-0"><Bot className="w-4 h-4 animate-pulse" /></div>
+                                <div className="flex flex-col items-start">
+                                    <div className="px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm bg-slate-800 border border-slate-700 rounded-tl-sm">
+                                        <div className="flex gap-1.5">
+                                            <div className="w-2 h-2 rounded-full bg-slate-600 animate-bounce"></div>
+                                            <div className="w-2 h-2 rounded-full bg-slate-600 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                            <div className="w-2 h-2 rounded-full bg-slate-600 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -361,32 +370,38 @@ export default function LiveChat({ userEmail, userRole }) {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-slate-950/50">
                 {messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center text-slate-500">
                         <MessageCircle className="w-10 h-10 mb-2 text-slate-600" />
-                        <p className="text-sm">No messages yet.</p>
-                        <p className="text-xs mt-1">Start the conversation below.</p>
+                        <p className="text-sm font-bold text-slate-400">Need help? Start a chat</p>
+                        <p className="text-xs mt-1">Your messages are secure and reviewed by our team.</p>
                     </div>
                 ) : (
-                    messages.map((msg) => {
+                    messages.map((msg, idx) => {
                         const isOwn = msg.sender_role === userRole;
+                        const showAvatar = idx === 0 || messages[idx - 1].sender_role !== msg.sender_role;
+                        
                         return (
-                            <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 shadow ${
-                                    isOwn
-                                        ? `${roleColor} text-white rounded-br-sm`
-                                        : 'bg-slate-700 text-slate-100 rounded-bl-sm'
-                                }`}>
-                                    {!isOwn && (
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                            {ROLE_LABELS[msg.sender_role] || msg.sender_role}
-                                        </p>
-                                    )}
-                                    <p className="text-sm leading-relaxed break-words">{msg.message}</p>
-                                    <p className={`text-[10px] mt-1 ${isOwn ? 'text-white/60 text-right' : 'text-slate-500'}`}>
-                                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
+                            <div key={msg.id} className={`flex w-full ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`flex max-w-[85%] gap-3 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                                    <div className="w-8 shrink-0 flex flex-col items-center">
+                                        {showAvatar ? (
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md ${isOwn ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-slate-600 to-slate-800'}`}>
+                                                {msg.sender_role[0]}
+                                            </div>
+                                        ) : <div className="w-8 h-8"></div>}
+                                    </div>
+                                    <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                                        {showAvatar && (
+                                            <span className="text-[10px] font-bold text-slate-400 mb-1.5 px-1 uppercase tracking-wider">
+                                                {ROLE_LABELS[msg.sender_role] || msg.sender_role} <span className="font-normal opacity-50 ml-2">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                            </span>
+                                        )}
+                                        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm whitespace-pre-wrap ${isOwn ? 'bg-emerald-600 text-white rounded-tr-sm' : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-sm'}`}>
+                                            {msg.message}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         );

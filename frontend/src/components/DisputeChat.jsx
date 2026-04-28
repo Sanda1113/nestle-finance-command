@@ -258,8 +258,8 @@ Approach:
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <button type="button" onClick={exportAuditPDF} className="flex items-center gap-1.5 px-3 py-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 text-xs font-bold rounded-lg transition-colors" title="Export Chat Log">
-                        <Download className="w-4 h-4" /> Export
+                    <button type="button" onClick={exportAuditPDF} className="flex items-center gap-1.5 px-3 py-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 text-xs font-bold rounded-lg transition-colors" title="Download Chat Log">
+                        <Download className="w-4 h-4" /> Download
                     </button>
                     {userRole === 'Supplier' && onResubmit && chatMode === 'human' && (
                         <button type="button" onClick={onResubmit} className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-black uppercase rounded-lg transition-colors">
@@ -275,14 +275,14 @@ Approach:
                     onClick={() => setChatMode('human')}
                     className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 transition-all ${chatMode === 'human' ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 border-b-2 border-emerald-500 shadow-sm' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800/80'}`}
                 >
-                    <User className="w-4 h-4" /> Live Agent
+                    <User className="w-4 h-4" /> Live Chat
                 </button>
                 <button
                     type="button"
                     onClick={() => setChatMode('ai')}
                     className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 transition-all ${chatMode === 'ai' ? 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 border-b-2 border-purple-500 shadow-sm' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800/80'}`}
                 >
-                    <Cpu className="w-4 h-4" /> AI Tracking
+                    <Bot className="w-4 h-4" /> AI Chat
                 </button>
             </div>
 
@@ -376,7 +376,7 @@ Approach:
                 {userRole === 'Finance' && chatMode === 'human' && (
                     <div className="flex border-b border-slate-100 dark:border-slate-800">
                         <button type="button" onClick={() => setIsFormMode(false)} className={`flex-1 py-2 text-xs font-bold ${!isFormMode ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>💬 Quick Chat</button>
-                        <button type="button" onClick={() => setIsFormMode(true)} className={`flex-1 py-2 text-xs font-bold flex items-center justify-center gap-1 ${isFormMode ? 'text-red-600 border-b-2 border-red-600' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><FileSpreadsheet className="w-3 h-3" /> Formal Dispute Form</button>
+                        <button type="button" onClick={() => setIsFormMode(true)} className={`flex-1 py-2 text-xs font-bold flex items-center justify-center gap-1 ${isFormMode ? 'text-red-600 border-b-2 border-red-600' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><FileSpreadsheet className="w-3 h-3" /> Submit Dispute Form</button>
                     </div>
                 )}
 
@@ -395,7 +395,7 @@ Approach:
                     <>
                         {userRole === 'Finance' && chatMode === 'human' && disputeStatus !== 'Resolved' && (
                             <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap gap-2">
-                                <span className="text-[10px] font-black uppercase text-slate-500 w-full mb-1 flex items-center gap-1"><FileSignature className="w-3 h-3" /> Formal Actions</span>
+                                <span className="text-[10px] font-black uppercase text-slate-500 w-full mb-1 flex items-center gap-1"><FileSignature className="w-3 h-3" /> Support Actions</span>
                                 <button type="button" onClick={() => handleFormalAction('Issue Credit Note')} className="flex-1 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-md transition-all shadow-sm">Credit Note</button>
                                 <button type="button" onClick={() => handleFormalAction('Force Auto-Approve')} className="flex-1 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-emerald-500 text-emerald-600 dark:text-emerald-400 text-xs font-bold rounded-md transition-all shadow-sm">Force Approve</button>
                                 <button type="button" onClick={() => handleFormalAction('Escalate to Procurement')} className="flex-1 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-red-500 text-red-600 dark:text-red-400 text-xs font-bold rounded-md transition-all shadow-sm">Escalate</button>
@@ -419,7 +419,7 @@ Approach:
                                 <textarea
                                     value={newMessage}
                                     onChange={e => setNewMessage(e.target.value)}
-                                    placeholder={chatMode === 'ai' ? "Ask AI about status..." : "Type official response..."}
+                                    placeholder={chatMode === 'ai' ? "Ask AI about status..." : "Type your message..."}
                                     className="flex-1 max-h-32 min-h-[40px] py-2.5 px-2 bg-transparent border-none outline-none resize-none text-sm dark:text-white"
                                     rows="1"
                                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
