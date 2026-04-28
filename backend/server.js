@@ -14,6 +14,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 const app = express();
+require('./payoutReminder');
 const port = process.env.PORT || 8080;
 const MAX_LOG_FIELD_LENGTH = 400;
 const SUPABASE_REQUEST_TIMEOUT_MS = 12000;
@@ -393,24 +394,75 @@ app.post('/api/save-reconciliation', async (req, res) => {
                 logError('Insert Invoice', invErr, { invoiceNumber: invoiceData.invoiceNumber });
             }
         } else {
-            console.warn(`⚠️ Skipping invoices table insert for ${invoiceData?.invoiceNumber || 'unknown invoice'}: missing file URL. Proceeding with reconciliation save, but no invoices row will be created.`);
+            console.warn(`⚠️ Skipping invoices table insert for ${invoiceData?.invoiceNumber || 'unknown invoice'}: missing file URL. Proceeding with reconciliation save.`);
         }
 
-        let timeline = matchStatus === 'Approved' ? 'Awaiting Payout' : 'Discrepancy - Manual Review';
+        let finalStatus = matchStatus;
+        let finalTimeline = finalStatus === 'Approved' ? 'Awaiting Payout' : 'Discrepancy - Manual Review';
+        let autoApprovalReason = null;
+        let autoApproved = false;
 
-        const { error: reconErr } = await supabase.from('reconciliations').insert([{
+        // MVP 5: Smart Tolerance System - Classify discrepancies
+        if (finalStatus.includes('Discrepancy')) {
+            const invTotal = Number(invoiceData.totalAmount) || 0;
+            const poTotal = Number(poData.totalAmount) || 0;
+            const invTax = Number(invoiceData.salesTax) || 0;
+            const poTax = Number(poData.salesTax) || 0;
+            const invQty = invoiceData.lineItems?.length || 0;
+            const poQty = poData.lineItems?.length || 0;
+            const delta = Math.abs(invTotal - poTotal);
+            const percentageDelta = poTotal > 0 ? delta / poTotal : 0;
+
+            let classification = null;
+            let willAutoApprove = false;
+            let ruleName = null;
+
+            if (delta < 1.00 && Math.abs(invTax - poTax) > 0) {
+                classification = 'tax rounding error';
+                willAutoApprove = true;
+                ruleName = 'Global Tax Rounding';
+            } else if (delta < 0.10) {
+                classification = 'currency decimal mismatch';
+                willAutoApprove = true;
+                ruleName = 'Currency Decimal Tolerance';
+            } else if (percentageDelta <= 0.005) {
+                classification = 'minor price variance';
+                willAutoApprove = true;
+                ruleName = 'Minor Price Variance <0.5%';
+            } else if (invQty < poQty) {
+                classification = 'missing line item';
+            } else if (percentageDelta > 0.005) {
+                classification = 'significant price mismatch';
+            } else {
+                classification = 'unknown variance';
+            }
+
+            if (willAutoApprove) {
+                finalStatus = 'Auto-Approved (Tolerance Match)';
+                finalTimeline = 'Approved - Awaiting Payout';
+                autoApproved = true;
+                autoApprovalReason = `Auto-approved: Invoice total ${invTotal.toFixed(2)} vs PO ${poTotal.toFixed(2)}. Delta of ${delta.toFixed(2)} classified as ${classification} (Rule: ${ruleName}). No manual review required.`;
+                console.log(`🤖 MVP5: ${autoApprovalReason}`);
+            } else {
+                console.log(`🔴 MVP5: Escalated to Finance due to ${classification}`);
+            }
+        }
+
+        const { data: reconData, error: reconErr } = await supabase.from('reconciliations').insert([{
             vendor_name: invoiceData.vendorName,
             invoice_number: invoiceData.invoiceNumber,
             po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
             invoice_total: invoiceData.totalAmount,
             po_total: poData.totalAmount,
-            match_status: matchStatus,
-            timeline_status: timeline,
+            match_status: finalStatus,
+            timeline_status: finalTimeline,
             supplier_email: supplierEmail,
             invoice_data: invoiceData,
             po_data: poData,
-            processed_at: new Date().toISOString()
-        }]);
+            processed_at: new Date().toISOString(),
+            auto_approval_reason: autoApprovalReason,
+            auto_approved: autoApproved
+        }]).select();
 
         if (reconErr) {
             logError('Insert Reconciliation', reconErr, { invoiceNumber: invoiceData.invoiceNumber });
@@ -418,6 +470,32 @@ app.post('/api/save-reconciliation', async (req, res) => {
         }
 
         console.log(`✅ Reconciliation saved`);
+        const reconId = reconData[0].id;
+
+        // MVP 6: Payout Tracker - Auto schedule payout if approved
+        if (finalStatus.includes('Approve')) {
+            try {
+                let dueDateStr = invoiceData.dueDate !== 'Not Found' && invoiceData.dueDate ? invoiceData.dueDate : null;
+                let dueDate = dueDateStr ? new Date(dueDateStr) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+                
+                await supabase.from('payout_schedule').insert([{
+                    reconciliation_id: reconId,
+                    po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
+                    invoice_number: invoiceData.invoiceNumber,
+                    supplier_email: supplierEmail,
+                    vendor_name: invoiceData.vendorName,
+                    payout_amount: invoiceData.totalAmount,
+                    invoice_date: invoiceData.invoiceDate !== 'Not Found' ? invoiceData.invoiceDate : new Date().toISOString(),
+                    due_date: dueDate.toISOString(),
+                    payment_terms: poData.paymentTerms || 'Net 30',
+                    status: 'Scheduled'
+                }]);
+                console.log(`📆 MVP6: Payout scheduled automatically for ${invoiceData.invoiceNumber}`);
+            } catch (err) {
+                logError('Schedule Payout MVP6', err);
+            }
+        }
+
         res.json({ success: true });
     } catch (error) {
         logError('Save Reconciliation', error);
@@ -582,6 +660,39 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
                 } catch (notifErr) {
                     logError('Recon Notification', notifErr, { supplier_email: supplierEmail });
                 }
+            }
+        }
+
+        // MVP 6: Payout Tracker - Auto schedule payout upon manual approval
+        if (newStatus === 'Approved') {
+            try {
+                const { data: existing } = await supabase.from('payout_schedule').select('id').eq('reconciliation_id', id);
+                if (!existing || existing.length === 0) {
+                    let idata = recon?.invoice_data || {};
+                    if (typeof idata === 'string') idata = JSON.parse(idata);
+                    
+                    let pdata = recon?.po_data || {};
+                    if (typeof pdata === 'string') pdata = JSON.parse(pdata);
+                    
+                    let dueDateStr = idata?.dueDate !== 'Not Found' && idata?.dueDate ? idata.dueDate : null;
+                    let dueDate = dueDateStr ? new Date(dueDateStr) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+                    
+                    await supabase.from('payout_schedule').insert([{
+                        reconciliation_id: id,
+                        po_number: recon?.po_number || idata?.invoiceNumber,
+                        invoice_number: recon?.invoice_number,
+                        supplier_email: recon?.supplier_email,
+                        vendor_name: recon?.vendor_name,
+                        payout_amount: recon?.invoice_total,
+                        invoice_date: idata?.invoiceDate !== 'Not Found' ? idata?.invoiceDate : new Date().toISOString(),
+                        due_date: dueDate.toISOString(),
+                        payment_terms: pdata?.paymentTerms || 'Net-30',
+                        status: 'Scheduled'
+                    }]);
+                    console.log(`📆 MVP6: Payout scheduled for ${recon?.invoice_number}`);
+                }
+            } catch (err) {
+                logError('Schedule Payout MVP6 Manual', err);
             }
         }
 
@@ -1147,6 +1258,76 @@ app.post('/api/reconciliations/:id/resubmit', async (req, res) => {
     } catch (error) {
         logError('Resubmit Reconciliation', error, { reconId: id });
         res.status(500).json({ error: 'Failed to resubmit invoice' });
+    }
+});
+
+// ==========================================
+// 💸 PAYOUT ENGINE & EARLY PAYMENT (MVP 6 & 7)
+// ==========================================
+app.get('/api/payouts', async (req, res) => {
+    try {
+        const { email } = req.query;
+        let query = supabase.from('payout_schedule').select('*').order('due_date', { ascending: true });
+        if (email) query = query.eq('supplier_email', email);
+        const { data, error } = await query;
+        if (error) throw error;
+        res.json({ success: true, data });
+    } catch (err) {
+        logError('Fetch Payouts', err);
+        res.status(500).json({ error: 'Failed to fetch payouts' });
+    }
+});
+
+app.patch('/api/payouts/:id/paid', async (req, res) => {
+    const { id } = req.params;
+    const { paidBy } = req.body;
+    try {
+        const { data, error } = await supabase.from('payout_schedule')
+            .update({ status: 'Paid', paid_at: new Date().toISOString(), paid_by: paidBy || 'Finance Team' })
+            .eq('id', id).select().single();
+        if (error) throw error;
+        
+        // Try to update timeline and notify
+        if (data && data.reconciliation_id) {
+            await supabase.from('reconciliations')
+                .update({ timeline_status: 'Paid' })
+                .eq('id', data.reconciliation_id);
+                
+            await supabase.from('notifications').insert([{
+                user_email: data.supplier_email,
+                user_role: 'Supplier',
+                title: '💰 Payment Processed',
+                message: `Nestlé Finance has processed payment for Invoice ${data.invoice_number}.`,
+                link: `/logs?po=${data.po_number || data.invoice_number}`,
+                is_read: false
+            }]).catch(() => {});
+        }
+
+        res.json({ success: true, data });
+    } catch (err) {
+        logError('Mark Payout Paid', err);
+        res.status(500).json({ error: 'Failed to mark paid' });
+    }
+});
+
+app.post('/api/payouts/:id/accept-early-payment', async (req, res) => {
+    const { id } = req.params;
+    const { discountAmount, earlyPaymentAmount, discountRate } = req.body;
+    try {
+        const { data, error } = await supabase.from('payout_schedule')
+            .update({
+                status: 'Early Payment Requested',
+                early_payment_accepted_at: new Date().toISOString(),
+                early_payment_amount: earlyPaymentAmount,
+                early_payment_discount: discountAmount,
+                early_payment_discount_rate: discountRate
+            })
+            .eq('id', id).select().single();
+        if (error) throw error;
+        res.json({ success: true, data });
+    } catch (err) {
+        logError('Accept Early Payment', err);
+        res.status(500).json({ error: 'Failed to accept offer' });
     }
 });
 

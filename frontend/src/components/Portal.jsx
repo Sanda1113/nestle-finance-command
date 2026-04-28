@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User, FileText, Clock, DollarSign, Search, Download } from 'lucide-react';
+import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User, FileText, Clock, DollarSign, Search, Download, CreditCard, Calendar } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import AppNotifier from './AppNotifier';
 import NotificationBell from './NotificationBell';
@@ -189,6 +189,9 @@ export default function Portal({ user, onLogout }) {
                         <button type="button" onClick={() => setActiveTab('analytics')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'analytics' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
                             <BarChart2 className="w-4 h-4 shrink-0" /> Analytics
                         </button>
+                        <button type="button" onClick={() => setActiveTab('payouts')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'payouts' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
+                            <CreditCard className="w-4 h-4 shrink-0" /> Payout Calendar
+                        </button>
                     </div>
                 </div>
 
@@ -197,6 +200,7 @@ export default function Portal({ user, onLogout }) {
                     {activeTab === 'procurement' && <ProcurementPortal user={user} />}
                     {activeTab === 'finance' && <FinancePortal user={user} />}
                     {activeTab === 'analytics' && <AnalyticsPortal />}
+                    {activeTab === 'payouts' && <PayoutCalendar />}
                 </div>
             </div>
 
@@ -210,6 +214,9 @@ export default function Portal({ user, onLogout }) {
                 </button>
                 <button type="button" onClick={() => setActiveTab('analytics')} className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'analytics' ? 'text-blue-400' : 'text-slate-500'}`}>
                     <BarChart2 className="w-5 h-5" /> <span>Analytics</span>
+                </button>
+                <button type="button" onClick={() => setActiveTab('payouts')} className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'payouts' ? 'text-blue-400' : 'text-slate-500'}`}>
+                    <CreditCard className="w-5 h-5" /> <span>Payouts</span>
                 </button>
             </div>
 
@@ -492,7 +499,6 @@ function ProcurementPortal({ user }) {
                     })
                 )}
             </div>
-        </div>
     );
 }
 
@@ -791,6 +797,11 @@ function FinancePortal({ user }) {
                                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                                         <div className="flex flex-col gap-4">
                                                             <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-2">📑 Document Context</h4>
+                                                            {r.auto_approved && r.auto_approval_reason && (
+                                                                <div className="bg-emerald-50 dark:bg-emerald-900/30 border-l-4 border-emerald-500 p-3 rounded text-xs text-emerald-800 dark:text-emerald-300 font-medium mb-4 shadow-sm">
+                                                                    <strong>AI Auto-Approval Note:</strong> {r.auto_approval_reason}
+                                                                </div>
+                                                            )}
                                                             <div className="bg-gradient-to-br from-blue-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-blue-200 dark:border-blue-900/50 shadow-sm relative overflow-hidden">
                                                                 <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
                                                                 <div className="flex justify-between items-center mb-2">
@@ -862,7 +873,6 @@ function FinancePortal({ user }) {
                     </table>
                 )}
             </div>
-        </div>
     );
 }
 
@@ -1115,6 +1125,112 @@ function AnalyticsPortal() {
                         </div>
                     </div>
                 </>
+            )}
+        </div>
+        </div>
+    );
+}
+
+function PayoutCalendar() {
+    const [payouts, setPayouts] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchPayouts = async () => {
+        try {
+            const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/payouts');
+            setPayouts(res.data.data || []);
+        } catch (error) {
+            console.error('Failed to fetch payouts', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPayouts();
+    }, []);
+
+    const markPaid = async (id) => {
+        if (!window.confirm("Are you sure you want to mark this payout as Paid?")) return;
+        try {
+            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/payouts/${id}/paid`, { paidBy: 'Finance User' });
+            fetchPayouts();
+        } catch (err) {
+            alert('Failed to mark as paid');
+        }
+    };
+
+    const upcoming = payouts.filter(p => p.status === 'Scheduled' || p.status === 'Early Payment Requested');
+    const past = payouts.filter(p => p.status === 'Paid');
+
+    return (
+        <div className="max-w-7xl mx-auto space-y-6">
+            <div className="mb-6">
+                <h2 className="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3"><Calendar className="w-8 h-8 text-blue-600" /> Payout Calendar</h2>
+                <p className="text-slate-500 dark:text-slate-400">Track and manage scheduled payouts across all suppliers.</p>
+            </div>
+            
+            {loading ? (
+                <div className="p-12 text-center text-slate-500 font-bold animate-pulse">Loading Payouts...</div>
+            ) : (
+                <div className="space-y-8">
+                    {/* KPI Header */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+                            <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Total Scheduled</p>
+                            <p className="text-4xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(upcoming.reduce((sum, p) => sum + (p.early_payment_amount || p.payout_amount), 0))}</p>
+                        </div>
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+                            <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Paid Out</p>
+                            <p className="text-4xl font-black text-emerald-500 dark:text-emerald-400">{formatCurrency(past.reduce((sum, p) => sum + p.payout_amount, 0))}</p>
+                        </div>
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+                            <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Early Payment Savings</p>
+                            <p className="text-4xl font-black text-purple-500 dark:text-purple-400">{formatCurrency(past.reduce((sum, p) => sum + (p.early_payment_discount || 0), 0))}</p>
+                        </div>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 shadow-sm rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                                <tr>
+                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Due Date</th>
+                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Supplier</th>
+                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Invoice</th>
+                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
+                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {upcoming.map(p => (
+                                    <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                        <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{new Date(p.due_date).toLocaleDateString()}</td>
+                                        <td className="p-4"><span className="text-sm font-semibold">{p.vendor_name || p.supplier_email}</span></td>
+                                        <td className="p-4"><span className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">{p.invoice_number}</span></td>
+                                        <td className="p-4">
+                                            <span className="font-bold text-blue-600 dark:text-blue-400">{formatCurrency(p.early_payment_amount || p.payout_amount)}</span>
+                                            {p.early_payment_amount && <span className="block text-xs text-purple-500">Early Payout!</span>}
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-bold ${p.status === 'Early Payment Requested' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                                                {p.status}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <button onClick={() => markPaid(p.id)} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors">
+                                                Mark Paid
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {upcoming.length === 0 && (
+                                    <tr><td colSpan="6" className="p-8 text-center text-slate-500">No scheduled payouts.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             )}
         </div>
     );

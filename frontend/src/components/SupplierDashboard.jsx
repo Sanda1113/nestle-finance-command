@@ -47,6 +47,7 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [myBoqs, setMyBoqs] = useState([]);
     const [myLogs, setMyLogs] = useState([]);
     const [myRecons, setMyRecons] = useState([]);
+    const [myPayouts, setMyPayouts] = useState([]);
     const [matchStatus, setMatchStatus] = useState('Pending');
     const [, setDbStatus] = useState('');
     const [, setError] = useState(null);
@@ -67,11 +68,12 @@ export default function SupplierDashboard({ user, onLogout }) {
         if (isFetchingDataRef.current) return;
         isFetchingDataRef.current = true;
         try {
-            const [posRes, logsRes, reconsRes, boqsRes] = await Promise.allSettled([
+            const [posRes, logsRes, reconsRes, boqsRes, payoutsRes] = await Promise.allSettled([
                 axios.get(`https://nestle-finance-command-production.up.railway.app/api/supplier/pos/${user.email}`, { timeout: 15000 }),
                 axios.get(`https://nestle-finance-command-production.up.railway.app/api/supplier/logs/${user.email}`, { timeout: 15000 }),
                 axios.get(`https://nestle-finance-command-production.up.railway.app/api/reconciliations?email=${encodeURIComponent(user.email)}`, { timeout: 15000 }),
-                axios.get(`https://nestle-finance-command-production.up.railway.app/api/boqs?email=${encodeURIComponent(user.email)}`, { timeout: 15000 })
+                axios.get(`https://nestle-finance-command-production.up.railway.app/api/boqs?email=${encodeURIComponent(user.email)}`, { timeout: 15000 }),
+                axios.get(`https://nestle-finance-command-production.up.railway.app/api/payouts?email=${encodeURIComponent(user.email)}`, { timeout: 15000 })
             ]);
 
             if (isMountedRef.current) {
@@ -239,6 +241,23 @@ export default function SupplierDashboard({ user, onLogout }) {
         finally { setLoading(false); }
     };
 
+
+        const handleAcceptEarlyPayment = async (payoutId, payoutAmount) => {
+        const discountRate = 0.02; // 2% dynamic discounting for MVP 7
+        const discountAmount = payoutAmount * discountRate;
+        const earlyPaymentAmount = payoutAmount - discountAmount;
+        if (!window.confirm(`Accept Early Payment?\n\nOriginal Amount: ${formatCurrency(payoutAmount)}\nEarly Payment Discount: ${formatCurrency(discountAmount)} (2%)\nAmount you will receive now: ${formatCurrency(earlyPaymentAmount)}`)) return;
+        
+        try {
+            await axios.post(`https://nestle-finance-command-production.up.railway.app/api/payouts/${payoutId}/accept-early-payment`, {
+                discountAmount, earlyPaymentAmount, discountRate
+            });
+            alert('Early payment offer accepted! Finance has been notified to accelerate your payout.');
+            fetchDashboardData();
+        } catch(err) {
+            alert('Failed to accept early payment offer.');
+        }
+    };
 
     const handleBoqUpload = async () => {
         if (!boqFile) { setError("Please select a BOQ file."); return; }
@@ -512,7 +531,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                 }
 
                 if (isApproved && isDelivered) {
-                    events.push({ label: 'Payout Initiated', date: new Date().toISOString(), status: 'pending', icon: '💰' });
+                    events.push({ label: 'Payout Initiated', date: new Date().toISOString(), status: 'pending', icon: '💰', isPayoutInitiated: true });
                 }
             } else {
                 // Check if delivery happened without invoice recon (rare but possible)
