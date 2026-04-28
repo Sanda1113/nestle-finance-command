@@ -499,6 +499,7 @@ function ProcurementPortal({ user }) {
                     })
                 )}
             </div>
+        </div>
     );
 }
 
@@ -873,6 +874,7 @@ function FinancePortal({ user }) {
                     </table>
                 )}
             </div>
+        </div>
     );
 }
 
@@ -1127,7 +1129,6 @@ function AnalyticsPortal() {
                 </>
             )}
         </div>
-        </div>
     );
 }
 
@@ -1155,14 +1156,13 @@ function PayoutCalendar() {
         try {
             await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/payouts/${id}/paid`, { paidBy: 'Finance User' });
             fetchPayouts();
-        } catch (err) {
+        } catch {
             alert('Failed to mark as paid');
         }
     };
 
     const upcoming = payouts.filter(p => p.status === 'Scheduled' || p.status === 'Early Payment Requested');
     const past = payouts.filter(p => p.status === 'Paid');
-
     return (
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="mb-6">
