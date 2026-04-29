@@ -2,6 +2,7 @@
 const express = require('express');
 const supabase = require('../db');
 const { sendSupplierEmail } = require('../mailer');
+const PDFDocument = require('pdfkit');
 
 const router = express.Router();
 const WAREHOUSE_SCOPE_MAX_RECORDS = 250;
@@ -661,53 +662,79 @@ router.post('/grn/clear', async (req, res) => {
     const { poNumber, clearedBy } = req.body;
     try {
         // Update PO status to "Goods Cleared - Ready for Payout"
-        const { error: updateErr } = await supabase
+        const { data: po, error: updateErr } = await supabase
             .from('purchase_orders')
             .update({ status: 'Goods Cleared - Ready for Payout' })
-            .eq('po_number', poNumber);
-        if (updateErr) throw updateErr;
-
-        // Fetch supplier email
-        const { data: po, error: fetchErr } = await supabase
-            .from('purchase_orders')
-            .select('supplier_email')
             .eq('po_number', poNumber)
+            .select('id, supplier_email')
             .single();
-        if (fetchErr) throw fetchErr;
+            
+        if (updateErr && updateErr.code !== 'PGRST116') throw updateErr;
 
+        // Fetch reconciliation to get invoice total
+        const { data: recon } = await supabase
+            .from('reconciliations')
+            .select('id, supplier_email, invoice_total')
+            .eq('po_number', poNumber)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        const supplierEmail = po?.supplier_email || recon?.supplier_email;
         const shipmentId = getShipmentId(poNumber);
+
+        // Auto-Generation: calculate scheduled_date (Net-30) and base_amount
+        const baseAmount = recon?.invoice_total || 0;
+        const scheduledDate = new Date();
+        scheduledDate.setDate(scheduledDate.getDate() + 30); // Net-30 terms
+
+        const { error: payoutErr } = await supabase.from('payout_schedules').insert([{
+            invoice_ref: recon?.id || null,
+            po_ref: po?.id || null,
+            supplier_email: supplierEmail,
+            title: `Payout for ${shipmentId}`,
+            start_date: scheduledDate.toISOString(),
+            end_date: scheduledDate.toISOString(),
+            base_amount: baseAmount,
+            final_amount: baseAmount,
+            status: 'Pending Finance'
+        }]);
+
+        if (payoutErr) {
+            console.error('Failed to insert payout schedule:', payoutErr);
+        }
 
         // 🔔 Notify Finance
         await supabase.from('notifications').insert([{
             user_role: 'Finance',
             title: '✅ Goods Cleared',
-            message: `Shipment ${shipmentId} has been cleared and is ready for payout.`,
+            message: `Shipment ${shipmentId} cleared. Payout ready for scheduling.`,
             link: `/finance?recon=${poNumber}`,
             is_read: false
         }]);
 
         // 🔔 Notify Supplier (in‑app)
-        if (po?.supplier_email) {
+        if (supplierEmail) {
             await supabase.from('notifications').insert([{
-                user_email: po.supplier_email,
+                user_email: supplierEmail,
                 user_role: 'Supplier',
                 title: '✅ Goods Cleared',
-                message: `Your shipment ${shipmentId} has been cleared by the warehouse. Payment will be processed.`,
+                message: `Goods received and verified for ${shipmentId}. Pending Finance scheduling.`,
                 link: `/logs?po=${poNumber}`,
                 is_read: false
             }]);
 
             // 📧 Email Supplier
             await sendSupplierEmail(
-                po.supplier_email,
+                supplierEmail,
                 `Goods Cleared – ${shipmentId}`,
                 `<p>Your shipment <strong>${shipmentId}</strong> (PO: ${poNumber}) has been <strong>cleared</strong> by the warehouse after inspection.</p>
-                 <p>The finance team has been notified to process payment according to Net‑30 terms.</p>`,
+                 <p>Goods received and verified. Pending Finance scheduling.</p>`,
                 { poNumber }
             );
         }
 
-        res.json({ success: true, message: 'Goods marked as cleared.' });
+        res.json({ success: true, message: 'Goods marked as cleared. Payout scheduled.' });
     } catch (error) {
         console.error('Failed to clear goods:', error);
         res.status(500).json({ error: 'Failed to clear goods' });
@@ -954,58 +981,178 @@ router.get('/payouts', async (req, res) => {
     }
 });
 
-router.patch('/payouts/:id', async (req, res) => {
+
+router.get('/payouts/:id/promise-to-pay.pdf', async (req, res) => {
     const { id } = req.params;
-    const { start_date, end_date, updatedBy } = req.body;
     try {
         const { data, error } = await supabase
             .from('payout_schedules')
-            .update({ start_date, end_date: end_date || start_date })
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error || !data) return res.status(404).send('Not Found');
+
+        const doc = new PDFDocument({ margin: 50 });
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="Promise-to-Pay-${data.id}.pdf"`);
+        
+        doc.pipe(res);
+
+        // Styling
+        doc.fontSize(24).font('Helvetica-Bold').text('Nestlé', { align: 'center' });
+        doc.fontSize(12).font('Helvetica').text('Global Procurement Center', { align: 'center' });
+        doc.moveDown(2);
+
+        doc.fontSize(20).text('Promise to Pay', { underline: true });
+        doc.moveDown(1);
+
+        doc.fontSize(12).text(`Date Issued: ${new Date().toLocaleDateString()}`);
+        doc.text(`Reference ID: ${data.id}`);
+        doc.text(`Supplier Email: ${data.supplier_email}`);
+        doc.moveDown(2);
+
+        doc.fontSize(14).text('Dear Valued Supplier,');
+        doc.moveDown();
+        doc.fontSize(12).text('This document serves as formal confirmation that your invoice has been successfully processed, validated, and approved for payment following our 3-way matching protocol.');
+        doc.moveDown(1);
+
+        doc.text(`Total Approved Amount: ${data.final_amount || data.base_amount}`, { font: 'Helvetica-Bold' });
+        doc.text(`Scheduled Payout Date: ${new Date(data.start_date).toLocaleDateString()}`, { font: 'Helvetica-Bold' });
+        doc.moveDown(2);
+
+        doc.font('Helvetica').text('Thank you for your continued partnership.');
+        doc.moveDown(4);
+
+        doc.text('Authorized by Nestlé Finance Command');
+        
+        doc.end();
+
+    } catch (error) {
+        console.error('PDF Gen Error:', error);
+        res.status(500).send('Error generating PDF');
+    }
+});
+
+router.patch('/payouts/:id/confirm', async (req, res) => {
+    const { id } = req.params;
+    const { start_date, base_amount } = req.body;
+    try {
+        const proofUrl = `https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${id}/promise-to-pay.pdf`;
+
+        const { data, error } = await supabase
+            .from('payout_schedules')
+            .update({ 
+                status: 'Scheduled',
+                start_date: start_date,
+                end_date: start_date,
+                base_amount: base_amount,
+                final_amount: base_amount,
+                proof_document_url: proofUrl
+            })
             .eq('id', id)
             .select()
             .single();
 
         if (error) throw error;
 
-        if (updatedBy === 'Supplier') {
-            // Supplier initiated early payout - Notify Finance
+        // Notify Supplier
+        if (data && data.supplier_email) {
             await supabase.from('notifications').insert([{
-                user_role: 'Finance',
-                title: '⚡ Early Payout Requested',
-                message: `Supplier ${data.supplier_email} requested early payout for ${data.title}. New date: ${new Date(start_date).toLocaleDateString()}.`,
-                link: `/finance?search=${data.invoice_ref || ''}`,
+                user_email: data.supplier_email,
+                user_role: 'Supplier',
+                title: '📅 Payout Scheduled',
+                message: `Finance has scheduled the payout for ${data.title} to ${new Date(start_date).toLocaleDateString()}.`,
+                link: `/liquidity`,
                 is_read: false
             }]);
-        } else {
-            // Finance initiated update - Notify Supplier
-            if (data && data.supplier_email) {
-                await supabase.from('notifications').insert([{
-                    user_email: data.supplier_email,
-                    user_role: 'Supplier',
-                    title: '📅 Payout Date Updated',
-                    message: `Finance has rescheduled the payout for ${data.title} to ${new Date(start_date).toLocaleDateString()}.`,
-                    link: `/liquidity`,
-                    is_read: false
-                }]);
 
-                const emailHtml = `
-                    <p>Hello,</p>
-                    <p>The Nestlé Finance team has rescheduled the payout date for <strong>${data.title}</strong>.</p>
-                    <p>The new scheduled payment date is <strong>${new Date(start_date).toLocaleDateString()}</strong>.</p>
-                    <p>You can view your updated calendar in the Supplier Portal.</p>
-                `;
-                await sendSupplierEmail(
-                    data.supplier_email,
-                    `Payout Date Updated - ${data.title}`,
-                    emailHtml
-                );
-            }
+            const emailHtml = `
+                <p>Hello,</p>
+                <p>We confirm receipt of your Invoice and GRN. Payment of ${data.final_amount} will be disbursed on <strong>${new Date(start_date).toLocaleDateString()}</strong>.</p>
+                <p>You can view your formal Promise to Pay letter and updated calendar in the Supplier Portal.</p>
+            `;
+            await sendSupplierEmail(
+                data.supplier_email,
+                `Payout Scheduled - ${data.title}`,
+                emailHtml
+            );
         }
 
         res.json({ success: true, data });
     } catch (error) {
-        console.error('Failed to update payout schedule:', error);
-        res.status(500).json({ error: 'Failed to update payout schedule' });
+        console.error('Failed to confirm payout:', error);
+        res.status(500).json({ error: 'Failed to confirm payout' });
+    }
+});
+
+router.patch('/payouts/:id/discount', async (req, res) => {
+    const { id } = req.params;
+    const { early_date, new_amount } = req.body;
+    try {
+        const { data, error } = await supabase
+            .from('payout_schedules')
+            .update({ 
+                status: 'Renegotiated',
+                start_date: early_date,
+                end_date: early_date,
+                final_amount: new_amount
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // Notify Finance
+        await supabase.from('notifications').insert([{
+            user_role: 'Finance',
+            title: '⚡ Early Payout Accepted',
+            message: `Supplier ${data.supplier_email} accepted early payout for ${data.title}. Calendar updated to ${new Date(early_date).toLocaleDateString()} for ${new_amount}.`,
+            link: `/payouts`,
+            is_read: false
+        }]);
+
+        res.json({ success: true, data });
+    } catch (error) {
+        console.error('Failed to apply discount:', error);
+        res.status(500).json({ error: 'Failed to apply discount' });
+    }
+});
+
+router.get('/lifecycle/transaction/:invoice_ref', async (req, res) => {
+    const { invoice_ref } = req.params;
+    try {
+        const { data: recon } = await supabase.from('reconciliations').select('*').eq('id', invoice_ref).single();
+        if (!recon) return res.status(404).json({ error: 'Transaction not found' });
+
+        const poNumber = recon.po_number;
+        const [
+            { data: po },
+            { data: grn },
+            { data: boq },
+            { data: payout }
+        ] = await Promise.all([
+            supabase.from('purchase_orders').select('*').eq('po_number', poNumber).single(),
+            supabase.from('grns').select('*').eq('po_number', poNumber).order('created_at', { ascending: false }).limit(1).single(),
+            supabase.from('boqs').select('*').eq('document_number', poNumber).single(),
+            supabase.from('payout_schedules').select('*').eq('invoice_ref', invoice_ref).single()
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                reconciliation: recon,
+                purchase_order: po || null,
+                grn: grn || null,
+                boq: boq || null,
+                payout_schedule: payout || null
+            }
+        });
+    } catch (error) {
+        console.error('Lifecycle error:', error);
+        res.status(500).json({ error: 'Failed to fetch lifecycle' });
     }
 });
 

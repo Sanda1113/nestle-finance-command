@@ -1297,10 +1297,12 @@ function AnalyticsPortal() {
 function PayoutCalendar() {
     const [payouts, setPayouts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [schedulingPayout, setSchedulingPayout] = useState(null);
+    const [confirmDate, setConfirmDate] = useState('');
 
     const fetchPayouts = async () => {
         try {
-            const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/payouts');
+            const res = await axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts');
             setPayouts(res.data.data || []);
         } catch (error) {
             console.error('Failed to fetch payouts', error);
@@ -1337,8 +1339,23 @@ function PayoutCalendar() {
         }
     };
 
-    const upcoming = payouts.filter(p => p.status === 'Scheduled' || p.status === 'Early Payment Requested');
+    const upcoming = payouts.filter(p => p.status === 'Scheduled' || p.status === 'Early Payment Requested' || p.status === 'Pending Finance' || p.status === 'Renegotiated');
     const past = payouts.filter(p => p.status === 'Paid');
+
+    const handleConfirmSchedule = async () => {
+        if (!schedulingPayout) return;
+        try {
+            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${schedulingPayout.id}/confirm`, {
+                start_date: new Date(confirmDate).toISOString(),
+                base_amount: schedulingPayout.base_amount
+            });
+            alert('Payout Scheduled successfully and Promise to Pay PDF generated.');
+            setSchedulingPayout(null);
+            fetchPayouts();
+        } catch (error) {
+            alert('Failed to schedule payout');
+        }
+    };
 
     // Grouping for Intelligent Payment Batching
     const batchedPayments = useMemo(() => {
@@ -1361,8 +1378,8 @@ function PayoutCalendar() {
         
         // Find payouts due on this day (approximate match by day string)
         const dayString = d.toLocaleDateString();
-        const dayPayouts = upcoming.filter(p => new Date(p.due_date).toLocaleDateString() === dayString);
-        const dayTotal = dayPayouts.reduce((sum, p) => sum + (p.early_payment_amount || p.payout_amount), 0);
+        const dayPayouts = upcoming.filter(p => p.start_date && new Date(p.start_date).toLocaleDateString() === dayString);
+        const dayTotal = dayPayouts.reduce((sum, p) => sum + (p.final_amount || p.base_amount || 0), 0);
         
         return {
             date: d,
@@ -1389,15 +1406,15 @@ function PayoutCalendar() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
                             <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Total Scheduled</p>
-                            <p className="text-4xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(upcoming.reduce((sum, p) => sum + (p.early_payment_amount || p.payout_amount), 0))}</p>
+                            <p className="text-4xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(upcoming.reduce((sum, p) => sum + (p.final_amount || p.base_amount || 0), 0))}</p>
                         </div>
                         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
                             <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Paid Out</p>
-                            <p className="text-4xl font-black text-emerald-500 dark:text-emerald-400">{formatCurrency(past.reduce((sum, p) => sum + p.payout_amount, 0))}</p>
+                            <p className="text-4xl font-black text-emerald-500 dark:text-emerald-400">{formatCurrency(past.reduce((sum, p) => sum + (p.final_amount || p.base_amount || 0), 0))}</p>
                         </div>
                         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
                             <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Early Payment Savings</p>
-                            <p className="text-4xl font-black text-purple-500 dark:text-purple-400">{formatCurrency(past.reduce((sum, p) => sum + (p.early_payment_discount || 0), 0))}</p>
+                            <p className="text-4xl font-black text-purple-500 dark:text-purple-400">{formatCurrency(past.reduce((sum, p) => sum + ((p.base_amount || 0) - (p.final_amount || 0)), 0))}</p>
                         </div>
                     </div>
 
@@ -1466,22 +1483,28 @@ function PayoutCalendar() {
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                 {upcoming.map(p => (
                                     <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                        <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{new Date(p.due_date).toLocaleDateString()}</td>
-                                        <td className="p-4"><span className="text-sm font-semibold">{p.vendor_name || p.supplier_email}</span></td>
-                                        <td className="p-4"><span className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">{p.invoice_number}</span></td>
+                                        <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{p.start_date ? new Date(p.start_date).toLocaleDateString() : 'Pending'}</td>
+                                        <td className="p-4"><span className="text-sm font-semibold">{p.supplier_email}</span></td>
+                                        <td className="p-4"><span className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">{p.title || p.id}</span></td>
                                         <td className="p-4">
-                                            <span className="font-bold text-blue-600 dark:text-blue-400">{formatCurrency(p.early_payment_amount || p.payout_amount)}</span>
-                                            {p.early_payment_amount && <span className="block text-xs text-purple-500">Early Payout!</span>}
+                                            <span className="font-bold text-blue-600 dark:text-blue-400">{formatCurrency(p.final_amount || p.base_amount)}</span>
+                                            {p.status === 'Renegotiated' && <span className="block text-xs text-purple-500">Early Payout!</span>}
                                         </td>
                                         <td className="p-4">
-                                            <span className={`px-2 py-1 rounded-lg text-xs font-bold ${p.status === 'Early Payment Requested' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                                            <span className={`px-2 py-1 rounded-lg text-xs font-bold ${p.status === 'Renegotiated' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400' : p.status === 'Pending Finance' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
                                                 {p.status}
                                             </span>
                                         </td>
                                         <td className="p-4 text-right">
-                                            <button onClick={() => markPaid(p.id)} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors">
-                                                Mark Paid
-                                            </button>
+                                            {p.status === 'Pending Finance' ? (
+                                                <button onClick={() => { setSchedulingPayout(p); setConfirmDate(p.start_date ? new Date(p.start_date).toISOString().split('T')[0] : ''); }} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors">
+                                                    Schedule
+                                                </button>
+                                            ) : (
+                                                <button onClick={() => markPaid(p.id)} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors">
+                                                    Mark Paid
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
@@ -1490,7 +1513,54 @@ function PayoutCalendar() {
                                 )}
                             </tbody>
                         </table>
-                    </div>
+                                        </div>
+
+                    {schedulingPayout && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 dark:border-slate-700">
+                                <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                                    <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                                        <Calendar className="w-5 h-5 text-blue-500" /> Confirm Payout Schedule
+                                    </h3>
+                                    <button onClick={() => setSchedulingPayout(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                                <div className="p-6 space-y-4">
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 p-4 rounded-xl text-sm mb-4 border border-blue-100 dark:border-blue-800/50">
+                                        Review the auto-generated Net-30 date for <strong>{schedulingPayout.supplier_email}</strong>. Confirming will generate a Promise to Pay PDF and notify the supplier.
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Amount</label>
+                                        <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(schedulingPayout.base_amount)}</div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Scheduled Date</label>
+                                        <input 
+                                            type="date" 
+                                            value={confirmDate} 
+                                            onChange={(e) => setConfirmDate(e.target.value)} 
+                                            className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                                        />
+                                    </div>
+                                    <div className="mt-6 flex gap-3">
+                                        <button 
+                                            onClick={() => setSchedulingPayout(null)}
+                                            className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button 
+                                            onClick={handleConfirmSchedule}
+                                            className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-colors shadow-md"
+                                        >
+                                            Confirm Schedule
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

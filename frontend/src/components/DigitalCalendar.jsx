@@ -118,10 +118,9 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         setIsUpdating(true);
         try {
             const newDate = new Date(); // Request payout today
-            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${selectedEvent.id}`, {
-                start_date: newDate.toISOString(),
-                end_date: newDate.toISOString(),
-                updatedBy: userRole
+            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${selectedEvent.id}/discount`, {
+                early_date: newDate.toISOString(),
+                new_amount: selectedEvent.amount - discountAmount
             });
             await fetchEvents();
             setIsDiscountModalOpen(false);

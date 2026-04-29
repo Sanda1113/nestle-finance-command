@@ -7,7 +7,7 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 async function runPayoutReminders() {
     console.log('⏳ Running daily payout reminder job...');
     try {
-        const { data: payouts, error } = await supabase.from('payout_schedule').select('*').in('status', ['Scheduled', 'Early Payment Requested']);
+        const { data: payouts, error } = await supabase.from('payout_schedules').select('*').in('status', ['Scheduled', 'Pending Finance', 'Renegotiated']);
         if (error) throw error;
 
         const now = new Date();
@@ -18,7 +18,7 @@ async function runPayoutReminders() {
         if (now.getDate() === 25) {
             console.log('🤖 MVP7: Proactive Early Payout AI trigger running...');
             for (const payout of payouts) {
-                if (payout.status === 'Scheduled' && !payout.early_payment_accepted_at) {
+                if (payout.status === 'Scheduled' && payout.status !== 'Renegotiated') {
                     const discountRate = 1.5;
                     console.log(`📧 MVP7: Sending proactive early payout offer to ${payout.supplier_email}`);
                     if (resend) {
@@ -26,7 +26,7 @@ async function runPayoutReminders() {
                             from: 'Nestlé Treasury <finance@nestle-command.com>',
                             to: [payout.supplier_email],
                             subject: 'Unlock Cash Early: Pre-Approved Liquidity Offer',
-                            html: `<p>We have pre-approved your $${payout.payout_amount} invoice (${payout.invoice_number}) for early payout at ${discountRate}%.</p><p>Click here to claim and get paid tomorrow.</p>`
+                            html: `<p>We have pre-approved your $${(payout.final_amount || payout.base_amount)} invoice (${(payout.title || payout.id)}) for early payout at ${discountRate}%.</p><p>Click here to claim and get paid tomorrow.</p>`
                         }).catch(err => console.error('Failed to send early payout email', err));
                     }
                 }
@@ -74,7 +74,7 @@ async function runPayoutReminders() {
 
 
         for (const payout of payouts) {
-            const dueDate = new Date(payout.due_date);
+            const dueDate = new Date(payout.start_date);
             dueDate.setHours(0, 0, 0, 0);
             const diffTime = dueDate - now;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -85,16 +85,16 @@ async function runPayoutReminders() {
             else if (diffDays < 0) alertType = 'Overdue';
 
             if (alertType) {
-                console.log(`🔔 Sending ${alertType} reminder for Invoice ${payout.invoice_number}`);
+                console.log(`🔔 Sending ${alertType} reminder for Invoice ${(payout.title || payout.id)}`);
                 const message = alertType === 'Overdue' 
-                    ? `⚠️ OVERDUE: Payment for invoice ${payout.invoice_number} was due on ${dueDate.toLocaleDateString()}. Please process immediately.`
-                    : `⏰ REMINDER: Payment for invoice ${payout.invoice_number} is due in ${diffDays} day(s) on ${dueDate.toLocaleDateString()}.`;
+                    ? `⚠️ OVERDUE: Payment for invoice ${(payout.title || payout.id)} was due on ${dueDate.toLocaleDateString()}. Please process immediately.`
+                    : `⏰ REMINDER: Payment for invoice ${(payout.title || payout.id)} is due in ${diffDays} day(s) on ${dueDate.toLocaleDateString()}.`;
 
                 // In-app Notification for Finance
                 await supabase.from('notifications').insert([{
                     user_email: 'finance@nestle.com',
                     user_role: 'Finance',
-                    title: `Payout Alert: ${alertType} (${payout.invoice_number})`,
+                    title: `Payout Alert: ${alertType} (${(payout.title || payout.id)})`,
                     message: message,
                     link: `/finance?filter=payouts`,
                     is_read: false
@@ -105,8 +105,8 @@ async function runPayoutReminders() {
                     await resend.emails.send({
                         from: 'Nestlé Finance <finance@nestle-command.com>', // Usually a verified domain
                         to: ['finance@nestle.com'],
-                        subject: `Payout Alert: ${alertType} - Invoice ${payout.invoice_number}`,
-                        html: `<p>${message}</p><p>Vendor: ${payout.vendor_name || payout.supplier_email}</p><p>Amount: $${payout.early_payment_amount || payout.payout_amount}</p>`
+                        subject: `Payout Alert: ${alertType} - Invoice ${(payout.title || payout.id)}`,
+                        html: `<p>${message}</p><p>Vendor: ${payout.vendor_name || payout.supplier_email}</p><p>Amount: $${payout.early_payment_amount || (payout.final_amount || payout.base_amount)}</p>`
                     }).catch(err => console.error('Failed to send reminder email', err));
                 }
             }
