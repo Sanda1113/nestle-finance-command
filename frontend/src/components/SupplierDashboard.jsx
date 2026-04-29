@@ -596,7 +596,8 @@ export default function SupplierDashboard({ user, onLogout }) {
                 totalAmount: po.total_amount,
                 currency: po.po_data?.currency,
                 events,
-                po
+                po,
+                payout: myPayouts.find(p => p.reconciliation_id === relatedRecon?.id || p.po_number === poNumber)
             });
         });
 

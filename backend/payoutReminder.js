@@ -13,6 +13,66 @@ async function runPayoutReminders() {
         const now = new Date();
         now.setHours(0, 0, 0, 0);
 
+        // --- MVP 7: Dynamic Discounting Proactive Email ---
+        // If it's the 25th of the month, proactively email suppliers for early payout
+        if (now.getDate() === 25) {
+            console.log('🤖 MVP7: Proactive Early Payout AI trigger running...');
+            for (const payout of payouts) {
+                if (payout.status === 'Scheduled' && !payout.early_payment_accepted_at) {
+                    const discountRate = 1.5;
+                    console.log(`📧 MVP7: Sending proactive early payout offer to ${payout.supplier_email}`);
+                    if (resend) {
+                        await resend.emails.send({
+                            from: 'Nestlé Treasury <finance@nestle-command.com>',
+                            to: [payout.supplier_email],
+                            subject: 'Unlock Cash Early: Pre-Approved Liquidity Offer',
+                            html: `<p>We have pre-approved your $${payout.payout_amount} invoice (${payout.invoice_number}) for early payout at ${discountRate}%.</p><p>Click here to claim and get paid tomorrow.</p>`
+                        }).catch(err => console.error('Failed to send early payout email', err));
+                    }
+                }
+            }
+        }
+
+        // --- MVP 6: SLA Default Risk (Disputes) ---
+        console.log('🚨 MVP6: Checking for SLA Default Risk on stuck disputes...');
+        const { data: stuckRecons, error: reconError } = await supabase.from('reconciliations')
+            .select('*')
+            .ilike('match_status', '%Discrep%');
+            
+        if (!reconError && stuckRecons) {
+            for (const recon of stuckRecons) {
+                const createdDate = new Date(recon.created_at || recon.processed_at);
+                createdDate.setHours(0, 0, 0, 0);
+                const diffTime = now - createdDate;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                // Day 28 of Net-30
+                if (diffDays === 28) {
+                    console.log(`🚨 SLA Default Risk for Invoice ${recon.invoice_number}`);
+                    const message = `SLA Default Risk: Payment due in 48 hours. Invoice ${recon.invoice_number} is still stuck in a dispute chat.`;
+                    
+                    await supabase.from('notifications').insert([{
+                        user_email: 'finance@nestle.com',
+                        user_role: 'Finance',
+                        title: `SLA Default Risk (${recon.invoice_number})`,
+                        message: message,
+                        link: `/finance?filter=pending`,
+                        is_read: false
+                    }]);
+                    
+                    if (resend) {
+                        await resend.emails.send({
+                            from: 'Nestlé Command <system@nestle-command.com>',
+                            to: ['finance@nestle.com'],
+                            subject: `URGENT: SLA Default Risk - Invoice ${recon.invoice_number}`,
+                            html: `<p><strong>${message}</strong></p><p>Please resolve this immediately in the Review Queue.</p>`
+                        }).catch(err => console.error('Failed to send SLA email', err));
+                    }
+                }
+            }
+        }
+
+
         for (const payout of payouts) {
             const dueDate = new Date(payout.due_date);
             dueDate.setHours(0, 0, 0, 0);

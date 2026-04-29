@@ -831,6 +831,11 @@ function FinancePortal({ user }) {
                                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                                         <div className="flex flex-col gap-4">
                                                             <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-2">📑 Document Context</h4>
+                                                            {r.auto_approved && r.auto_approval_reason && (
+                                                                <div className="bg-emerald-50 dark:bg-emerald-900/30 border-l-4 border-emerald-500 p-3 rounded text-xs text-emerald-800 dark:text-emerald-300 font-medium mb-4 shadow-sm">
+                                                                    <strong>AI Auto-Approval Note:</strong> {r.auto_approval_reason}
+                                                                </div>
+                                                            )}
                                                             {r.autoApprovedViaTolerance && (
                                                                 <div className="bg-emerald-50 dark:bg-emerald-900/30 border-l-4 border-emerald-500 p-4 rounded-r shadow-sm mb-4">
                                                                     <div className="flex items-start gap-2">
