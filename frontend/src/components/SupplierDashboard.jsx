@@ -116,7 +116,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                 axios.get(`https://nestle-finance-command-production.up.railway.app/api/supplier/logs/${user.email}`, { timeout: 15000 }),
                 axios.get(`https://nestle-finance-command-production.up.railway.app/api/reconciliations?email=${encodeURIComponent(user.email)}`, { timeout: 15000 }),
                 axios.get(`https://nestle-finance-command-production.up.railway.app/api/boqs?email=${encodeURIComponent(user.email)}`, { timeout: 15000 }),
-                axios.get(`https://nestle-finance-command-production.up.railway.app/api/payouts?email=${encodeURIComponent(user.email)}`, { timeout: 15000 })
+                axios.get(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts?email=${encodeURIComponent(user.email)}`, { timeout: 15000 })
             ]);
 
             if (isMountedRef.current) {
@@ -141,6 +141,9 @@ export default function SupplierDashboard({ user, onLogout }) {
                 }
                 if (boqsRes.status === 'fulfilled') {
                     setMyBoqs(boqsRes.value.data.data || []);
+                }
+                if (payoutsRes.status === 'fulfilled') {
+                    setMyPayouts(payoutsRes.value.data.data || []);
                 }
             }
 
@@ -579,7 +582,25 @@ export default function SupplierDashboard({ user, onLogout }) {
                 }
 
                 if (isApproved && isDelivered) {
-                    events.push({ label: 'Payout Initiated', date: new Date().toISOString(), status: 'pending', icon: '💰', isPayoutInitiated: true });
+                    const payout = myPayouts.find(p => p.invoice_ref === relatedRecon.id);
+                    if (!payout) {
+                        events.push({ label: 'Awaiting Scheduling', date: new Date().toISOString(), status: 'pending', icon: '⏳' });
+                    } else {
+                        events.push({ label: 'Scheduled (Calendar)', date: payout.created_at, status: payout.status === 'Scheduled' || payout.status === 'Renegotiated' ? 'completed' : 'completed', icon: '🗓️' });
+                        
+                        if (payout.status === 'Hold') {
+                            events.push({ label: 'Payment Hold', date: payout.hold_until_date || new Date().toISOString(), status: 'warning', icon: '⏸️' });
+                        }
+                        
+                        if (payout.status === 'Paid') {
+                            if (payout.hold_until_date) {
+                                events.push({ label: 'Payment Hold', date: payout.hold_until_date, status: 'completed', icon: '⏸️' });
+                            }
+                            events.push({ label: 'Paid (Funds Disbursed)', date: payout.updated_at, status: 'completed', icon: '💰', isPaid: true, bankRef: payout.bank_transaction_ref });
+                        } else if (payout.status !== 'Hold') {
+                            events.push({ label: 'Processing Payment', date: new Date().toISOString(), status: 'pending', icon: '💸' });
+                        }
+                    }
                 }
             } else {
                 const isDelivered = po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp;
@@ -1089,6 +1110,17 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                                                     <h4 className="font-semibold text-slate-200 text-sm">
                                                                                         <JargonText text={event.label} />
                                                                                     </h4>
+                                                                                    {event.isPaid && event.bankRef && (
+                                                                                        <button 
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                alert('Downloading Remittance Advice for TXN: ' + event.bankRef);
+                                                                                            }}
+                                                                                            className="ml-2 px-2 py-0.5 bg-emerald-900/40 text-emerald-400 border border-emerald-700 rounded text-[10px] uppercase font-bold hover:bg-emerald-800 transition-colors"
+                                                                                        >
+                                                                                            📄 Receipt
+                                                                                        </button>
+                                                                                    )}
                                                                                 </div>
                                                                                 <span className="text-[10px] text-slate-400">{safeDate(event.date)}</span>
                                                                             </div>

@@ -22,12 +22,30 @@ export default function DigitalCalendar({ userRole, userEmail }) {
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [holdDate, setHoldDate] = useState('');
 
     // Dynamic Discounting State
     const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
     const [discountRate, setDiscountRate] = useState(2.5);
 
     const isFinance = userRole === 'Finance';
+
+    const eventStyleGetter = (event) => {
+        let backgroundColor = '#3b82f6'; // blue-500
+        if (event.status === 'Hold') backgroundColor = '#f59e0b'; // amber-500
+        if (event.status === 'Paid') backgroundColor = '#10b981'; // emerald-500
+        
+        return {
+            style: {
+                backgroundColor,
+                opacity: 0.9,
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px'
+            }
+        };
+    };
+
 
     const fetchEvents = useCallback(async () => {
         setLoading(true);
@@ -42,6 +60,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                     start: new Date(p.start_date),
                     end: new Date(p.end_date || p.start_date),
                     title: p.title || `Payout`,
+                    status: p.status,
                 }));
                 setEvents(mappedEvents);
             }
@@ -87,6 +106,49 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         } catch (error) {
             console.error('Failed to update event date', error);
             fetchEvents(); // rollback
+        }
+    };
+
+    
+    const handleApproveTransfer = async () => {
+        if (!selectedEvent) return;
+        setIsUpdating(true);
+        try {
+            const res = await axios.post(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${selectedEvent.id}/disburse`, {
+                supplier_email: selectedEvent.supplier_email,
+                final_amount: selectedEvent.amount || selectedEvent.final_amount || selectedEvent.base_amount,
+                mock_supplier_account: 'SUPP-ACC-12345'
+            });
+            alert('Transfer approved! TXN ID: ' + res.data.transactionId);
+            fetchEvents();
+            setIsModalOpen(false);
+        } catch (error) {
+            console.error('Failed to disburse', error);
+            alert('Failed to process transfer');
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const handleHoldPayment = async () => {
+        if (!selectedEvent || !holdDate) {
+            alert('Please select a hold date');
+            return;
+        }
+        setIsUpdating(true);
+        try {
+            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${selectedEvent.id}/hold`, {
+                hold_until_date: new Date(holdDate).toISOString()
+            });
+            alert('Payment placed on hold');
+            fetchEvents();
+            setIsModalOpen(false);
+        } catch (error) {
+            console.error('Failed to hold', error);
+            alert('Failed to hold payment');
+        } finally {
+            setIsUpdating(false);
+            setHoldDate('');
         }
     };
 
@@ -185,6 +247,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                     resizable
                     style={{ height: '70vh' }}
                     startAccessor="start"
+                    eventPropGetter={eventStyleGetter}
                     endAccessor="end"
                     popup
                 />
@@ -195,6 +258,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                     onSelectEvent={handleSelectEvent}
                     style={{ height: '70vh' }}
                     startAccessor="start"
+                    eventPropGetter={eventStyleGetter}
                     endAccessor="end"
                     popup
                 />
@@ -303,10 +367,37 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                             <div className="text-xs text-slate-500 mt-4 bg-slate-100 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
                                 💡 Tip: You can drag and drop this event directly on the calendar to reschedule it. The supplier will automatically receive an email and in-app notification.
                             </div>
-                            <div className="mt-6">
+                            
+                            <div className="mt-6 flex flex-col gap-3">
+                                {selectedEvent.status !== 'Paid' && (
+                                    <>
+                                        <button 
+                                            onClick={handleApproveTransfer}
+                                            disabled={isUpdating}
+                                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-sm"
+                                        >
+                                            {isUpdating ? 'Processing...' : 'Approve Transfer (Bank Mock)'}
+                                        </button>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                type="date" 
+                                                value={holdDate}
+                                                onChange={(e) => setHoldDate(e.target.value)}
+                                                className="flex-1 bg-slate-100 dark:bg-slate-800 p-2 rounded-xl text-sm border border-slate-300 dark:border-slate-700 outline-none text-slate-800 dark:text-slate-200"
+                                            />
+                                            <button 
+                                                onClick={handleHoldPayment}
+                                                disabled={isUpdating || !holdDate}
+                                                className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-colors disabled:opacity-50"
+                                            >
+                                                Hold Payment
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
                                 <button 
                                     onClick={() => setIsModalOpen(false)}
-                                    className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition-colors"
+                                    className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition-colors mt-2"
                                 >
                                     Close
                                 </button>

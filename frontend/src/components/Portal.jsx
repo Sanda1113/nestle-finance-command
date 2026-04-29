@@ -608,6 +608,22 @@ function FinancePortal({ user }) {
         };
     }, [fetchData]);
 
+
+    const handleStagePayout = async (record) => {
+        try {
+            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/stage', {
+                invoice_ref: record.id,
+                supplier_email: record.vendor_email || 'supplier@nestle.com',
+                total_amount: record.invoice_total
+            });
+            alert('Payout Staged successfully!');
+            fetchData(false);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to stage payout.');
+        }
+    };
+
     const handleManualOverride = async (id, decision) => {
         const confirmMsg = decision === 'Approved'
             ? "Are you sure you want to manually APPROVE this document?"
