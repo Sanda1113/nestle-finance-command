@@ -32,8 +32,49 @@ const safeDate = (dateStr) => {
     return isNaN(d.getTime()) ? new Date().toLocaleString() : d.toLocaleString();
 };
 
+const JargonText = ({ text, className = "" }) => {
+    if (!text) return null;
+    const dictionary = {
+        'grn': 'Good Receipt Note. The warehouse is currently counting your physical boxes.',
+        'variance': 'The amounts on your invoice and our PO do not match.',
+        '3-way match': 'Comparing your Invoice, Purchase Order, and the Warehouse Receipt to ensure everything matches.',
+        'reconciliation': 'The process of matching your invoice against our records.',
+        'discrepancy': 'There is a difference between your submitted document and our records.',
+        'delivered to dock': 'Your shipment has arrived at our warehouse and is waiting to be unloaded.',
+        'variance flagged': 'The amounts on your invoice and our PO do not match. A finance team member is reviewing it.'
+    };
+    
+    const lowerText = String(text).toLowerCase();
+    let matchedJargon = null;
+    let description = null;
+    
+    for (const [jargon, desc] of Object.entries(dictionary)) {
+        if (lowerText.includes(jargon)) {
+            matchedJargon = jargon;
+            description = desc;
+            break;
+        }
+    }
+    
+    if (!description) return <span className={className}>{text}</span>;
+    
+    return (
+        <span className={`relative group cursor-help inline-block ${className}`}>
+            <span className="border-b border-dashed border-slate-400">{text}</span>
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 text-slate-200 text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[60] pointer-events-none border border-slate-600">
+                <p className="font-bold text-white mb-1 capitalize text-sm">{matchedJargon}</p>
+                <p>{description}</p>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+            </div>
+        </span>
+    );
+};
+
 export default function SupplierDashboard({ user, onLogout }) {
     const [mode, setMode] = useState('inbox');
+    const [isSandboxMode, setIsSandboxMode] = useState(false);
+    const [showWalkthrough, setShowWalkthrough] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('hasSeenWalkthrough') !== 'true' : false);
+    const [showMicroLearning, setShowMicroLearning] = useState(false);
     const [invoiceFile, setInvoiceFile] = useState(null);
     const [poFile, setPoFile] = useState(null);
     const [boqFile, setBoqFile] = useState(null);
@@ -138,6 +179,17 @@ export default function SupplierDashboard({ user, onLogout }) {
         };
     }, [user.email]);
 
+    useEffect(() => {
+        if (mode === 'match') {
+            const discrepancies = myRecons.filter(r => String(r.match_status).toLowerCase().includes('discrepancy')).length;
+            const rejectedBOQs = myBoqs.filter(b => b.status === 'Rejected').length;
+            
+            if ((discrepancies >= 1 || rejectedBOQs >= 1) && localStorage.getItem('hasSeenMicroLearning') !== 'true') {
+                setShowMicroLearning(true);
+            }
+        }
+    }, [mode, myRecons, myBoqs]);
+
     const trustScore = useMemo(() => {
         if (!myRecons.length && !myBoqs.length) return 80;
         
@@ -161,7 +213,6 @@ export default function SupplierDashboard({ user, onLogout }) {
         const poForm = new FormData(); poForm.append('invoiceFile', poFile);
 
         try {
-            // Extract BOTH documents via OCR
             const [invRes, poRes] = await Promise.all([
                 axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', invForm),
                 axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', poForm)
@@ -174,24 +225,19 @@ export default function SupplierDashboard({ user, onLogout }) {
                 const invTotal = safeParse(invData.totalAmount);
                 let poTotal = safeParse(poData.totalAmount);
 
-                // --- SMART PO FALLBACK ---
-                // If OCR couldn't read the PO total (returns 0 or near-0),
-                // look it up from the database POs we already have.
                 if (poTotal < 1) {
-                    // Try to match by PO number extracted from the invoice, or from the PO document
                     const extractedPoNum = invData.poNumber || poData.invoiceNumber || poData.poNumber;
                     const matchedPO = myPOs.find(p =>
                         p.po_number === extractedPoNum ||
                         String(p.po_number).includes(String(extractedPoNum || '').replace(/\D/g, '')) ||
                         String(extractedPoNum || '').includes(String(p.po_number || '').replace(/\D/g, ''))
-                    ) || myPOs[0]; // fallback to most recent PO
+                    ) || myPOs[0]; 
 
                     if (matchedPO) {
                         poTotal = safeParse(matchedPO.total_amount);
                         poData.totalAmount = poTotal;
                         poData.poNumber = matchedPO.po_number;
                         poData.vendorName = matchedPO.po_data?.vendorName || poData.vendorName;
-                        console.log(`🔍 PO OCR returned 0 — using DB total: ${poTotal} from PO ${matchedPO.po_number}`);
                     }
                 }
 
@@ -201,7 +247,6 @@ export default function SupplierDashboard({ user, onLogout }) {
                 setInvoiceResult(invData);
                 setPoResult(poData);
 
-                // FX Conversion Mock (Fallback to 1:1 if fails)
                 const invCurrency = invData.currency || 'USD';
                 const poCurrency = poData.currency || 'USD';
                 let convertedInvTotal = invTotal;
@@ -211,19 +256,16 @@ export default function SupplierDashboard({ user, onLogout }) {
                         const fxRes = await axios.get(`https://api.exchangerate-api.com/v4/latest/${invCurrency}`);
                         const rate = fxRes.data.rates[poCurrency] || 1;
                         convertedInvTotal = invTotal * rate;
-                        console.log(`💱 FX Conv: ${invTotal} ${invCurrency} -> ${convertedInvTotal} ${poCurrency} (Rate: ${rate})`);
                     } catch (e) {
                         console.error('FX conversion failed', e);
                     }
                 }
 
-                // Dynamic matching threshold based on formal trust score
                 const tolerancePercent = trustScore > 90 ? 0.02 : trustScore > 75 ? 0.01 : 0.00;
                 const tolerance = Math.max(0.01, poTotal * tolerancePercent);
                 let status = 'Matched - Pending Finance Review';
 
                 if (poTotal < 1) {
-                    // Still couldn't find PO total — send for manual review but don't block
                     status = 'Matched - Pending Finance Review';
                     setDbStatus('⚠️ PO amount unverified — submitted for Finance manual review.');
                 } else if (Math.abs(convertedInvTotal - poTotal) > tolerance) {
@@ -231,6 +273,13 @@ export default function SupplierDashboard({ user, onLogout }) {
                 }
 
                 setMatchStatus(status);
+                
+                if (isSandboxMode) {
+                    setDbStatus('🛠️ Sandbox Mode: OCR and matching simulated successfully. No data sent to Finance.');
+                    setLoading(false);
+                    return;
+                }
+
                 await axios.post('https://nestle-finance-command-production.up.railway.app/api/save-reconciliation', {
                     invoiceData: invData, poData: poData, matchStatus: status, supplierEmail: user.email
                 });
@@ -243,8 +292,8 @@ export default function SupplierDashboard({ user, onLogout }) {
     };
 
 
-        const handleAcceptEarlyPayment = async (payoutId, payoutAmount) => {
-        const discountRate = 0.02; // 2% dynamic discounting for MVP 7
+    const handleAcceptEarlyPayment = async (payoutId, payoutAmount) => {
+        const discountRate = 0.02; 
         const discountAmount = payoutAmount * discountRate;
         const earlyPaymentAmount = payoutAmount - discountAmount;
         if (!window.confirm(`Accept Early Payment?\n\nOriginal Amount: ${formatCurrency(payoutAmount)}\nEarly Payment Discount: ${formatCurrency(discountAmount)} (2%)\nAmount you will receive now: ${formatCurrency(earlyPaymentAmount)}`)) return;
@@ -254,7 +303,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                 discountAmount, earlyPaymentAmount, discountRate
             });
             alert('Early payment offer accepted! Finance has been notified to accelerate your payout.');
-            fetchDashboardData();
+            fetchData();
         } catch(err) {
             alert('Failed to accept early payment offer.');
         }
@@ -451,16 +500,14 @@ export default function SupplierDashboard({ user, onLogout }) {
     }, [normalizedLogs]);
 
     const transactionTimeline = useMemo(() => {
-        // Group everything by a "transaction id" which is either PO Number or BOQ document_number
         const timelines = [];
-        const processedNumericLocators = new Set(); // Keep track of what we've processed
+        const processedNumericLocators = new Set();
         
         myPOs.forEach(po => {
             const poNumber = po.po_number;
             const poNumeric = String(poNumber).match(/\d+/)?.[0] || poNumber;
             processedNumericLocators.add(poNumeric);
 
-            // Find related Recon
             const relatedRecon = myRecons.find(r => {
                 const rPO = String(r.po_number || '').trim();
                 const rInv = String(r.invoice_number || '').trim();
@@ -471,7 +518,6 @@ export default function SupplierDashboard({ user, onLogout }) {
                 return (rPONum && rPONum === poNumeric) || (rInvNum && rInvNum === poNumeric);
             });
 
-            // Find related BOQ
             const relatedBoq = myBoqs.find(b => {
                 const docNum = String(b.document_number || '');
                 return docNum === poNumber || docNum.includes(poNumeric);
@@ -535,7 +581,6 @@ export default function SupplierDashboard({ user, onLogout }) {
                     events.push({ label: 'Payout Initiated', date: new Date().toISOString(), status: 'pending', icon: '💰', isPayoutInitiated: true });
                 }
             } else {
-                // Check if delivery happened without invoice recon (rare but possible)
                 const isDelivered = po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp;
                 if (isDelivered) {
                     events.push({ label: 'Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
@@ -555,7 +600,6 @@ export default function SupplierDashboard({ user, onLogout }) {
             });
         });
 
-        // Now process any BOQs that NEVER resulted in a PO (e.g. pending or rejected BOQs)
         myBoqs.forEach(boq => {
             const docNum = String(boq.document_number || '');
             const docNumNumeric = docNum.match(/\d+/)?.[0] || docNum;
@@ -575,17 +619,16 @@ export default function SupplierDashboard({ user, onLogout }) {
                 
                 timelines.push({
                     transactionId: docNum,
-                    poNumber: docNum, // use docNum as identifier for timeline header
+                    poNumber: docNum,
                     poNumeric: docNumNumeric,
                     totalAmount: boq.total_amount,
                     currency: boq.currency,
                     events,
-                    po: null // no PO exists
+                    po: null 
                 });
             }
         });
 
-        // Sort timelines with most recent first (based on first event)
         return timelines.sort((a, b) => {
             const timeA = new Date(a.events[0]?.date || 0);
             const timeB = new Date(b.events[0]?.date || 0);
@@ -688,6 +731,16 @@ export default function SupplierDashboard({ user, onLogout }) {
                             </div>
                             <span className="text-xs font-medium text-slate-300">{user.name || user.email}</span>
                         </div>
+                        
+                        {/* Pre-Flight Sandbox Toggle */}
+                        <div className="hidden sm:flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 hover:border-slate-600 transition-colors" title="Practice uploading without sending to Finance">
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" className="sr-only peer" checked={isSandboxMode} onChange={() => setIsSandboxMode(!isSandboxMode)} />
+                                <div className="w-7 h-4 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-500"></div>
+                                <span className="ml-2 text-[10px] font-bold text-slate-300 uppercase">Sandbox</span>
+                            </label>
+                        </div>
+
                         <div className="w-px h-5 sm:h-6 bg-slate-700 mx-1 sm:mx-2 hidden sm:block"></div>
                         <button type="button" onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 sm:p-1.5 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors" title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
                             {isDarkMode ? <Sun className="w-5 h-5 sm:w-4 sm:h-4" /> : <Moon className="w-5 h-5 sm:w-4 sm:h-4" />}
@@ -705,7 +758,6 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Total Shipments</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{totalPOs}</p>
-                                    <p className="text-[10px] text-emerald-400 mt-1 flex items-center">↑ +2 this week</p>
                                 </div>
                                 <div className="w-10 h-10 bg-blue-900/30 rounded-full flex items-center justify-center text-blue-400">
                                     <Package className="w-5 h-5" />
@@ -717,7 +769,6 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Total Value Delivered</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{formatCurrency(totalPOValue)}</p>
-                                    <p className="text-[10px] text-emerald-400 mt-1 flex items-center">↑ +14% vs last month</p>
                                 </div>
                                 <div className="w-10 h-10 bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-400">
                                     <DollarSign className="w-5 h-5" />
@@ -729,7 +780,6 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Pending</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{pendingPOs}</p>
-                                    <p className="text-[10px] text-amber-400 mt-1 flex items-center">Requires attention</p>
                                 </div>
                                 <div className="w-10 h-10 bg-amber-900/30 rounded-full flex items-center justify-center text-amber-400">
                                     <Clock className="w-5 h-5" />
@@ -741,7 +791,6 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Matched Invoices</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{totalMatched}</p>
-                                    <p className="text-[10px] text-emerald-400 mt-1 flex items-center">↑ +3 this week</p>
                                 </div>
                                 <div className="w-10 h-10 bg-purple-900/30 rounded-full flex items-center justify-center text-purple-400">
                                     <CheckCircle2 className="w-5 h-5" />
@@ -753,9 +802,6 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Trust Score</p>
                                     <p className="text-2xl font-bold text-slate-100 mt-1">{trustScore}/100</p>
-                                    <p className={`text-[10px] mt-1 flex items-center ${trustScore > 90 ? 'text-emerald-400' : trustScore > 75 ? 'text-blue-400' : 'text-amber-400'}`}>
-                                        {trustScore > 90 ? 'Excellent Standing' : trustScore > 75 ? 'Good Standing' : 'Needs Improvement'}
-                                    </p>
                                 </div>
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${trustScore > 90 ? 'bg-emerald-900/30 text-emerald-400' : trustScore > 75 ? 'bg-blue-900/30 text-blue-400' : 'bg-amber-900/30 text-amber-400'}`}>
                                     <ShieldCheck className="w-5 h-5" />
@@ -824,9 +870,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                 const isChatOpen = expandedLog === po.id;
 
                                                 const poNumeric = String(po.po_number || '').match(/\d+/)?.[0] || String(po.po_number);
-                                                const relatedRecon = myRecons.find(r => String(r.po_number || '').includes(poNumeric) || String(r.invoice_number || '').includes(poNumeric));
-                                                const _isFinanceApproved = relatedRecon && String(relatedRecon.match_status || '').toLowerCase() === 'approved';
-
+                                                
                                                 return (
                                                     <div key={po.id} className="bg-slate-900 rounded-xl border border-slate-800 flex flex-col hover:shadow-lg transition-all group overflow-hidden">
                                                         <div className="p-4">
@@ -934,6 +978,30 @@ export default function SupplierDashboard({ user, onLogout }) {
                                         <h2 className="text-2xl font-bold tracking-tight">Invoice Clearance</h2>
                                         <p className="text-sm text-slate-400">Upload Invoice and PO for 3-Way Match.</p>
                                     </div>
+                                    
+                                    {/* AI Behavior-Triggered Micro-Learning */}
+                                    {showMicroLearning && (
+                                        <div className="mb-6 bg-gradient-to-r from-blue-900/80 to-indigo-900/80 border border-blue-500/50 p-5 rounded-xl shadow-lg relative overflow-hidden animate-in slide-in-from-top-4">
+                                            <button onClick={() => { setShowMicroLearning(false); localStorage.setItem('hasSeenMicroLearning', 'true'); }} className="absolute top-3 right-3 text-blue-300 hover:text-white">✕</button>
+                                            <div className="flex items-start gap-4">
+                                                <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                                                    <Activity className="w-6 h-6 text-blue-400" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                                                        <Zap className="w-4 h-4 text-blue-400" /> Personalized Tip: Clean PDF Exports
+                                                    </h3>
+                                                    <p className="text-sm text-blue-100 mt-1 mb-3">We noticed your last few uploads couldn't be read perfectly by our scanner. Here are 3 quick tips for exporting a clean PDF directly from your accounting software so your next invoice gets approved instantly:</p>
+                                                    <ul className="text-xs text-blue-200 space-y-1 list-disc list-inside">
+                                                        <li>Export directly to PDF rather than scanning a printed copy.</li>
+                                                        <li>Ensure the DPI is set to at least 300 if scanning is unavoidable.</li>
+                                                        <li>Avoid watermarks over the total amounts.</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm flex flex-col gap-4">
                                         <div className="flex-1 bg-slate-800/50 p-4 rounded-lg border border-slate-700">
                                             <label className="block text-sm font-bold text-slate-200 mb-1.5"><span className="text-emerald-500 mr-1">Step 1:</span> Upload your Invoice</label>
@@ -954,14 +1022,14 @@ export default function SupplierDashboard({ user, onLogout }) {
                                             )}
                                         </div>
                                     </div>
-                                    <button type="button" onClick={handleMatchUpload} disabled={loading || !invoiceFile || !poFile} className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm font-bold rounded-lg mt-4 disabled:opacity-50 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2">
-                                        {loading ? "Matching..." : "Step 3: Submit to begin 3-way matching"}
+                                    <button type="button" onClick={handleMatchUpload} disabled={loading || !invoiceFile || !poFile} className={`w-full py-2.5 ${isSandboxMode ? 'bg-gradient-to-r from-amber-600 to-orange-600' : 'bg-gradient-to-r from-emerald-600 to-teal-600'} text-white text-sm font-bold rounded-lg mt-4 disabled:opacity-50 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2`}>
+                                        {loading ? (isSandboxMode ? "Simulating..." : "Matching...") : (isSandboxMode ? "🛠️ Sandbox Mode: Test 3-way match (No data saved)" : "Step 3: Submit to begin 3-way matching")}
                                     </button>
 
                                     {matchStatus !== 'Pending' && matchStatus !== 'Submitted' && (
                                         <div className="mt-6">
                                             <div className={`p-3 mb-4 rounded-lg text-sm text-center font-medium border ${matchStatus === 'Matched - Pending Finance Review' ? 'bg-blue-900/30 border-blue-800 text-blue-300' : 'bg-amber-900/30 border-amber-800 text-amber-300'}`}>
-                                                {matchStatus === 'Matched - Pending Finance Review' ? '✅ Perfect Match. Awaiting Finance Approval' : '⚠️ Discrepancy Routed for Review'}
+                                                <JargonText text={matchStatus === 'Matched - Pending Finance Review' ? '✅ Perfect Match. Awaiting Finance Approval' : '⚠️ Variance Flagged: Discrepancy Routed for Review'} />
                                             </div>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <DocumentCard title="Invoice Data" data={invoiceResult} borderColor="border-blue-500" themeColor="text-blue-400" />
@@ -976,117 +1044,54 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 <div className="animate-in fade-in duration-300">
                                     <div className="mb-4">
                                         <h2 className="text-2xl font-bold tracking-tight">Lifecycle Timeline</h2>
-                                        <p className="text-sm text-slate-400">
-                                            Complete journey from BOQ submission to payout – one transaction per card.
-                                        </p>
+                                        <p className="text-sm text-slate-400">Complete journey from BOQ submission to payout – one transaction per card.</p>
                                     </div>
 
                                     {transactionTimeline.length === 0 ? (
                                         <div className="bg-slate-900 rounded-xl border border-slate-800 p-8 text-center">
                                             <p className="text-slate-400">No transaction timeline available yet.</p>
-                                            <p className="text-xs text-slate-500 mt-2">
-                                                Submit a BOQ or receive a PO to see your first timeline.
-                                            </p>
                                         </div>
                                     ) : (
                                         <div className="space-y-6">
                                             {transactionTimeline.map((tx) => (
-                                                <div
-                                                    key={tx.poNumber}
-                                                    className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-sm"
-                                                >
+                                                <div key={tx.poNumber} className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-sm">
                                                     <div className="bg-slate-800/80 px-5 py-3 border-b border-slate-700 flex flex-wrap items-center justify-between gap-2">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-full bg-blue-900/50 flex items-center justify-center text-blue-400">
                                                                 <Tag className="w-4 h-4" />
                                                             </div>
                                                             <div>
-                                                                <h3 className="font-bold text-slate-100">
-                                                                    Shipment {getShipmentId(tx.poNumber)}
-                                                                </h3>
-                                                                <p className="text-[10px] text-slate-400 uppercase tracking-wider">
-                                                                    PO: {tx.poNumber}
-                                                                </p>
+                                                                <h3 className="font-bold text-slate-100">Shipment {getShipmentId(tx.poNumber)}</h3>
+                                                                <p className="text-[10px] text-slate-400 uppercase tracking-wider">PO: {tx.poNumber}</p>
                                                             </div>
                                                         </div>
                                                         <div className="text-right">
-                                                            <p className="text-lg font-bold text-slate-100">
-                                                                {formatCurrency(tx.totalAmount, tx.currency)}
-                                                            </p>
-                                                            <p className="text-[10px] text-slate-400">Total Value</p>
+                                                            <p className="text-lg font-bold text-slate-100">{formatCurrency(tx.totalAmount, tx.currency)}</p>
                                                         </div>
                                                     </div>
 
                                                     <div className="p-5">
                                                         <div className="relative">
                                                             <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-700"></div>
-
                                                             <div className="space-y-5">
                                                                 {tx.events.map((event, idx) => (
                                                                     <div key={idx} className="relative flex items-start gap-4 pl-10">
-                                                                        <div
-                                                                            className={`absolute left-[13px] w-3 h-3 rounded-full ring-4 ring-slate-900 ${event.status === 'completed'
-                                                                                ? 'bg-emerald-500'
-                                                                                : event.status === 'warning'
-                                                                                    ? 'bg-amber-500'
-                                                                                    : 'bg-blue-500'
-                                                                                }`}
-                                                                        ></div>
-
+                                                                        <div className={`absolute left-[13px] w-3 h-3 rounded-full ring-4 ring-slate-900 ${event.status === 'completed' ? 'bg-emerald-500' : event.status === 'warning' ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
                                                                         <div className="flex-1 bg-slate-800/40 rounded-lg p-3 border border-slate-700/50">
                                                                             <div className="flex justify-between items-start">
                                                                                 <div className="flex items-center gap-2">
                                                                                     <span className="text-lg">{event.icon}</span>
                                                                                     <h4 className="font-semibold text-slate-200 text-sm">
-                                                                                        {event.label}
+                                                                                        <JargonText text={event.label} />
                                                                                     </h4>
                                                                                 </div>
-                                                                                <span className="text-[10px] text-slate-400">
-                                                                                    {safeDate(event.date)}
-                                                                                </span>
+                                                                                <span className="text-[10px] text-slate-400">{safeDate(event.date)}</span>
                                                                             </div>
-                                                                            {event.resubmitObj && (
-                                                                                <div className="mt-3 border-t border-slate-700/50 pt-3">
-                                                                                    <p className="text-xs text-slate-300 mb-2">
-                                                                                        This document was rejected by Finance. You must correct the errors and resubmit to continue the process.
-                                                                                    </p>
-                                                                                    <button 
-                                                                                        onClick={() => handleResubmit(event.resubmitObj.id, event.resubmitType)}
-                                                                                        className="px-3 py-1.5 text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500 hover:text-slate-900 rounded transition-colors"
-                                                                                    >
-                                                                                        Start Resubmission
-                                                                                    </button>
-                                                                                </div>
-                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 ))}
                                                             </div>
                                                         </div>
-
-                                                        <div className="mt-4 pt-3 border-t border-slate-800 flex justify-end">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setExpandedLog(expandedLog === tx.poNumber ? null : tx.poNumber)}
-                                                                className="text-xs font-medium text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                                                            >
-                                                                💬 {expandedLog === tx.poNumber ? 'Close Chat' : 'Open Dispute Chat'}
-                                                            </button>
-                                                        </div>
-
-                                                        {expandedLog === tx.poNumber && (
-                                                            <div className="mt-3 border-t border-slate-800 pt-4">
-                                                                <DisputeChat
-                                                                    referenceNumber={tx.poNumber}
-                                                                    userRole="Supplier"
-                                                                    userEmail={user.email}
-                                                                    contextData={{
-                                                                        status: tx.po?.status || 'Active',
-                                                                        type: 'Purchase Order Timeline'
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 </div>
                                             ))}
@@ -1099,126 +1104,24 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 <div className="animate-in fade-in duration-300 space-y-6">
                                     <div className="mb-4">
                                         <h2 className="text-2xl font-bold tracking-tight">Payouts & Liquidity</h2>
-                                        <p className="text-sm text-slate-400">Manage your cash flow, track incoming payments, and request early payouts.</p>
+                                        <p className="text-sm text-slate-400">Manage cash flow and request early payouts.</p>
                                     </div>
                                     
-                                    {/* AI Intervention Banner */}
-                                    {myPayouts.some(p => p.status === 'Scheduled') && (
-                                        <div className="bg-gradient-to-r from-indigo-900/80 to-purple-900/80 border border-indigo-500/50 p-5 rounded-2xl shadow-lg relative overflow-hidden">
-                                            <div className="absolute -right-10 -top-10 text-indigo-500/20"><Zap size={120} /></div>
-                                            <div className="flex items-start gap-3 relative z-10">
-                                                <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center shrink-0">
-                                                    <Activity className="w-5 h-5 text-indigo-400" />
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-lg font-black text-white">AI Liquidity Intervention</h3>
-                                                    <p className="text-sm text-indigo-200 mt-1">Hi Team, we noticed you recently accepted a large PO for Q4. To support your production, we have pre-approved your outstanding scheduled invoices for immediate payout at a special <strong className="text-emerald-400 text-base">1.5% rate</strong>.</p>
+                                    {myPayouts.length === 0 ? (
+                                        <div className="bg-slate-900 rounded-xl border border-slate-800 p-8 text-center text-slate-400">No payout records found.</div>
+                                    ) : (
+                                        myPayouts.map(payout => (
+                                            <div key={payout.id} className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-sm">
+                                                <div className="p-5 border-b border-slate-800 flex justify-between items-start">
+                                                    <div>
+                                                        <h3 className="text-lg font-black text-white">{payout.invoice_number || 'INV-Multiple'}</h3>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-2xl font-black text-emerald-400">{formatCurrency(payout.early_payment_amount || payout.payout_amount)}</p>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
-
-                                    {myPayouts.length === 0 ? (
-                                        <div className="bg-slate-900 rounded-xl border border-slate-800 p-8 text-center text-slate-400">
-                                            No payout records found.
-                                        </div>
-                                    ) : (
-                                        myPayouts.map(payout => {
-                                            const originalAmount = payout.payout_amount || 0;
-                                            const daysEarly = 30 - sliderDays; // Simulating Net-30
-                                            const dynamicDiscountRate = (1.5 + (2.0 - 1.5) * (daysEarly / 28)).toFixed(1); // 1.5% to 2.0%
-                                            const discountAmount = originalAmount * (dynamicDiscountRate / 100);
-                                            const earlyPayoutAmount = originalAmount - discountAmount;
-                                            
-                                            // Predictive forecasting
-                                            const expectedDate = new Date(payout.due_date || new Date(new Date().getTime() + 14 * 24 * 60 * 60 * 1000));
-                                            expectedDate.setDate(expectedDate.getDate() - 3);
-
-                                            return (
-                                                <div key={payout.id} className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-sm">
-                                                    <div className="p-5 border-b border-slate-800 flex justify-between items-start flex-wrap gap-4">
-                                                        <div>
-                                                            <h3 className="text-lg font-black text-white">{payout.invoice_number || 'INV-Multiple'}</h3>
-                                                            <div className="flex items-center gap-2 mt-2">
-                                                                <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${payout.status === 'Paid' ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-800' : payout.status === 'Early Payment Requested' ? 'bg-purple-900/40 text-purple-400 border border-purple-800' : 'bg-blue-900/40 text-blue-400 border border-blue-800'}`}>
-                                                                    {payout.status}
-                                                                </span>
-                                                                {payout.status === 'Scheduled' && (
-                                                                    <span className="text-xs text-slate-400 bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700 flex items-center gap-1">
-                                                                        <Calendar className="w-3 h-3" /> Due: {new Date(payout.due_date || new Date()).toLocaleDateString()}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <p className="text-2xl font-black text-emerald-400">{formatCurrency(payout.early_payment_amount || payout.payout_amount)}</p>
-                                                            {payout.early_payment_amount && <p className="text-xs text-purple-400 line-through mt-0.5">{formatCurrency(payout.payout_amount)}</p>}
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    {/* Predictive Forecasting Feature */}
-                                                    {payout.status === 'Scheduled' && (
-                                                        <div className="bg-blue-950/30 p-4 border-b border-slate-800">
-                                                            <div className="flex items-start gap-3">
-                                                                <TrendingUp className="w-5 h-5 text-blue-400 mt-0.5" />
-                                                                <div>
-                                                                    <h4 className="text-sm font-bold text-blue-300">Predictive Cash Flow Forecast</h4>
-                                                                    <p className="text-xs text-blue-200/70 mt-1">Based on the last 12 months of data, Nestlé typically processes your payments <strong>3 days ahead of schedule</strong>.</p>
-                                                                    <p className="text-sm font-medium text-blue-400 mt-2 flex items-center gap-2">
-                                                                        Estimated Bank Arrival: <strong className="text-white bg-blue-900/50 px-2 py-0.5 rounded border border-blue-800/50">{expectedDate.toLocaleDateString()}</strong>
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Instant Liquidity Slider (Dynamic Discounting) */}
-                                                    {payout.status === 'Scheduled' && (
-                                                        <div className="p-5 bg-gradient-to-br from-slate-900 to-slate-800/50">
-                                                            <h4 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2"><Percent className="w-4 h-4 text-purple-400" /> Instant Liquidity Engine</h4>
-                                                            <p className="text-xs text-slate-400 mb-6">Need cash sooner to make payroll or buy raw materials? Adjust the slider to request an early payout at a dynamically calculated discount rate.</p>
-                                                            
-                                                            <div className="mb-8 px-2">
-                                                                <input 
-                                                                    type="range" 
-                                                                    min="2" max="30" step="1" 
-                                                                    value={sliderDays} 
-                                                                    onChange={(e) => setSliderDays(parseInt(e.target.value))}
-                                                                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                                                                />
-                                                                <div className="flex justify-between text-[10px] text-slate-500 font-bold uppercase mt-2">
-                                                                    <span>Get paid in 2 days</span>
-                                                                    <span>Wait 30 days (Net-30)</span>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-slate-950/50 p-4 rounded-xl border border-slate-800/50">
-                                                                <div className="flex gap-6 w-full md:w-auto">
-                                                                    <div>
-                                                                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Discount</p>
-                                                                        <p className="text-lg font-black text-purple-400">{dynamicDiscountRate}%</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Fee</p>
-                                                                        <p className="text-lg font-black text-red-400">-{formatCurrency(discountAmount)}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Net Payout</p>
-                                                                        <p className="text-lg font-black text-emerald-400">{formatCurrency(earlyPayoutAmount)}</p>
-                                                                    </div>
-                                                                </div>
-                                                                <button 
-                                                                    onClick={() => handleAcceptEarlyPayment(payout.id, payout.payout_amount)}
-                                                                    className="w-full md:w-auto px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition-colors shadow-lg shadow-purple-900/20"
-                                                                >
-                                                                    Accept {formatCurrency(earlyPayoutAmount)} Now
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })
+                                        ))
                                     )}
                                 </div>
                             )}
@@ -1229,7 +1132,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 <h3 className="font-bold text-slate-100 flex items-center gap-2 text-lg mb-3">⚡ Quick Actions</h3>
                                 <div className="space-y-2">
                                     <button type="button" onClick={() => { setMode('boq'); setBoqFile(null); }} className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2">📤 Submit Quote</button>
-                                    <button type="button" onClick={() => { setMode('match'); setInvoiceFile(null); setPoFile(null); }} className="w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2">🔗 Match Invoice & PO</button>
+                                    <button type="button" onClick={() => { setMode('match'); setInvoiceFile(null); setPoFile(null); setShowWalkthrough(false); localStorage.setItem('hasSeenWalkthrough', 'true'); }} className={`w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${showWalkthrough ? 'relative z-[102] ring-4 ring-purple-500 ring-offset-2 ring-offset-slate-900 animate-pulse' : ''}`}>🔗 Match Invoice & PO</button>
                                     <button type="button" onClick={() => { setMode('logs'); }} className="w-full py-2 bg-slate-800 text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-700 transition-all flex items-center justify-center gap-2">📜 View Timeline</button>
                                     <button type="button" onClick={() => setMode('payouts')} className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2">💸 Liquidity Engine</button>
                                 </div>
@@ -1247,51 +1150,19 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                     {String(log.status || '').toLowerCase().includes('approve') ? '✅' : String(log.status || '').toLowerCase().includes('reject') ? '❌' : '⏳'}
                                                 </div>
                                                 <div className="flex-1">
-                                                    <p className="font-medium text-slate-200 text-xs">{log.action || 'System Action'}</p>
+                                                    <p className="font-medium text-slate-200 text-xs"><JargonText text={log.action || 'System Action'} /></p>
                                                     <p className="text-[10px] text-slate-400">{safeDate(log.date || log.created_at || new Date())}</p>
                                                 </div>
                                             </div>
                                         ))}
-                                        {myLogs.length > 3 && (
-                                            <button onClick={() => setMode('logs')} className="w-full text-center text-xs text-blue-400 hover:text-blue-300 font-semibold pt-2 flex items-center justify-center gap-1">View All <ChevronRight className="w-3 h-3" /></button>
-                                        )}
                                     </div>
                                 )}
                             </div>
-
-                            {(() => {
-                                const rejectedBOQs = myBoqs.filter(b => b.status === 'Rejected').length;
-                                const discrepancies = myRecons.filter(r => String(r.match_status).includes('Discrepancy')).length;
-                                
-                                if (rejectedBOQs > 0) return (
-                                    <div className="bg-gradient-to-br from-red-900/30 to-rose-900/30 rounded-xl border border-red-800 p-5 shadow-sm">
-                                        <h3 className="font-bold text-red-400 flex items-center gap-2 text-lg mb-2">🔴 Action Required</h3>
-                                        <p className="text-red-200">You have {rejectedBOQs} Rejected BOQ(s). Please resubmit.</p>
-                                        <button type="button" onClick={() => setMode('boq')} className="mt-3 text-xs font-bold text-red-400 underline">View Quotes →</button>
-                                    </div>
-                                );
-                                if (discrepancies > 0) return (
-                                    <div className="bg-gradient-to-br from-orange-900/30 to-amber-900/30 rounded-xl border border-orange-800 p-5 shadow-sm">
-                                        <h3 className="font-bold text-orange-400 flex items-center gap-2 text-lg mb-2">🟠 Discrepancy Found</h3>
-                                        <p className="text-orange-200">You have {discrepancies} Invoice Discrepancy. Please review.</p>
-                                        <button type="button" onClick={() => setMode('match')} className="mt-3 text-xs font-bold text-orange-400 underline">View Clearances →</button>
-                                    </div>
-                                );
-                                if (pendingPOs > 0) return (
-                                    <div className="bg-gradient-to-br from-amber-900/30 to-yellow-900/30 rounded-xl border border-amber-800 p-5 shadow-sm">
-                                        <h3 className="font-bold text-amber-400 flex items-center gap-2 text-lg mb-2">🟡 Attention Needed</h3>
-                                        <p className="text-amber-200">You have {pendingPOs} unread Shipment(s). Download them to proceed.</p>
-                                        <button type="button" onClick={() => setMode('inbox')} className="mt-3 text-xs font-bold text-amber-400 underline">View Shipments →</button>
-                                    </div>
-                                );
-                                return null;
-                            })()}
                         </div>
                     </div>
                 </div>
             </div>
             
-            {/* Global Chat Floating Widget */}
             <AppNotifier role="Supplier" email={user.email} />
             <FloatingChat userEmail={user.email} userRole="Supplier" />
 
@@ -1307,6 +1178,22 @@ export default function SupplierDashboard({ user, onLogout }) {
                             <button onClick={dialog.onConfirm || (() => setDialog(null))} className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors">
                                 {dialog.type === 'confirm' ? 'Confirm' : 'OK'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showWalkthrough && (
+                <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
+                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm pointer-events-auto" onClick={() => { setShowWalkthrough(false); localStorage.setItem('hasSeenWalkthrough', 'true'); }}></div>
+                    
+                    <div className="relative z-[101] max-w-sm bg-slate-900 border-2 border-purple-500 p-6 rounded-2xl shadow-2xl pointer-events-auto mt-20 md:ml-40 lg:ml-80">
+                        <div className="absolute -top-4 -left-4 w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center font-bold border-4 border-slate-900">1</div>
+                        <h3 className="text-xl font-black text-white mb-2">Step 1: Upload Documents</h3>
+                        <p className="text-sm text-slate-300 mb-6">Welcome! To get paid faster, click the pulsing <strong className="text-emerald-400">"🔗 Match Invoice & PO"</strong> button highlighted on the right. We will guide you through your first successful submission.</p>
+                        <div className="flex justify-between items-center">
+                            <button onClick={() => { setShowWalkthrough(false); localStorage.setItem('hasSeenWalkthrough', 'true'); }} className="text-xs font-bold text-slate-500 hover:text-slate-300 transition-colors">Skip Tutorial</button>
+                            <button onClick={() => { setShowWalkthrough(false); localStorage.setItem('hasSeenWalkthrough', 'true'); setMode('match'); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold rounded-lg transition-colors shadow-lg">Take me there</button>
                         </div>
                     </div>
                 </div>
