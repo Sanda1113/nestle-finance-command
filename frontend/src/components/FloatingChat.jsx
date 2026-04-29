@@ -8,7 +8,7 @@ export default function FloatingChat({ userEmail, userRole }) {
     return (
         <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end">
             {isOpen && (
-                <div className="relative mb-4 w-[380px] sm:w-[420px] bg-slate-900 border border-slate-700 shadow-2xl rounded-2xl overflow-hidden flex flex-col shadow-blue-900/20 shadow-[0_0_50px_rgba(37,99,235,0.3)] animate-in slide-in-from-bottom-5 duration-300" style={{ height: '520px' }}>
+                <div className="relative mb-4 w-[380px] sm:w-[420px] bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden flex flex-col shadow-[0_0_50px_rgba(37,99,235,0.3)] animate-in slide-in-from-bottom-5 duration-300" style={{ height: '520px' }}>
                     <div className="bg-slate-800 p-3 flex justify-between items-center border-b border-slate-700 shrink-0">
                         <div className="flex items-center gap-2">
                             <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
