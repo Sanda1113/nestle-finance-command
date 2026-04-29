@@ -6,6 +6,7 @@ import DisputeChat from './DisputeChat';
 import AppNotifier from './AppNotifier';
 import NotificationBell from './NotificationBell';
 import FloatingChat from './FloatingChat';
+import DigitalCalendar from './DigitalCalendar';
 import { supabase } from '../utils/supabaseClient';
 
 const formatCurrency = (amount, currencyCode = 'USD') => {
@@ -1413,7 +1414,7 @@ function PayoutCalendar() {
 
                     {/* Cash Burn Calendar */}
                     <div>
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2"><Calendar className="w-5 h-5" /> The "Cash Burn" Calendar Dashboard</h3>
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2"><Calendar className="w-5 h-5" /> Digital Payout Calendar</h3>
                         <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
                             {calendarDays.map((day, i) => (
                                 <div key={i} className={`p-4 rounded-xl border ${day.date.toDateString() === today.toDateString() ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md ring-1 ring-blue-500' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm'} ${day.isWeekend ? 'opacity-60' : ''}`}>
