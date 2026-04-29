@@ -746,7 +746,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                         <button type="button" onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 sm:p-1.5 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors" title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
                             {isDarkMode ? <Sun className="w-5 h-5 sm:w-4 sm:h-4" /> : <Moon className="w-5 h-5 sm:w-4 sm:h-4" />}
                         </button>
-                        <button type="button" onClick={onLogout} className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-red-900/40 hover:bg-red-600 text-white rounded-lg text-xs sm:text-sm font-bold transition-colors">
+                        <button type="button" onClick={onLogout} className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-red-900/40 hover:bg-red-600 text-white rounded-lg text-xs sm:text-sm font-bold transition-colors" title="Sign out of the Supplier Portal">
                             <LogOut className="w-4 h-4 shrink-0" /> <span className="hidden sm:block">Logout</span>
                         </button>
                     </div>
@@ -754,7 +754,7 @@ export default function SupplierDashboard({ user, onLogout }) {
 
                 <div className="p-4 md:p-6 max-w-7xl mx-auto">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all">
+                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all" title="Total number of Purchase Orders processed in the portal">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Total Shipments</p>
@@ -765,7 +765,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all">
+                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all" title="Total monetary value of all processed and approved shipments">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Total Value Delivered</p>
@@ -776,7 +776,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all">
+                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all" title="Number of shipments currently awaiting delivery or approval">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Pending</p>
@@ -787,7 +787,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all">
+                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all" title="Number of invoices that have successfully passed the 3-way match process">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Matched Invoices</p>
@@ -798,7 +798,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all">
+                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all" title="Your supplier reliability rating based on invoice accuracy and BOQ approval rates">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Trust Score</p>
@@ -815,11 +815,11 @@ export default function SupplierDashboard({ user, onLogout }) {
                         <div className="lg:col-span-2 space-y-6">
                             <div className="flex flex-wrap gap-2 bg-slate-900/60 backdrop-blur-sm p-1.5 rounded-xl border border-slate-800">
                                 {[
-                                    { id: 'boq', label: 'Step 1: Submit Quote', color: 'blue' },
-                                    { id: 'match', label: 'Step 2: Submit Invoice', color: 'emerald' },
-                                    { id: 'inbox', label: '📥 My Shipments', color: 'purple' },
-                                    { id: 'logs', label: '📜 Timeline', color: 'amber' },
-                                    { id: 'payouts', label: '💸 Liquidity', color: 'indigo' }
+                                    { id: 'boq', label: 'Step 1: Submit Quote', color: 'blue', title: 'Start a new transaction by submitting a quote (BOQ)' },
+                                    { id: 'match', label: 'Step 2: Submit Invoice', color: 'emerald', title: 'Submit your invoice for reconciliation against a Purchase Order' },
+                                    { id: 'inbox', label: '📥 My Shipments', color: 'purple', title: 'View and manage your active Purchase Orders and shipments' },
+                                    { id: 'logs', label: '📜 Timeline', color: 'amber', title: 'Track the end-to-end history of your documents and payments' },
+                                    { id: 'payouts', label: '💸 Liquidity', color: 'indigo', title: 'Access early payment options and view your scheduled payouts' }
                                 ].map(tab => {
                                     const colorMap = {
                                         purple: 'bg-gradient-to-r from-purple-600 to-purple-700',
@@ -833,6 +833,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                             type="button"
                                             key={tab.id}
                                             onClick={() => { setMode(tab.id); setMatchStatus('Pending'); setError(null); setExpandedLog(null); }}
+                                            title={tab.title}
                                             className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-all ${mode === tab.id
                                                 ? `${colorMap[tab.color]} text-white shadow-md`
                                                 : 'text-slate-400 hover:bg-slate-800'
@@ -888,7 +889,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                             <p className="text-xl font-bold text-slate-100 mt-1">{formatCurrency(po.total_amount, po.po_data?.currency)}</p>
 
                                                             <div className="flex flex-wrap gap-2 mt-4">
-                                                                <button type="button" onClick={() => handlePrintPO(po)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${po.is_downloaded ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 shadow-sm'}`}>
+                                                                <button type="button" onClick={() => handlePrintPO(po)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${po.is_downloaded ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 shadow-sm'}`} title="Download or print the official Purchase Order document">
                                                                     📄 PDF
                                                                 </button>
 
@@ -897,17 +898,17 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                                         type="button"
                                                                         onClick={() => handleMarkDelivered(po.po_number)}
                                                                         className="flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 bg-amber-600 hover:bg-amber-500 text-white shadow-sm border border-amber-500"
-                                                                        title="Mark as arriving at Dock"
+                                                                        title="Notify the warehouse that your shipment has arrived at the dock"
                                                                     >
                                                                         🚚 Mark Delivered
                                                                     </button>
                                                                 ) : (
-                                                                    <div className="flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center gap-1 bg-emerald-900/30 text-emerald-400 border border-emerald-800/50">
+                                                                    <div className="flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center gap-1 bg-emerald-900/30 text-emerald-400 border border-emerald-800/50" title="This shipment has been marked as delivered to the dock">
                                                                         ✅ At Dock
                                                                     </div>
                                                                 )}
 
-                                                                <button type="button" onClick={() => setExpandedLog(isChatOpen ? null : po.id)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${isChatOpen ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                                                                <button type="button" onClick={() => setExpandedLog(isChatOpen ? null : po.id)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${isChatOpen ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`} title="Open a chat to resolve any disputes or issues with this shipment">
                                                                     💬 Chat
                                                                 </button>
                                                             </div>
@@ -940,6 +941,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-sm">
                                         <div 
                                             className="border-2 border-dashed border-slate-700 rounded-lg p-6 text-center hover:border-blue-500 transition-colors"
+                                            title="Drag and drop or click to select your Bill of Quantities (BOQ) document"
                                             onDrop={(e) => {
                                                 e.preventDefault();
                                                 if (e.dataTransfer.files && e.dataTransfer.files[0]) {
@@ -950,6 +952,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                             onDragEnter={(e) => e.preventDefault()}
                                         >
                                             <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setBoqFile(e.target.files[0])}
+                                                title="Select your Bill of Quantities (BOQ) document"
                                                 className="block w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-900/50 file:text-blue-300 hover:file:bg-blue-800/50 cursor-pointer" />
                                             <p className="text-xs text-slate-400 mt-2">Supported: PDF, Images, Excel</p>
                                         </div>
@@ -960,7 +963,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                 <span className="opacity-70">({(boqFile.size / 1024).toFixed(1)} KB)</span>
                                             </div>
                                         )}
-                                        <button type="button" onClick={handleBoqUpload} disabled={loading || !boqFile} className="w-full mt-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold rounded-lg disabled:opacity-50 transition-all shadow-sm hover:shadow-md">
+                                        <button type="button" onClick={handleBoqUpload} disabled={loading || !boqFile} className="w-full mt-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold rounded-lg disabled:opacity-50 transition-all shadow-sm hover:shadow-md" title="Send your quote to the Nestlé Procurement Team for approval">
                                             {loading ? "Digitizing..." : "Submit Quote"}
                                         </button>
                                     </div>
@@ -1004,18 +1007,18 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     )}
 
                                     <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm flex flex-col gap-4">
-                                        <div className="flex-1 bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                                        <div className="flex-1 bg-slate-800/50 p-4 rounded-lg border border-slate-700" title="Upload your invoice for reconciliation">
                                             <label className="block text-sm font-bold text-slate-200 mb-1.5"><span className="text-emerald-500 mr-1">Step 1:</span> Upload your Invoice</label>
-                                            <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setInvoiceFile(e.target.files[0])} className="block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-blue-900/50 file:text-blue-300 cursor-pointer border border-slate-700 rounded-md p-1.5 bg-slate-900/50" />
+                                            <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setInvoiceFile(e.target.files[0])} className="block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-blue-900/50 file:text-blue-300 cursor-pointer border border-slate-700 rounded-md p-1.5 bg-slate-900/50" title="Select your Invoice document" />
                                             {invoiceFile && (
                                                 <div className="mt-2 flex items-center gap-2 text-xs text-emerald-400">
                                                     <FileText className="w-3 h-3" /> <span className="truncate">{invoiceFile.name}</span> ({(invoiceFile.size / 1024).toFixed(1)} KB)
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="flex-1 bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                                        <div className="flex-1 bg-slate-800/50 p-4 rounded-lg border border-slate-700" title="Upload the Purchase Order issued by Nestlé">
                                             <label className="block text-sm font-bold text-slate-200 mb-1.5"><span className="text-purple-500 mr-1">Step 2:</span> Upload the PO issued by Nestlé</label>
-                                            <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setPoFile(e.target.files[0])} className="block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-purple-900/50 file:text-purple-300 cursor-pointer border border-slate-700 rounded-md p-1.5 bg-slate-900/50" />
+                                            <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setPoFile(e.target.files[0])} className="block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-purple-900/50 file:text-purple-300 cursor-pointer border border-slate-700 rounded-md p-1.5 bg-slate-900/50" title="Select the Nestlé Purchase Order document" />
                                             {poFile && (
                                                 <div className="mt-2 flex items-center gap-2 text-xs text-purple-400">
                                                     <FileText className="w-3 h-3" /> <span className="truncate">{poFile.name}</span> ({(poFile.size / 1024).toFixed(1)} KB)
@@ -1023,7 +1026,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                             )}
                                         </div>
                                     </div>
-                                    <button type="button" onClick={handleMatchUpload} disabled={loading || !invoiceFile || !poFile} className={`w-full py-2.5 ${isSandboxMode ? 'bg-gradient-to-r from-amber-600 to-orange-600' : 'bg-gradient-to-r from-emerald-600 to-teal-600'} text-white text-sm font-bold rounded-lg mt-4 disabled:opacity-50 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2`}>
+                                    <button type="button" onClick={handleMatchUpload} disabled={loading || !invoiceFile || !poFile} className={`w-full py-2.5 ${isSandboxMode ? 'bg-gradient-to-r from-amber-600 to-orange-600' : 'bg-gradient-to-r from-emerald-600 to-teal-600'} text-white text-sm font-bold rounded-lg mt-4 disabled:opacity-50 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2`} title="Run the automated 3-way match to verify your invoice against the PO">
                                         {loading ? (isSandboxMode ? "Simulating..." : "Matching...") : (isSandboxMode ? "🛠️ Sandbox Mode: Test 3-way match (No data saved)" : "Step 3: Submit to begin 3-way matching")}
                                     </button>
 
@@ -1132,10 +1135,10 @@ export default function SupplierDashboard({ user, onLogout }) {
                             <div className="bg-slate-900 rounded-xl border border-slate-800 p-5 shadow-sm">
                                 <h3 className="font-bold text-slate-100 flex items-center gap-2 text-lg mb-3">⚡ Quick Actions</h3>
                                 <div className="space-y-2">
-                                    <button type="button" onClick={() => { setMode('boq'); setBoqFile(null); }} className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2">📤 Submit Quote</button>
-                                    <button type="button" onClick={() => { setMode('match'); setInvoiceFile(null); setPoFile(null); setShowWalkthrough(false); localStorage.setItem('hasSeenWalkthrough', 'true'); }} className={`w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${showWalkthrough ? 'relative z-[102] ring-4 ring-purple-500 ring-offset-2 ring-offset-slate-900 animate-pulse' : ''}`}>🔗 Match Invoice & PO</button>
-                                    <button type="button" onClick={() => { setMode('logs'); }} className="w-full py-2 bg-slate-800 text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-700 transition-all flex items-center justify-center gap-2">📜 View Timeline</button>
-                                    <button type="button" onClick={() => setMode('payouts')} className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2">💸 Liquidity Engine</button>
+                                    <button type="button" onClick={() => { setMode('boq'); setBoqFile(null); }} className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2" title="Submit a Bill of Quantities (BOQ) to get a Purchase Order">📤 Submit Quote</button>
+                                    <button type="button" onClick={() => { setMode('match'); setInvoiceFile(null); setPoFile(null); setShowWalkthrough(false); localStorage.setItem('hasSeenWalkthrough', 'true'); }} className={`w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${showWalkthrough ? 'relative z-[102] ring-4 ring-purple-500 ring-offset-2 ring-offset-slate-900 animate-pulse' : ''}`} title="Upload your Invoice and the Purchase Order to start the 3-Way Match process">🔗 Match Invoice & PO</button>
+                                    <button type="button" onClick={() => { setMode('logs'); }} className="w-full py-2 bg-slate-800 text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-700 transition-all flex items-center justify-center gap-2" title="View the complete lifecycle and history of your transactions">📜 View Timeline</button>
+                                    <button type="button" onClick={() => setMode('payouts')} className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2" title="Manage your cash flow and access early payment options via Dynamic Discounting">💸 Liquidity Engine</button>
                                 </div>
                             </div>
 
