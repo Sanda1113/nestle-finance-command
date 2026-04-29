@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2, Search, FileText, ChevronRight, ShieldCheck, Zap, Activity, Percent, Calendar, TrendingUp, Zap, Activity, Percent, Calendar, TrendingUp } from 'lucide-react';
+import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2, Search, FileText, ChevronRight, ShieldCheck, Zap, Activity, Percent, Calendar, TrendingUp } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import NotificationBell from './NotificationBell';
 import AppNotifier from './AppNotifier';
