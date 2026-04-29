@@ -1,6 +1,14 @@
-import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Edit2, CheckCircle2, Calendar as CalendarIcon, Clock, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Calendar, momentLocalizer } from 'react-big-calendar';
+import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
+import moment from 'moment';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import axios from 'axios';
+import { Calendar as CalendarIcon, Edit2, CheckCircle2, Clock, X, Info } from 'lucide-react';
+
+const localizer = momentLocalizer(moment);
+const DnDCalendar = withDragAndDrop(Calendar);
 
 const formatCurrency = (amount, currencyCode = 'USD') => {
     if (amount === undefined || amount === null || isNaN(amount)) return '$0.00';
@@ -8,210 +16,300 @@ const formatCurrency = (amount, currencyCode = 'USD') => {
     catch { return `${currencyCode} ${Number(amount).toFixed(2)}`; }
 };
 
-export default function DigitalCalendar({ payouts, onUpdatePayout, userRole, loading }) {
-    const [currentDate, setCurrentDate] = useState(new Date());
-    const [selectedPayout, setSelectedPayout] = useState(null);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [newDate, setNewDate] = useState('');
+export default function DigitalCalendar({ userRole, userEmail }) {
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
 
-    const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-    const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
+    // Dynamic Discounting State
+    const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
+    const [discountRate, setDiscountRate] = useState(2.5);
 
-    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const isFinance = userRole === 'Finance';
 
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth();
-
-    const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-    const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
-
-    const handlePrevMonth = () => setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
-    const handleNextMonth = () => setCurrentDate(new Date(currentYear, currentMonth + 1, 1));
-    
-    const handleYearChange = (e) => setCurrentDate(new Date(parseInt(e.target.value), currentMonth, 1));
-    const handleMonthChange = (e) => setCurrentDate(new Date(currentYear, parseInt(e.target.value), 1));
-
-    const handleEditClick = (payout) => {
-        setSelectedPayout(payout);
-        setNewDate(new Date(payout.due_date).toISOString().split('T')[0]);
-        setIsEditModalOpen(true);
-    };
-
-    const handleUpdateDate = async () => {
-        if (!selectedPayout || !newDate) return;
-        setIsUpdating(true);
+    const fetchEvents = useCallback(async () => {
+        setLoading(true);
         try {
-            const res = await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/payouts/${selectedPayout.id}/date`, {
-                newDate,
-                updatedBy: userRole
-            });
+            const url = isFinance 
+                ? 'https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts'
+                : `https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts?email=${encodeURIComponent(userEmail)}`;
+            const res = await axios.get(url);
             if (res.data.success) {
-                onUpdatePayout && onUpdatePayout();
-                setIsEditModalOpen(false);
+                const mappedEvents = res.data.data.map(p => ({
+                    ...p,
+                    start: new Date(p.start_date),
+                    end: new Date(p.end_date || p.start_date),
+                    title: p.title || `Payout`,
+                }));
+                setEvents(mappedEvents);
             }
         } catch (error) {
-            alert('Failed to update payout date.');
+            console.error('Failed to fetch calendar events', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [isFinance, userEmail]);
+
+    useEffect(() => {
+        fetchEvents();
+    }, [fetchEvents]);
+
+    const onEventResize = useCallback(
+        ({ event, start, end }) => {
+            if (!isFinance) return;
+            // Finance logic for resizing
+            updateEventDate(event.id, start, end);
+        },
+        [isFinance]
+    );
+
+    const onEventDrop = useCallback(
+        ({ event, start, end }) => {
+            if (!isFinance) return;
+            // Finance logic for drag drop
+            updateEventDate(event.id, start, end);
+        },
+        [isFinance]
+    );
+
+    const updateEventDate = async (id, start, end) => {
+        try {
+            // Optimistic update
+            setEvents(prev => prev.map(ev => ev.id === id ? { ...ev, start, end } : ev));
+            
+            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${id}`, {
+                start_date: start.toISOString(),
+                end_date: end.toISOString(),
+                updatedBy: userRole
+            });
+        } catch (error) {
+            console.error('Failed to update event date', error);
+            fetchEvents(); // rollback
+        }
+    };
+
+    const handleSelectEvent = (event) => {
+        setSelectedEvent(event);
+        if (isFinance) {
+            setIsModalOpen(true);
+        } else {
+            // Supplier specific logic (e.g., MVP 7 Dynamic Discounting)
+            setIsDiscountModalOpen(true);
+        }
+    };
+
+    // Calculate Dynamic Discount details
+    const daysUntilPayout = useMemo(() => {
+        if (!selectedEvent) return 0;
+        const now = moment();
+        const payoutDate = moment(selectedEvent.start);
+        return Math.max(0, payoutDate.diff(now, 'days'));
+    }, [selectedEvent]);
+
+    const discountAmount = useMemo(() => {
+        if (!selectedEvent) return 0;
+        return (selectedEvent.amount * (discountRate / 100));
+    }, [selectedEvent, discountRate]);
+
+    const handleAcceptEarlyPayout = async () => {
+        if (!selectedEvent) return;
+        setIsUpdating(true);
+        try {
+            const newDate = new Date(); // Request payout today
+            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${selectedEvent.id}`, {
+                start_date: newDate.toISOString(),
+                end_date: newDate.toISOString(),
+                updatedBy: userRole
+            });
+            await fetchEvents();
+            setIsDiscountModalOpen(false);
+            
+            // Add a toast notification logic here or trigger global state refresh
+            alert('Early payout requested successfully. Finance team notified.');
+        } catch (error) {
+            console.error('Failed to accept early payout', error);
+            alert('Failed to request early payout');
         } finally {
             setIsUpdating(false);
         }
     };
 
-    const days = [];
-    for (let i = 0; i < firstDay; i++) {
-        days.push(<div key={`empty-${i}`} className="p-2 border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 opacity-50 min-h-[100px]"></div>);
-    }
-
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = new Date(currentYear, currentMonth, day).toDateString();
-        const dayPayouts = payouts.filter(p => new Date(p.due_date).toDateString() === dateStr);
-        
-        const isToday = new Date().toDateString() === dateStr;
-
-        days.push(
-            <div key={day} className={`p-2 flex flex-col border border-slate-200 dark:border-slate-700 min-h-[120px] transition-colors ${isToday ? 'bg-blue-50/50 dark:bg-blue-900/20 ring-1 ring-inset ring-blue-500' : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
-                <div className="flex justify-between items-start mb-2">
-                    <span className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}>
-                        {day}
-                    </span>
-                    {dayPayouts.length > 0 && (
-                        <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">
-                            {dayPayouts.length}
-                        </span>
-                    )}
-                </div>
-                <div className="flex-1 overflow-y-auto space-y-1 scrollbar-hide">
-                    {dayPayouts.map(p => (
-                        <div key={p.id} className={`group relative p-1.5 rounded border text-[10px] leading-tight flex flex-col gap-0.5 shadow-sm ${p.status === 'Paid' ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:text-emerald-300' : p.status === 'Early Payment Requested' ? 'bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-900/20 dark:border-purple-800/50 dark:text-purple-300' : 'bg-white border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'}`}>
-                            <div className="font-bold truncate">{userRole === 'Finance' ? (p.vendor_name || p.supplier_email) : p.invoice_number}</div>
-                            <div className="font-black">{formatCurrency(p.early_payment_amount || p.payout_amount)}</div>
-                            
-                            {userRole === 'Finance' && p.status !== 'Paid' && (
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); handleEditClick(p); }}
-                                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-1 bg-white dark:bg-slate-700 rounded shadow hover:bg-blue-50 dark:hover:bg-slate-600 text-blue-600 dark:text-blue-400 transition-all"
-                                    title="Edit Payout Date"
-                                >
-                                    <Edit2 className="w-3 h-3" />
-                                </button>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
-    }
-
-    const yearOptions = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 2 + i);
-
     return (
-        <div className="bg-white dark:bg-slate-900 shadow-sm rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
-            {/* Header */}
-            <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <button onClick={handlePrevMonth} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                        <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-                    </button>
-                    <div className="flex gap-2">
-                        <select 
-                            value={currentMonth} 
-                            onChange={handleMonthChange}
-                            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white font-bold rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            {monthNames.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                        </select>
-                        <select 
-                            value={currentYear} 
-                            onChange={handleYearChange}
-                            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white font-bold rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                        </select>
-                    </div>
-                    <button onClick={handleNextMonth} className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                        <ChevronRight className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-                    </button>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button onClick={() => setCurrentDate(new Date())} className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm">
-                        Today
-                    </button>
-                </div>
-            </div>
+        <div className="bg-white dark:bg-slate-900 shadow-sm rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 p-4">
+            <style>
+                {`
+                    .rbc-calendar {
+                        min-height: 600px;
+                        font-family: inherit;
+                    }
+                    .rbc-event {
+                        background-color: #3b82f6; /* blue-500 */
+                        border-radius: 6px;
+                        padding: 4px;
+                        opacity: 0.9;
+                        border: none;
+                    }
+                    .rbc-today {
+                        background-color: #eff6ff; /* blue-50 */
+                    }
+                    .dark .rbc-today {
+                        background-color: #1e3a8a; /* blue-900 */
+                    }
+                    .dark .rbc-month-view, .dark .rbc-time-view, .dark .rbc-header, .dark .rbc-day-bg, .dark .rbc-month-row {
+                        border-color: #334155; /* slate-700 */
+                    }
+                    .dark .rbc-off-range-bg {
+                        background-color: #0f172a; /* slate-900 */
+                    }
+                    .dark .rbc-btn-group button {
+                        color: #cbd5e1; /* slate-300 */
+                        border-color: #475569;
+                    }
+                    .dark .rbc-btn-group button:hover, .dark .rbc-btn-group button.rbc-active {
+                        background-color: #334155;
+                        color: white;
+                    }
+                `}
+            </style>
+            
+            {loading && <div className="text-center text-slate-500 my-4 font-bold animate-pulse">Loading Calendar...</div>}
+            
+            {isFinance ? (
+                <DnDCalendar
+                    localizer={localizer}
+                    events={events}
+                    onEventDrop={onEventDrop}
+                    onEventResize={onEventResize}
+                    onSelectEvent={handleSelectEvent}
+                    resizable
+                    style={{ height: '70vh' }}
+                    startAccessor="start"
+                    endAccessor="end"
+                    popup
+                />
+            ) : (
+                <Calendar
+                    localizer={localizer}
+                    events={events}
+                    onSelectEvent={handleSelectEvent}
+                    style={{ height: '70vh' }}
+                    startAccessor="start"
+                    endAccessor="end"
+                    popup
+                />
+            )}
 
-            {/* Calendar Grid */}
-            <div className="p-4 flex-1">
-                {loading ? (
-                    <div className="h-64 flex items-center justify-center text-slate-400 animate-pulse font-bold">
-                        Loading calendar data...
-                    </div>
-                ) : (
-                    <>
-                        <div className="grid grid-cols-7 mb-2">
-                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                                <div key={day} className="text-center text-xs font-black uppercase text-slate-400 tracking-wider py-2">
-                                    {day}
+            {/* Supplier Early Payout Modal (MVP 7) */}
+            {isDiscountModalOpen && selectedEvent && !isFinance && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-700">
+                        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                            <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                                <Clock className="w-5 h-5 text-indigo-500" /> Early Payout Offer
+                            </h3>
+                            <button onClick={() => setIsDiscountModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 p-4 rounded-xl flex items-start gap-3 border border-blue-200 dark:border-blue-800/50">
+                                <Info className="w-5 h-5 shrink-0 mt-0.5" />
+                                <div className="text-sm font-medium">
+                                    This payment of <strong>{formatCurrency(selectedEvent.amount)}</strong> is scheduled in <strong>{daysUntilPayout} days</strong>. You can choose to get paid today for a small fee.
                                 </div>
-                            ))}
-                        </div>
-                        <div className="grid grid-cols-7 gap-px bg-slate-200 dark:bg-slate-700 rounded-xl overflow-hidden shadow-inner">
-                            {days}
-                        </div>
-                    </>
-                )}
-            </div>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Adjust Early Payout Rate</label>
+                                <div className="flex items-center gap-4">
+                                    <input 
+                                        type="range" 
+                                        min="1" max="5" step="0.1" 
+                                        value={discountRate}
+                                        onChange={(e) => setDiscountRate(Number(e.target.value))}
+                                        className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                    />
+                                    <span className="font-bold text-indigo-600 dark:text-indigo-400 min-w-[3rem] text-right">{discountRate.toFixed(1)}%</span>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-slate-500 font-medium">Original Invoice Value</span>
+                                    <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(selectedEvent.amount)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-rose-500 font-medium">Early Payment Fee ({discountRate}%)</span>
+                                    <span className="font-bold text-rose-600 dark:text-rose-400">-{formatCurrency(discountAmount)}</span>
+                                </div>
+                                <div className="h-px bg-slate-200 dark:bg-slate-700 my-2"></div>
+                                <div className="flex justify-between items-center">
+                                    <span className="font-bold text-slate-700 dark:text-slate-300 uppercase text-xs tracking-wider">You Receive Today</span>
+                                    <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(selectedEvent.amount - discountAmount)}</span>
+                                </div>
+                            </div>
 
-            {/* Edit Modal */}
-            {isEditModalOpen && selectedPayout && (
+                            <div className="mt-6 flex gap-3">
+                                <button 
+                                    onClick={() => setIsDiscountModalOpen(false)}
+                                    className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition-colors"
+                                >
+                                    Keep Original Date
+                                </button>
+                                <button 
+                                    onClick={handleAcceptEarlyPayout}
+                                    disabled={isUpdating}
+                                    className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 text-white font-bold rounded-xl transition-colors flex justify-center items-center gap-2 shadow-md"
+                                >
+                                    {isUpdating ? <Clock className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                                    {isUpdating ? 'Processing...' : 'Accept Early Payout'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* Finance View Edit Modal */}
+            {isModalOpen && selectedEvent && isFinance && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 dark:border-slate-700">
                         <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
                             <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
-                                <CalendarIcon className="w-5 h-5 text-blue-500" /> Edit Payout Date
+                                <CalendarIcon className="w-5 h-5 text-blue-500" /> Payout Details
                             </h3>
-                            <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                            <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
                         <div className="p-6 space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Invoice Number</label>
-                                <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">{selectedPayout.invoice_number}</div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Title</label>
+                                <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">{selectedEvent.title}</div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Supplier</label>
-                                <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">{selectedPayout.vendor_name || selectedPayout.supplier_email}</div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Supplier Email</label>
+                                <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">{selectedEvent.supplier_email}</div>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Amount</label>
-                                <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(selectedPayout.early_payment_amount || selectedPayout.payout_amount)}</div>
+                                <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(selectedEvent.amount)}</div>
                             </div>
-                            <div className="pt-2">
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">New Payout Date</label>
-                                <input 
-                                    type="date" 
-                                    value={newDate}
-                                    onChange={(e) => setNewDate(e.target.value)}
-                                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-800 dark:text-white"
-                                />
-                                <p className="text-xs text-slate-500 mt-2">
-                                    Changing this date will notify the supplier via email and in-app notification.
-                                </p>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date</label>
+                                <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">{moment(selectedEvent.start).format('MMMM Do YYYY')}</div>
                             </div>
-                            <div className="mt-6 flex gap-3">
+                            <div className="text-xs text-slate-500 mt-4 bg-slate-100 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                                💡 Tip: You can drag and drop this event directly on the calendar to reschedule it. The supplier will automatically receive an email and in-app notification.
+                            </div>
+                            <div className="mt-6">
                                 <button 
-                                    onClick={() => setIsEditModalOpen(false)}
-                                    className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition-colors"
+                                    onClick={() => setIsModalOpen(false)}
+                                    className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition-colors"
                                 >
-                                    Cancel
-                                </button>
-                                <button 
-                                    onClick={handleUpdateDate}
-                                    disabled={isUpdating}
-                                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold rounded-xl transition-colors flex justify-center items-center gap-2"
-                                >
-                                    {isUpdating ? <Clock className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                                    {isUpdating ? 'Saving...' : 'Save Changes'}
+                                    Close
                                 </button>
                             </div>
                         </div>

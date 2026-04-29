@@ -933,4 +933,80 @@ router.post('/livechat/send', async (req, res) => {
     }
 });
 
+// ==========================================
+// 💸 PAYOUT CALENDAR UPDATES
+// ==========================================
+router.get('/payouts', async (req, res) => {
+    const { email } = req.query;
+    try {
+        let query = supabase.from('payout_schedules').select('*');
+        if (email) {
+            query = query.eq('supplier_email', email);
+        }
+        const { data, error } = await query.order('start_date', { ascending: true });
+        
+        if (error) throw error;
+        
+        res.json({ success: true, data });
+    } catch (error) {
+        console.error('Failed to fetch payouts:', error);
+        res.status(500).json({ error: 'Failed to fetch payouts' });
+    }
+});
+
+router.patch('/payouts/:id', async (req, res) => {
+    const { id } = req.params;
+    const { start_date, end_date, updatedBy } = req.body;
+    try {
+        const { data, error } = await supabase
+            .from('payout_schedules')
+            .update({ start_date, end_date: end_date || start_date })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        if (updatedBy === 'Supplier') {
+            // Supplier initiated early payout - Notify Finance
+            await supabase.from('notifications').insert([{
+                user_role: 'Finance',
+                title: '⚡ Early Payout Requested',
+                message: `Supplier ${data.supplier_email} requested early payout for ${data.title}. New date: ${new Date(start_date).toLocaleDateString()}.`,
+                link: `/finance?search=${data.invoice_ref || ''}`,
+                is_read: false
+            }]);
+        } else {
+            // Finance initiated update - Notify Supplier
+            if (data && data.supplier_email) {
+                await supabase.from('notifications').insert([{
+                    user_email: data.supplier_email,
+                    user_role: 'Supplier',
+                    title: '📅 Payout Date Updated',
+                    message: `Finance has rescheduled the payout for ${data.title} to ${new Date(start_date).toLocaleDateString()}.`,
+                    link: `/liquidity`,
+                    is_read: false
+                }]);
+
+                const emailHtml = `
+                    <p>Hello,</p>
+                    <p>The Nestlé Finance team has rescheduled the payout date for <strong>${data.title}</strong>.</p>
+                    <p>The new scheduled payment date is <strong>${new Date(start_date).toLocaleDateString()}</strong>.</p>
+                    <p>You can view your updated calendar in the Supplier Portal.</p>
+                `;
+                await sendSupplierEmail(
+                    data.supplier_email,
+                    `Payout Date Updated - ${data.title}`,
+                    emailHtml
+                );
+            }
+        }
+
+        res.json({ success: true, data });
+    } catch (error) {
+        console.error('Failed to update payout schedule:', error);
+        res.status(500).json({ error: 'Failed to update payout schedule' });
+    }
+});
+
 module.exports = router;

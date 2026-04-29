@@ -6,6 +6,7 @@ import NotificationBell from './NotificationBell';
 import AppNotifier from './AppNotifier';
 import FloatingChat from './FloatingChat';
 import { supabase } from '../utils/supabaseClient';
+import DigitalCalendar from './DigitalCalendar';
 
 const formatCurrency = (amount, currencyCode = 'USD') => {
     if (amount === undefined || amount === null || isNaN(amount)) return '$0.00';
@@ -1111,22 +1112,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                         <p className="text-sm text-slate-400">Manage cash flow and request early payouts.</p>
                                     </div>
                                     
-                                    {myPayouts.length === 0 ? (
-                                        <div className="bg-slate-900 rounded-xl border border-slate-800 p-8 text-center text-slate-400">No payout records found.</div>
-                                    ) : (
-                                        myPayouts.map(payout => (
-                                            <div key={payout.id} className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-sm">
-                                                <div className="p-5 border-b border-slate-800 flex justify-between items-start">
-                                                    <div>
-                                                        <h3 className="text-lg font-black text-white">{payout.invoice_number || 'INV-Multiple'}</h3>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-2xl font-black text-emerald-400">{formatCurrency(payout.early_payment_amount || payout.payout_amount)}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
+                                    <DigitalCalendar userRole="Supplier" userEmail={user?.email} />
                                 </div>
                             )}
                         </div>
