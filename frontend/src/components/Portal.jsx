@@ -823,7 +823,7 @@ function FinancePortal({ user }) {
                                             </td>
                                                                                         <td className="p-4 text-right">
                                                 <div className="flex flex-wrap justify-end gap-1.5">
-                                                    {r.displayStatus === 'Approved - Awaiting Payout' ? (
+                                                    {r.displayStatus.includes('Approved') ? (
                                                         <button
                                                             type="button"
                                                             onClick={(e) => { e.stopPropagation(); handleStagePayout(r); }}
