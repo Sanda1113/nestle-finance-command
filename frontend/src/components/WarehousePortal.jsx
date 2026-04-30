@@ -27,7 +27,7 @@ const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
 const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge'];
 const WAREHOUSE_POLL_INTERVAL_MS = 5000;
 const IMMEDIATE_REFRESH_DEBOUNCE_MS = 800;
-const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['PO Generated', 'In Transit', 'Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload']);
+const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['Pending', 'PO Generated', 'In Transit', 'Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload']);
 const WAREHOUSE_COMPLETED_STATUSES = new Set([
     'Goods Received (GRN Logged)',
     'Partially Received (Awaiting Backorder)',
@@ -301,6 +301,7 @@ export default function WarehousePortal({ user, onLogout }) {
     const syncingRef = useRef(false);
     const queuePersistAlertShownRef = useRef(false);
     const isFetchingPOsRef = useRef(false);
+    const fetchCounterRef = useRef(0);
     const lastImmediateRefreshAtRef = useRef(0);
 
     const latestState = useRef({ pos, selectedPO, receivedItems });
@@ -517,8 +518,7 @@ export default function WarehousePortal({ user, onLogout }) {
     }, [syncQueue]);
 
     const fetchPOs = useCallback(async ({ preferCached = false } = {}) => {
-        if (isFetchingPOsRef.current) return;
-        isFetchingPOsRef.current = true;
+        const currentFetchId = ++fetchCounterRef.current;
         if (preferCached) {
             const cachedPOs = loadCachedPOs();
             if (cachedPOs.length > 0) setPOs(cachedPOs);
@@ -527,8 +527,7 @@ export default function WarehousePortal({ user, onLogout }) {
         if (!navigator.onLine) {
             setLoading(false);
             const cachedPOs = loadCachedPOs();
-            if (cachedPOs.length > 0) setPOs(cachedPOs);
-            isFetchingPOsRef.current = false;
+            if (cachedPOs.length > 0 && currentFetchId === fetchCounterRef.current) setPOs(cachedPOs);
             return;
         }
         try {
@@ -550,6 +549,7 @@ export default function WarehousePortal({ user, onLogout }) {
                     ? 98
                     : Math.floor(Math.random() * (95 - 65 + 1) + 65)
             }));
+            if (currentFetchId !== fetchCounterRef.current) return;
             setPOs(enhancedData);
             persistPOCache(enhancedData);
         } catch (err) {

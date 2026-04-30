@@ -609,6 +609,7 @@ router.get('/grn/pending-pos', async (req, res) => {
         if (isWarehouseScope) {
             query = query
                 .in('status', [
+                    'Pending',
                     'PO Generated',
                     'In Transit',
                     'Delivered to Dock',
