@@ -75,11 +75,13 @@ describe('Sprint2 Routes', () => {
         expect(res.body).toHaveProperty('success', true);
         expect(Array.isArray(res.body.data)).toBe(true);
         expect(mockQuery.in).toHaveBeenCalledWith('status', expect.arrayContaining([
+            'PO Generated',
+            'In Transit',
             'Delivered to Dock',
             'Pending Warehouse GRN',
             'Truck at Bay - Pending Unload'
         ]));
-        expect(mockQuery.limit).toHaveBeenCalledWith(250);
+        expect(mockQuery.limit).toHaveBeenCalledWith(100);
         expect(res.body.data[0].po_data.warehouse_rejection.shortageEvidence[0].photoDataUrl).toBe('data:image/jpeg;base64,abc');
         expect(res.body.data[0].po_data.warehouse_grn.shortageEvidence[0].photoDataUrl).toBe('');
     });
