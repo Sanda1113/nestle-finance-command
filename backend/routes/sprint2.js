@@ -1174,7 +1174,6 @@ router.post('/payouts/stage', async (req, res) => {
         base_amount: total_amount,
         final_amount: total_amount,
         amount: total_amount,
-        payout_amount: total_amount,
         status: 'Scheduled'
       };
 
