@@ -27,7 +27,7 @@ const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
 const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge'];
 const WAREHOUSE_POLL_INTERVAL_MS = 5000;
 const IMMEDIATE_REFRESH_DEBOUNCE_MS = 800;
-const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload']);
+const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['PO Generated', 'In Transit', 'Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload']);
 const WAREHOUSE_COMPLETED_STATUSES = new Set([
     'Goods Received (GRN Logged)',
     'Partially Received (Awaiting Backorder)',
@@ -562,7 +562,7 @@ export default function WarehousePortal({ user, onLogout }) {
     }, [loadCachedPOs, persistPOCache]);
 
     useEffect(() => {
-        fetchPOs();
+        fetchPOs({ preferCached: true });
 
         if (isOffline) return;
 
@@ -1143,8 +1143,8 @@ export default function WarehousePortal({ user, onLogout }) {
     });
 
     const pendingList = [...rawPendingList].sort((a, b) => {
-        const timeA = a.po_data?.delivery_timestamp ? new Date(a.po_data.delivery_timestamp).getTime() : Infinity;
-        const timeB = b.po_data?.delivery_timestamp ? new Date(b.po_data.delivery_timestamp).getTime() : Infinity;
+        const timeA = a.po_data?.delivery_timestamp ? new Date(a.po_data.delivery_timestamp).getTime() : 0;
+        const timeB = b.po_data?.delivery_timestamp ? new Date(b.po_data.delivery_timestamp).getTime() : 0;
         return timeB - timeA;
     });
 
