@@ -519,16 +519,23 @@ export default function WarehousePortal({ user, onLogout }) {
 
     const fetchPOs = useCallback(async ({ preferCached = false } = {}) => {
         // Guard: skip if a fetch is already in-flight to prevent races
-        if (isFetchingPOsRef.current) return;
+        if (isFetchingPOsRef.current) {
+            console.debug('[WH] fetchPOs skipped — fetch already in-flight');
+            return;
+        }
         isFetchingPOsRef.current = true;
 
         const currentFetchId = ++fetchCounterRef.current;
+        console.log(`[WH] fetchPOs START (id=${currentFetchId}, preferCached=${preferCached}, online=${navigator.onLine})`);
+
         if (preferCached) {
             const cachedPOs = loadCachedPOs();
+            console.log(`[WH] Cache loaded: ${cachedPOs.length} POs`);
             if (cachedPOs.length > 0) setPOs(cachedPOs);
         }
 
         if (!navigator.onLine) {
+            console.warn('[WH] Device is OFFLINE — using cache only');
             setLoading(false);
             isFetchingPOsRef.current = false;
             const cachedPOs = loadCachedPOs();
@@ -536,7 +543,9 @@ export default function WarehousePortal({ user, onLogout }) {
             return;
         }
         try {
-            const res = await axios.get(`${API_BASE_URL}/grn/pending-pos`, {
+            const url = `${API_BASE_URL}/grn/pending-pos`;
+            console.log(`[WH] GET ${url} scope=warehouse`);
+            const res = await axios.get(url, {
                 params: {
                     scope: 'warehouse',
                     includePhotos: false,
@@ -547,23 +556,50 @@ export default function WarehousePortal({ user, onLogout }) {
                     Pragma: 'no-cache'
                 }
             });
+
+            console.log('[WH] API raw response:', {
+                status: res.status,
+                success: res.data?.success,
+                count: Array.isArray(res.data?.data) ? res.data.data.length : 'NOT_ARRAY',
+                firstPO: res.data?.data?.[0]
+                    ? { po_number: res.data.data[0].po_number, status: res.data.data[0].status }
+                    : null
+            });
+
             const sourceData = Array.isArray(res.data?.data) ? res.data.data : [];
+
+            if (sourceData.length === 0) {
+                console.warn('[WH] ⚠️ API returned 0 POs for scope=warehouse. Check DB statuses.');
+            } else {
+                console.log('[WH] PO statuses from API:', sourceData.map(p => `${p.po_number}: "${p.status}"`));
+            }
+
             const enhancedData = sourceData.map(po => ({
                 ...po,
                 trustScore: String(po?.supplier_email || '').toLowerCase().includes('nestle')
                     ? 98
                     : Math.floor(Math.random() * (95 - 65 + 1) + 65)
             }));
+
             if (currentFetchId !== fetchCounterRef.current) {
+                console.warn(`[WH] fetchPOs id=${currentFetchId} superseded by id=${fetchCounterRef.current} — discarding`);
                 isFetchingPOsRef.current = false;
                 return;
             }
+            console.log(`[WH] fetchPOs DONE — setting ${enhancedData.length} POs to state`);
             setPOs(enhancedData);
             persistPOCache(enhancedData);
         } catch (err) {
-            console.error('fetchPOs error:', err);
+            console.error('[WH] ❌ fetchPOs HTTP error:', {
+                message: err.message,
+                status: err.response?.status,
+                data: err.response?.data
+            });
             const cachedPOs = loadCachedPOs();
-            if (cachedPOs.length > 0) setPOs(cachedPOs);
+            if (cachedPOs.length > 0) {
+                console.warn(`[WH] Falling back to ${cachedPOs.length} cached POs`);
+                setPOs(cachedPOs);
+            }
         } finally {
             setLoading(false);
             isFetchingPOsRef.current = false;
@@ -1155,6 +1191,22 @@ export default function WarehousePortal({ user, onLogout }) {
         });
     };
 
+    // ── DEBUG: log filter pipeline every render when pos changes ──────────────
+    if (pos.length > 0) {
+        console.group(`[WH] Filter pipeline — ${pos.length} total POs`);
+        pos.forEach(po => {
+            const status = String(po.status || '');
+            const isCompleted = status.includes('Received') || status.includes('Cancelled') || status.includes('Cleared');
+            const isDeliveredToDock = WAREHOUSE_PROCESSABLE_STATUSES.has(status) || Boolean(po.po_data?.delivery_timestamp);
+            const bucket = isCompleted ? 'COMPLETED' : isDeliveredToDock ? 'PENDING' : 'HIDDEN (no match)';
+            console.log(`  ${po.po_number} | status="${status}" | hasTimestamp=${Boolean(po.po_data?.delivery_timestamp)} → ${bucket}`);
+        });
+        console.groupEnd();
+    } else {
+        console.warn('[WH] Filter pipeline: pos[] is EMPTY — nothing to display');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const rawPendingList = pos.filter(po => {
         const status = String(po.status || '');
         const isCompleted = status.includes('Received') || status.includes('Cancelled') || status.includes('Cleared');
@@ -1175,6 +1227,8 @@ export default function WarehousePortal({ user, onLogout }) {
     });
     const activeList = viewMode === 'pending' ? pendingList : completedList;
     const filteredPOs = activeList.filter(po => po.po_number.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    console.log(`[WH] Render state: pos=${pos.length} pending=${pendingList.length} completed=${completedList.length} filtered=${filteredPOs.length} viewMode=${viewMode} searchTerm="${searchTerm}"`);
 
     const totalExpected = receivedItems.reduce((sum, item) => sum + parseFloat(item.qty), 0);
     const totalReceived = receivedItems.reduce((sum, item) => sum + parseFloat(item.actualQtyReceived), 0);

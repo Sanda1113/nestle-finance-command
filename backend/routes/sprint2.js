@@ -602,24 +602,29 @@ router.get('/grn/pending-pos', async (req, res) => {
             ? 'id, po_number, supplier_email, status, created_at, po_data, total_amount'
             : 'id, po_number, supplier_email, status, created_at, total_amount';
 
+        console.log(`[pending-pos] scope="${scope}" isWarehouse=${isWarehouseScope} includePhotos=${includePhotos}`);
+
+        const WAREHOUSE_STATUSES = [
+            'Pending',
+            'PO Generated',
+            'In Transit',
+            'Delivered to Dock',
+            'Pending Warehouse GRN',
+            'Truck at Bay - Pending Unload',
+            'Goods Received (GRN Logged)',
+            'Partially Received (Awaiting Backorder)',
+            'Transaction Cancelled (Shortage)',
+            'Goods Cleared - Ready for Payout'
+        ];
+
         let query = supabase
             .from('purchase_orders')
             .select(selectFields);
 
         if (isWarehouseScope) {
+            console.log(`[pending-pos] Querying with .in('status', [${WAREHOUSE_STATUSES.map(s => `"${s}"`).join(', ')}])`);
             query = query
-                .in('status', [
-                    'Pending',
-                    'PO Generated',
-                    'In Transit',
-                    'Delivered to Dock',
-                    'Pending Warehouse GRN',
-                    'Truck at Bay - Pending Unload',
-                    'Goods Received (GRN Logged)',
-                    'Partially Received (Awaiting Backorder)',
-                    'Transaction Cancelled (Shortage)',
-                    'Goods Cleared - Ready for Payout'
-                ])
+                .in('status', WAREHOUSE_STATUSES)
                 .order('created_at', { ascending: false })
                 .limit(100);
         } else if (includePhotos) {
@@ -635,7 +640,12 @@ router.get('/grn/pending-pos', async (req, res) => {
         const { data, error } = await query;
 
         if (error) {
-            console.error('❌ Failed to fetch pending POs:', error);
+            console.error('❌ [pending-pos] Supabase query error:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
             return res.status(500).json({
                 error: 'Failed to fetch POs',
                 details: error.message,
@@ -644,6 +654,26 @@ router.get('/grn/pending-pos', async (req, res) => {
         }
 
         const sourceData = data || [];
+        console.log(`[pending-pos] Supabase returned ${sourceData.length} row(s)`);
+
+        if (sourceData.length === 0) {
+            console.warn('[pending-pos] ⚠️  0 rows returned. Either no POs exist with those statuses, or RLS is blocking the query.');
+
+            // Diagnostic: count ALL rows to check if RLS is the problem
+            const { count, error: countErr } = await supabase
+                .from('purchase_orders')
+                .select('*', { count: 'exact', head: true });
+            if (countErr) {
+                console.error('[pending-pos] Diagnostic count error:', countErr.message);
+            } else {
+                console.log(`[pending-pos] Diagnostic: total purchase_orders rows visible to anon key = ${count}`);
+            }
+        } else {
+            sourceData.forEach(po => {
+                console.log(`[pending-pos]   ${po.po_number} | status="${po.status}" | supplier=${po.supplier_email} | has_po_data=${Boolean(po.po_data)}`);
+            });
+        }
+
         const responseData = includePhotos
             ? sourceData
             : sourceData.map((po) => ({
@@ -651,9 +681,10 @@ router.get('/grn/pending-pos', async (req, res) => {
                 po_data: stripShortagePhotoData(po.po_data)
             }));
 
+        console.log(`[pending-pos] Responding with ${responseData.length} PO(s)`);
         res.json({ success: true, data: responseData });
     } catch (error) {
-        console.error('❌ Exception in pending-pos:', error);
+        console.error('❌ [pending-pos] Unhandled exception:', error);
         res.status(500).json({ error: 'Server error', details: error.message });
     }
 });
