@@ -518,6 +518,10 @@ export default function WarehousePortal({ user, onLogout }) {
     }, [syncQueue]);
 
     const fetchPOs = useCallback(async ({ preferCached = false } = {}) => {
+        // Guard: skip if a fetch is already in-flight to prevent races
+        if (isFetchingPOsRef.current) return;
+        isFetchingPOsRef.current = true;
+
         const currentFetchId = ++fetchCounterRef.current;
         if (preferCached) {
             const cachedPOs = loadCachedPOs();
@@ -526,6 +530,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
         if (!navigator.onLine) {
             setLoading(false);
+            isFetchingPOsRef.current = false;
             const cachedPOs = loadCachedPOs();
             if (cachedPOs.length > 0 && currentFetchId === fetchCounterRef.current) setPOs(cachedPOs);
             return;
@@ -549,11 +554,14 @@ export default function WarehousePortal({ user, onLogout }) {
                     ? 98
                     : Math.floor(Math.random() * (95 - 65 + 1) + 65)
             }));
-            if (currentFetchId !== fetchCounterRef.current) return;
+            if (currentFetchId !== fetchCounterRef.current) {
+                isFetchingPOsRef.current = false;
+                return;
+            }
             setPOs(enhancedData);
             persistPOCache(enhancedData);
         } catch (err) {
-            console.error(err);
+            console.error('fetchPOs error:', err);
             const cachedPOs = loadCachedPOs();
             if (cachedPOs.length > 0) setPOs(cachedPOs);
         } finally {
@@ -567,23 +575,33 @@ export default function WarehousePortal({ user, onLogout }) {
 
         if (isOffline) return;
 
+        // Supabase Realtime for instant push-based updates
         const channels = [
             'purchase_orders',
             'reconciliations',
             'payout_schedules'
-        ].map(table => 
+        ].map(table =>
             supabase
-                .channel(`warehouse_${table}`)
+                .channel(`warehouse_${table}_v2`)
                 .on(
                     'postgres_changes',
                     { event: '*', schema: 'public', table },
-                    () => fetchPOs()
+                    () => { isFetchingPOsRef.current = false; fetchPOs(); }
                 )
                 .subscribe()
         );
 
+        // Polling fallback – ensures data stays fresh even if Realtime WebSocket drops
+        const pollInterval = setInterval(() => {
+            if (!document.hidden && navigator.onLine) {
+                isFetchingPOsRef.current = false; // allow poll to bypass in-flight guard
+                fetchPOs();
+            }
+        }, WAREHOUSE_POLL_INTERVAL_MS);
+
         return () => {
             channels.forEach(ch => supabase.removeChannel(ch));
+            clearInterval(pollInterval);
         };
     }, [fetchPOs, isOffline]);
 
@@ -598,6 +616,7 @@ export default function WarehousePortal({ user, onLogout }) {
 
         const refreshImmediately = () => {
             if (shouldRefreshImmediately()) {
+                isFetchingPOsRef.current = false;
                 fetchPOs();
             }
         };
@@ -1170,12 +1189,22 @@ export default function WarehousePortal({ user, onLogout }) {
             const po = params.get('po');
             if (po) {
                 setSearchTerm(po);
-                // Always fetch fresh data first so the newly-arrived shipment
-                // is present in state before we try to find and open it.
+                // Force-clear the in-flight guard so fetchPOs can run immediately
+                isFetchingPOsRef.current = false;
                 fetchPOs().then(() => {
-                    // After state updates, look up the PO from the latest snapshot
-                    const target = latestState.current.pos.find(p => p.po_number === po);
-                    if (target) handleSelectPO(target);
+                    // React setState is async — retry a few times via rAF to
+                    // wait for latestState.current to reflect the new data.
+                    let attempts = 0;
+                    const tryOpen = () => {
+                        const target = latestState.current.pos.find(p => p.po_number === po);
+                        if (target) {
+                            handleSelectPO(target);
+                        } else if (++attempts < 8) {
+                            // Back off a bit and retry until state propagates
+                            setTimeout(tryOpen, 150);
+                        }
+                    };
+                    setTimeout(tryOpen, 100);
                 });
             }
         }
