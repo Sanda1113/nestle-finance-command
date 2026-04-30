@@ -1314,13 +1314,17 @@ app.patch('/api/payouts/:id/paid', async (req, res) => {
             .update({ status: 'Paid', paid_at: new Date().toISOString(), paid_by: paidBy || 'Finance Team' })
             .eq('id', id).select().single();
             
-        if (error && error.code === 'PGRST116') {
+        if (error) {
+            console.warn(`[Mark Payout Paid] Failed on payout_schedule (Code: ${error.code}). Falling back to payout_schedules...`, error);
             ({ data, error } = await supabase.from('payout_schedules')
                 .update({ status: 'Paid' })
                 .eq('id', id).select().single());
         }
 
-        if (error) throw error;
+        if (error) {
+            console.error(`[Mark Payout Paid] Failed on payout_schedules too (Code: ${error.code}).`, error);
+            throw error;
+        }
         
         // Try to update timeline and notify
         const reconId = data && (data.reconciliation_id || data.invoice_ref);
