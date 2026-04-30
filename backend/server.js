@@ -1310,23 +1310,31 @@ app.patch('/api/payouts/:id/paid', async (req, res) => {
     const { id } = req.params;
     const { paidBy } = req.body;
     try {
-        const { data, error } = await supabase.from('payout_schedule')
+        let { data, error } = await supabase.from('payout_schedule')
             .update({ status: 'Paid', paid_at: new Date().toISOString(), paid_by: paidBy || 'Finance Team' })
             .eq('id', id).select().single();
+            
+        if (error && error.code === 'PGRST116') {
+            ({ data, error } = await supabase.from('payout_schedules')
+                .update({ status: 'Paid' })
+                .eq('id', id).select().single());
+        }
+
         if (error) throw error;
         
         // Try to update timeline and notify
-        if (data && data.reconciliation_id) {
+        const reconId = data && (data.reconciliation_id || data.invoice_ref);
+        if (reconId) {
             await supabase.from('reconciliations')
                 .update({ timeline_status: 'Paid' })
-                .eq('id', data.reconciliation_id);
+                .eq('id', reconId);
                 
             await supabase.from('notifications').insert([{
                 user_email: data.supplier_email,
                 user_role: 'Supplier',
                 title: '💰 Payment Processed',
-                message: `Nestlé Finance has processed payment for Invoice ${data.invoice_number}.`,
-                link: `/logs?po=${data.po_number || data.invoice_number}`,
+                message: `Nestlé Finance has processed payment for Invoice ${data.invoice_number || data.title}.`,
+                link: `/logs?po=${data.po_number || data.po_ref || data.invoice_number || data.title}`,
                 is_read: false
             }]).catch(() => {});
         }
