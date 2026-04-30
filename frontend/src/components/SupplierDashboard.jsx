@@ -163,7 +163,9 @@ export default function SupplierDashboard({ user, onLogout }) {
             'purchase_orders',
             'reconciliations',
             'boqs',
-            'supplier_logs'
+            'supplier_logs',
+            'payout_schedules',
+            'payout_schedule'
         ].map(table => 
             supabase
                 .channel(`supplier_${table}`)

@@ -566,17 +566,23 @@ export default function WarehousePortal({ user, onLogout }) {
 
         if (isOffline) return;
 
-        const channel = supabase
-            .channel('warehouse_pos')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'purchase_orders' },
-                () => fetchPOs()
-            )
-            .subscribe();
+        const channels = [
+            'purchase_orders',
+            'reconciliations',
+            'payout_schedules'
+        ].map(table => 
+            supabase
+                .channel(`warehouse_${table}`)
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table },
+                    () => fetchPOs()
+                )
+                .subscribe()
+        );
 
         return () => {
-            supabase.removeChannel(channel);
+            channels.forEach(ch => supabase.removeChannel(ch));
         };
     }, [fetchPOs, isOffline]);
 

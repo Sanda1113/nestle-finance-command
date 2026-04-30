@@ -562,7 +562,9 @@ function FinancePortal({ user }) {
         const channels = [
             'reconciliations',
             'boqs',
-            'purchase_orders'
+            'purchase_orders',
+            'payout_schedules',
+            'payout_schedule'
         ].map(table => 
             supabase
                 .channel(`finance_${table}`)
@@ -1341,6 +1343,24 @@ function PayoutCalendar() {
 
     useEffect(() => {
         fetchPayouts();
+
+        const channel = supabase
+            .channel('payouts_updates')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'payout_schedules' },
+                () => fetchPayouts()
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'payout_schedule' },
+                () => fetchPayouts()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, []);
 
     const markPaid = async (id) => {
