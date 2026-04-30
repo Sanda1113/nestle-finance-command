@@ -543,7 +543,8 @@ export default function WarehousePortal({ user, onLogout }) {
                     Pragma: 'no-cache'
                 }
             });
-            const enhancedData = res.data.data.map(po => ({
+            const sourceData = Array.isArray(res.data?.data) ? res.data.data : [];
+            const enhancedData = sourceData.map(po => ({
                 ...po,
                 trustScore: String(po?.supplier_email || '').toLowerCase().includes('nestle')
                     ? 98
@@ -1280,7 +1281,7 @@ export default function WarehousePortal({ user, onLogout }) {
                         className="p-2 sm:p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
                         title="Force Refresh Data"
                     >
-                        <RefreshCw className="w-5 h-5 sm:w-4 sm:h-4" />
+                        <RefreshCw className={`w-5 h-5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
                     </button>
                     <NotificationBell role="Warehouse" onNavigate={handleNotificationNavigate} />
                     {isOffline ? (
@@ -1420,7 +1421,7 @@ export default function WarehousePortal({ user, onLogout }) {
                     </div>
                 </div>
 
-                {loading ? (
+                {loading && pos.length === 0 ? (
                     <div className="p-12 flex justify-center">
                         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                     </div>
