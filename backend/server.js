@@ -1333,14 +1333,18 @@ app.patch('/api/payouts/:id/paid', async (req, res) => {
                 .update({ timeline_status: 'Paid' })
                 .eq('id', reconId);
                 
-            await supabase.from('notifications').insert([{
-                user_email: data.supplier_email,
-                user_role: 'Supplier',
-                title: '💰 Payment Processed',
-                message: `Nestlé Finance has processed payment for Invoice ${data.invoice_number || data.title}.`,
-                link: `/logs?po=${data.po_number || data.po_ref || data.invoice_number || data.title}`,
-                is_read: false
-            }]).catch(() => {});
+            try {
+                await supabase.from('notifications').insert([{
+                    user_email: data.supplier_email,
+                    user_role: 'Supplier',
+                    title: '💰 Payment Processed',
+                    message: `Nestlé Finance has processed payment for Invoice ${data.invoice_number || data.title}.`,
+                    link: `/logs?po=${data.po_number || data.po_ref || data.invoice_number || data.title}`,
+                    is_read: false
+                }]);
+            } catch (notifErr) {
+                console.warn('[Mark Payout Paid] Notification skipped due to error:', notifErr.message);
+            }
         }
 
         res.json({ success: true, data });
