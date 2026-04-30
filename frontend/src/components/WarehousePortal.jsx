@@ -1138,8 +1138,9 @@ export default function WarehousePortal({ user, onLogout }) {
 
     const rawPendingList = pos.filter(po => {
         const status = String(po.status || '');
-        const isCompleted = status.includes('Received') || status.includes('Cancelled');
-        const isDeliveredToDock = WAREHOUSE_PROCESSABLE_STATUSES.has(status) || po.po_data?.delivery_timestamp;
+        const isCompleted = status.includes('Received') || status.includes('Cancelled') || status.includes('Cleared');
+        // Accept any PO that is processable OR has a delivery_timestamp set (supplier confirmed dock arrival)
+        const isDeliveredToDock = WAREHOUSE_PROCESSABLE_STATUSES.has(status) || Boolean(po.po_data?.delivery_timestamp);
         return !isCompleted && isDeliveredToDock;
     });
 
@@ -1169,8 +1170,13 @@ export default function WarehousePortal({ user, onLogout }) {
             const po = params.get('po');
             if (po) {
                 setSearchTerm(po);
-                const target = pos.find(p => p.po_number === po);
-                if (target) handleSelectPO(target);
+                // Always fetch fresh data first so the newly-arrived shipment
+                // is present in state before we try to find and open it.
+                fetchPOs().then(() => {
+                    // After state updates, look up the PO from the latest snapshot
+                    const target = latestState.current.pos.find(p => p.po_number === po);
+                    if (target) handleSelectPO(target);
+                });
             }
         }
     };
