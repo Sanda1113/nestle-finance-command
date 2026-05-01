@@ -761,9 +761,14 @@ export default function SupplierDashboard({ user, onLogout }) {
                 const chosen =
                     fits.find(c => !overlaps(c.top, c.left)) ||
                     fits[0] ||
-                    { placement: 'corner', top: clampT(vh - ttH - 16), left: clampL(8) };
+                    { placement: 'corner', top: vh - ttH - 24, left: 16 };
 
-                setTooltipPos({ top: chosen.top, left: chosen.left, placement: chosen.placement });
+                // Ensure integer pixels to prevent sub-pixel blurring
+                setTooltipPos({ 
+                    top: Math.round(chosen.top), 
+                    left: Math.round(chosen.left), 
+                    placement: chosen.placement 
+                });
             }, 380);
         };
         run();
@@ -1593,10 +1598,30 @@ export default function SupplierDashboard({ user, onLogout }) {
 
                 const boxStyle = isMobile
                     // Mobile: full-width bottom sheet
-                    ? { position: 'fixed', bottom: 0, left: 0, right: 0, width: '100%', zIndex: 230, borderRadius: '1rem 1rem 0 0' }
+                    ? { 
+                        position: 'fixed', bottom: 0, left: 0, right: 0, width: '100%', zIndex: 230, 
+                        borderRadius: '1rem 1rem 0 0', filter: 'none',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+                      }
                     : isCentered
-                        ? {}
-                        : { position: 'fixed', top: tooltipPos.top, left: tooltipPos.left, width: ttW, zIndex: 230 };
+                        ? { 
+                            position: 'fixed', 
+                            top: Math.round(vh / 2 - 150),
+                            left: Math.round(vw / 2 - ttW / 2),
+                            width: ttW, 
+                            zIndex: 230,
+                            filter: 'none',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+                          }
+                        : { 
+                            position: 'fixed', 
+                            top: tooltipPos.top, 
+                            left: tooltipPos.left, 
+                            width: ttW, 
+                            zIndex: 230,
+                            filter: 'none',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+                          };
 
                 return (
                     <div className="fixed inset-0 z-[200] pointer-events-none">
@@ -1665,13 +1690,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                         {/* === TOOLTIP BOX === */}
                         <div
                             ref={tooltipRef}
-                            className={`pointer-events-auto bg-slate-900 border border-purple-500/50 shadow-2xl overflow-hidden ${
-                                isMobile
-                                    ? 'rounded-t-2xl'
-                                    : isCentered
-                                        ? `absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-2xl`
-                                        : 'rounded-2xl'
-                            }`}
+                            className="pointer-events-auto bg-slate-900 border border-purple-500/50 overflow-hidden rounded-2xl"
                             style={boxStyle}
                         >
                             {/* Header: phase label + exit */}
