@@ -141,10 +141,122 @@ export default function SupplierDashboard({ user, onLogout }) {
             action: () => setMode('payouts')
         },
         {
+            title: '🔍 Search Shipments',
+            body: 'Looking for a specific Purchase Order? Type the PO number or amount here to filter your active shipments list instantly.',
+            tip: '⌨️ Real-time filtering as you type.',
+            targetId: 'tut-search',
+            action: () => setMode('inbox')
+        },
+        {
+            title: '📄 Upload Quote (BOQ)',
+            body: 'This is where you drop your Bill of Quantities. You can click to browse or simply drag and drop your file onto this area.',
+            tip: '📂 Supports PDF, Excel, and Images.',
+            targetId: 'tut-boq-input',
+            action: () => setMode('boq')
+        },
+        {
+            title: '🧾 Invoice Upload',
+            body: 'First step of the 3-Way Match: Upload your official invoice document here.',
+            tip: '💡 Ensure the text is clear for the AI scanner.',
+            targetId: 'tut-invoice-input',
+            action: () => setMode('match')
+        },
+        {
+            title: '📄 PO Reference Upload',
+            body: 'Second step of the 3-Way Match: Upload the corresponding Nestle Purchase Order to verify against your invoice.',
+            tip: '📑 This enables automated reconciliation.',
+            targetId: 'tut-po-input',
+            action: () => setMode('match')
+        },
+        {
             title: '💬 Floating Chat (Bottom Right)',
             body: 'The floating chat bubble (bottom-right corner) is a general-purpose Live Chat with the Finance team. Use this for broad questions not tied to a specific transaction — e.g., account questions, onboarding help.',
             tip: '📌 This is different from the Dispute Chat, which is per-transaction.',
             targetId: 'tut-floating-chat'
+        },
+        {
+            title: '🔄 Force Refresh',
+            body: 'Use this button to manually trigger a fresh data pull from the Nestle backend. Useful if you expect a status change but the UI hasn\'t updated yet.',
+            tip: '⚡ We use real-time sockets, but a manual refresh is a good fallback.',
+            targetId: 'tut-refresh'
+        },
+        {
+            title: '🔔 Notifications Center',
+            body: 'Click the bell to see all your recent alerts, including invoice approvals, discrepancies, and new PO releases.',
+            tip: '🔴 A red dot indicates unread urgent messages.',
+            targetId: 'tut-notifications'
+        },
+        {
+            title: '👤 User Profile',
+            body: 'This shows your currently logged-in account details. Ensure your vendor email matches the one on the PO for automatic syncing.',
+            tip: '🛠️ Your role is listed here as "Supplier".',
+            targetId: 'tut-user'
+        },
+        {
+            title: '🌓 Theme Toggle',
+            body: 'Switch between Dark and Light mode. Our dashboard is optimized for high-contrast dark mode to reduce eye strain during long shifts.',
+            tip: '🎨 Preference is saved to your browser.',
+            targetId: 'tut-theme'
+        },
+        {
+            title: '🚪 Secure Logout',
+            body: 'Always log out when finished, especially on shared terminal computers in the warehouse or dispatch office.',
+            tip: '🔒 This clears your session tokens.',
+            targetId: 'tut-logout'
+        },
+        {
+            title: '📊 Stat: Total Shipments',
+            body: 'A quick count of every PO issued to your vendor account in our system.',
+            tip: '📈 Hover for more details.',
+            targetId: 'tut-stats-shipments'
+        },
+        {
+            title: '💰 Stat: Total Value',
+            body: 'The sum total of all goods delivered and confirmed by the Nestle Dock.',
+            tip: '💵 Values are converted to your primary currency.',
+            targetId: 'tut-stats-value'
+        },
+        {
+            title: '⏳ Stat: Pending Shipments',
+            body: 'Shows how many shipments are still in transit or awaiting GRN (Goods Receipt Note) at the dock.',
+            tip: '🚚 Priority items should be cleared first.',
+            targetId: 'tut-stats-pending'
+        },
+        {
+            title: '✅ Stat: Matched Invoices',
+            body: 'Number of invoices that have successfully passed the automated 3-way match logic.',
+            tip: '🎉 These are ready for finance disbursement.',
+            targetId: 'tut-stats-matched'
+        },
+        {
+            title: '🛡️ Stat: Trust Score',
+            body: 'Your supplier reliability rating. High accuracy in BOQs and Invoices keeps this score high.',
+            tip: '💎 High scores may qualify for better dynamic discount rates.',
+            targetId: 'tut-stats-trust'
+        },
+        {
+            title: '⚡ Quick Action: Submit Quote',
+            body: 'Shortcut to the BOQ upload workflow. Use this to start a new transaction quickly.',
+            tip: '📑 Use this for Step 1.',
+            targetId: 'tut-quick-boq'
+        },
+        {
+            title: '⚡ Quick Action: Match Invoice',
+            body: 'Direct link to the 3-Way Match engine. Use this when you have your invoice and PO ready.',
+            tip: '🔗 Use this for Step 2.',
+            targetId: 'tut-quick-match'
+        },
+        {
+            title: '⚡ Quick Action: Timeline',
+            body: 'Fast track to the lifecycle history of all your shipments.',
+            tip: '📜 Audit trail is here.',
+            targetId: 'tut-quick-logs'
+        },
+        {
+            title: '⚡ Quick Action: Payouts',
+            body: 'Access the liquidity engine to view your payment calendar or request early funds.',
+            tip: '💸 Manage your cash flow here.',
+            targetId: 'tut-quick-payouts'
         },
         {
             title: '✅ You\'re Ready!',
@@ -153,6 +265,12 @@ export default function SupplierDashboard({ user, onLogout }) {
             targetId: null
         }
     ], [setMode]);
+
+    const spotlightClass = (id) => {
+        return isSandboxMode && showSandboxTutorial && steps[sandboxTutorialStep]?.targetId === id
+            ? 'ring-4 ring-purple-500 ring-offset-4 ring-offset-slate-900 animate-pulse relative z-[201]'
+            : '';
+    };
 
     const [showWalkthrough, setShowWalkthrough] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('hasSeenWalkthrough') !== 'true' : false);
     const [showMicroLearning, setShowMicroLearning] = useState(false);
@@ -850,11 +968,13 @@ export default function SupplierDashboard({ user, onLogout }) {
                         </div>
                     </div>
                     <div className="flex items-center gap-1 sm:gap-3">
-                        <button type="button" onClick={fetchData} className="p-2 sm:p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Force Refresh Data">
+                        <button type="button" id="tut-refresh" onClick={fetchData} className={`p-2 sm:p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors ${spotlightClass('tut-refresh')}`} title="Force Refresh Data">
                             <RefreshCw className="w-5 h-5 sm:w-4 sm:h-4" />
                         </button>
-                        <NotificationBell email={user.email} role="Supplier" onNavigate={handleNotificationNavigate} />
-                        <div className="hidden sm:flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full">
+                        <div id="tut-notifications" className={spotlightClass('tut-notifications')}>
+                            <NotificationBell email={user.email} role="Supplier" onNavigate={handleNotificationNavigate} />
+                        </div>
+                        <div id="tut-user" className={`hidden sm:flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full ${spotlightClass('tut-user')}`}>
                             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shrink-0">
                                 <User className="w-3.5 h-3.5 text-white" />
                             </div>
@@ -871,10 +991,10 @@ export default function SupplierDashboard({ user, onLogout }) {
                         </div>
 
                         <div className="w-px h-5 sm:h-6 bg-slate-700 mx-1 sm:mx-2 hidden sm:block"></div>
-                        <button type="button" onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 sm:p-1.5 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors" title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+                        <button type="button" id="tut-theme" onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 sm:p-1.5 text-slate-300 hover:bg-slate-800 rounded-lg transition-colors ${spotlightClass('tut-theme')}`} title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
                             {isDarkMode ? <Sun className="w-5 h-5 sm:w-4 sm:h-4" /> : <Moon className="w-5 h-5 sm:w-4 sm:h-4" />}
                         </button>
-                        <button type="button" onClick={onLogout} className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-red-900/40 hover:bg-red-600 text-white rounded-lg text-xs sm:text-sm font-bold transition-colors" title="Sign out of the Supplier Portal">
+                        <button type="button" id="tut-logout" onClick={onLogout} className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-red-900/40 hover:bg-red-600 text-white rounded-lg text-xs sm:text-sm font-bold transition-colors ${spotlightClass('tut-logout')}`} title="Sign out of the Supplier Portal">
                             <LogOut className="w-4 h-4 shrink-0" /> <span className="hidden sm:block">Logout</span>
                         </button>
                     </div>
@@ -882,7 +1002,7 @@ export default function SupplierDashboard({ user, onLogout }) {
 
                 <div className="p-4 md:p-6 max-w-7xl mx-auto">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all" title="Total number of Purchase Orders processed in the portal">
+                        <div id="tut-stats-shipments" className={`bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all ${spotlightClass('tut-stats-shipments')}`} title="Total number of Purchase Orders processed in the portal">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Total Shipments</p>
@@ -893,7 +1013,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all" title="Total monetary value of all processed and approved shipments">
+                        <div id="tut-stats-value" className={`bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all ${spotlightClass('tut-stats-value')}`} title="Total monetary value of all processed and approved shipments">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Total Value Delivered</p>
@@ -904,7 +1024,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all" title="Number of shipments currently awaiting delivery or approval">
+                        <div id="tut-stats-pending" className={`bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all ${spotlightClass('tut-stats-pending')}`} title="Number of shipments currently awaiting delivery or approval">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Pending</p>
@@ -915,7 +1035,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all" title="Number of invoices that have successfully passed the 3-way match process">
+                        <div id="tut-stats-matched" className={`bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all ${spotlightClass('tut-stats-matched')}`} title="Number of invoices that have successfully passed the 3-way match process">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Matched Invoices</p>
@@ -926,7 +1046,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all" title="Your supplier reliability rating based on invoice accuracy and BOQ approval rates">
+                        <div id="tut-stats-trust" className={`bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all ${spotlightClass('tut-stats-trust')}`} title="Your supplier reliability rating based on invoice accuracy and BOQ approval rates">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Trust Score</p>
@@ -984,10 +1104,11 @@ export default function SupplierDashboard({ user, onLogout }) {
                                         <div className="relative">
                                             <input
                                                 type="text"
+                                                id="tut-search"
                                                 placeholder="Search Shipment #..."
                                                 value={searchTerm}
                                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                                className="pl-9 pr-3 py-1.5 text-sm border border-slate-700 rounded-lg bg-slate-800 focus:ring-2 focus:ring-purple-500 text-slate-200"
+                                                className={`pl-9 pr-3 py-1.5 text-sm border border-slate-700 rounded-lg bg-slate-800 focus:ring-2 focus:ring-purple-500 text-slate-200 ${spotlightClass('tut-search')}`}
                                             />
                                             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                                         </div>
@@ -1122,9 +1243,9 @@ export default function SupplierDashboard({ user, onLogout }) {
                                             onDragOver={(e) => e.preventDefault()}
                                             onDragEnter={(e) => e.preventDefault()}
                                         >
-                                            <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setBoqFile(e.target.files[0])}
+                                            <input type="file" id="tut-boq-input" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setBoqFile(e.target.files[0])}
                                                 title="Select your Bill of Quantities (BOQ) document"
-                                                className="block w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-900/50 file:text-blue-300 hover:file:bg-blue-800/50 cursor-pointer" />
+                                                className={`block w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-900/50 file:text-blue-300 hover:file:bg-blue-800/50 cursor-pointer ${spotlightClass('tut-boq-input')}`} />
                                             <p className="text-xs text-slate-400 mt-2">Supported: PDF, Images, Excel</p>
                                         </div>
                                         {boqFile && (
@@ -1180,7 +1301,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm flex flex-col gap-4">
                                         <div className="flex-1 bg-slate-800/50 p-4 rounded-lg border border-slate-700" title="Upload your invoice for reconciliation">
                                             <label className="block text-sm font-bold text-slate-200 mb-1.5"><span className="text-emerald-500 mr-1">Step 1:</span> Upload your Invoice</label>
-                                            <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setInvoiceFile(e.target.files[0])} className="block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-blue-900/50 file:text-blue-300 cursor-pointer border border-slate-700 rounded-md p-1.5 bg-slate-900/50" title="Select your Invoice document" />
+                                            <input type="file" id="tut-invoice-input" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setInvoiceFile(e.target.files[0])} className={`block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-blue-900/50 file:text-blue-300 cursor-pointer border border-slate-700 rounded-md p-1.5 bg-slate-900/50 ${spotlightClass('tut-invoice-input')}`} title="Select your Invoice document" />
                                             {invoiceFile && (
                                                 <div className="mt-2 flex items-center gap-2 text-xs text-emerald-400">
                                                     <FileText className="w-3 h-3" /> <span className="truncate">{invoiceFile.name}</span> ({(invoiceFile.size / 1024).toFixed(1)} KB)
@@ -1189,7 +1310,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                         </div>
                                         <div className="flex-1 bg-slate-800/50 p-4 rounded-lg border border-slate-700" title="Upload the Purchase Order issued by Nestlé">
                                             <label className="block text-sm font-bold text-slate-200 mb-1.5"><span className="text-purple-500 mr-1">Step 2:</span> Upload the PO issued by Nestlé</label>
-                                            <input type="file" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setPoFile(e.target.files[0])} className="block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-purple-900/50 file:text-purple-300 cursor-pointer border border-slate-700 rounded-md p-1.5 bg-slate-900/50" title="Select the Nestlé Purchase Order document" />
+                                            <input type="file" id="tut-po-input" accept=".pdf, image/*, .xlsx, .xls, .csv" onChange={(e) => setPoFile(e.target.files[0])} className={`block w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-purple-900/50 file:text-purple-300 cursor-pointer border border-slate-700 rounded-md p-1.5 bg-slate-900/50 ${spotlightClass('tut-po-input')}`} title="Select the Nestlé Purchase Order document" />
                                             {poFile && (
                                                 <div className="mt-2 flex items-center gap-2 text-xs text-purple-400">
                                                     <FileText className="w-3 h-3" /> <span className="truncate">{poFile.name}</span> ({(poFile.size / 1024).toFixed(1)} KB)
@@ -1302,10 +1423,10 @@ export default function SupplierDashboard({ user, onLogout }) {
                             <div className="bg-slate-900 rounded-xl border border-slate-800 p-5 shadow-sm">
                                 <h3 className="font-bold text-slate-100 flex items-center gap-2 text-lg mb-3">⚡ Quick Actions</h3>
                                 <div className="space-y-2">
-                                    <button type="button" onClick={() => { setMode('boq'); setBoqFile(null); }} className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2" title="Submit a Bill of Quantities (BOQ) to get a Purchase Order">📤 Submit Quote</button>
-                                    <button type="button" onClick={() => { setMode('match'); setInvoiceFile(null); setPoFile(null); setShowWalkthrough(false); localStorage.setItem('hasSeenWalkthrough', 'true'); }} className={`w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${showWalkthrough ? 'relative z-[102] ring-4 ring-purple-500 ring-offset-2 ring-offset-slate-900 animate-pulse' : ''}`} title="Upload your Invoice and the Purchase Order to start the 3-Way Match process">🔗 Match Invoice & PO</button>
-                                    <button type="button" onClick={() => { setMode('logs'); }} className="w-full py-2 bg-slate-800 text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-700 transition-all flex items-center justify-center gap-2" title="View the complete lifecycle and history of your transactions">📜 View Timeline</button>
-                                    <button type="button" onClick={() => setMode('payouts')} className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2" title="Manage your cash flow and access early payment options via Dynamic Discounting">💸 Liquidity Engine</button>
+                                    <button type="button" id="tut-quick-boq" onClick={() => { setMode('boq'); setBoqFile(null); }} className={`w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${spotlightClass('tut-quick-boq')}`} title="Submit a Bill of Quantities (BOQ) to get a Purchase Order">📤 Submit Quote</button>
+                                    <button type="button" id="tut-quick-match" onClick={() => { setMode('match'); setInvoiceFile(null); setPoFile(null); setShowWalkthrough(false); localStorage.setItem('hasSeenWalkthrough', 'true'); }} className={`w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${showWalkthrough ? 'relative z-[102] ring-4 ring-purple-500 ring-offset-2 ring-offset-slate-900 animate-pulse' : ''} ${spotlightClass('tut-quick-match')}`} title="Upload your Invoice and the Purchase Order to start the 3-Way Match process">🔗 Match Invoice & PO</button>
+                                    <button type="button" id="tut-quick-logs" onClick={() => { setMode('logs'); }} className={`w-full py-2 bg-slate-800 text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-700 transition-all flex items-center justify-center gap-2 ${spotlightClass('tut-quick-logs')}`} title="View the complete lifecycle and history of your transactions">📜 View Timeline</button>
+                                    <button type="button" id="tut-quick-payouts" onClick={() => setMode('payouts')} className={`w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${spotlightClass('tut-quick-payouts')}`} title="Manage your cash flow and access early payment options via Dynamic Discounting">💸 Liquidity Engine</button>
                                 </div>
                             </div>
 
@@ -1377,10 +1498,10 @@ export default function SupplierDashboard({ user, onLogout }) {
                 Shows every time sandbox is ON
                 ============================ */}
             {showSandboxTutorial && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[2px]" onClick={() => setShowSandboxTutorial(false)}></div>
+                <div className={`fixed inset-0 z-[200] flex ${steps[sandboxTutorialStep]?.targetId ? 'items-end justify-start' : 'items-center justify-center'} p-4 pointer-events-none transition-all duration-500`}>
+                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[2px] pointer-events-auto" onClick={() => setShowSandboxTutorial(false)}></div>
                     
-                    <div className="relative max-w-md w-full bg-slate-900 border-2 border-purple-500/70 rounded-2xl shadow-2xl overflow-hidden z-[201] animate-in zoom-in-95">
+                    <div className="relative max-w-md w-full bg-slate-900 border-2 border-purple-500/70 rounded-2xl shadow-2xl overflow-hidden z-[201] animate-in zoom-in-95 pointer-events-auto">
                         {/* Header */}
                         <div className="bg-gradient-to-r from-purple-900/80 to-indigo-900/80 px-5 py-4 border-b border-purple-500/30 flex items-center justify-between">
                             <div className="flex items-center gap-2">
