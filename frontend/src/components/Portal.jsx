@@ -753,6 +753,7 @@ function FinancePortal({ user }) {
                         <option value="Pending">Needs Review / Pending</option>
                         <option value="Approved">Approved / Payouts</option>
                     </select>
+                </div>
             </div>
 
             {/* Smart Tolerance Modal */}
@@ -1089,77 +1090,6 @@ function FinancePortal({ user }) {
                     </table>
                 )}
             </div>
-            
-            {showToleranceModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 dark:border-slate-700">
-                        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
-                            <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2"><Target className="w-6 h-6 text-blue-500" /> Smart Tolerance Rules & Shadow Mode</h3>
-                            <button onClick={() => { setShowToleranceModal(false); setShadowModeResult(null); }} className="text-slate-400 hover:text-slate-600 font-bold">✕ Close</button>
-                        </div>
-                        <div className="p-6 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="p-4 border border-slate-200 dark:border-slate-700 rounded-xl">
-                                    <label className="text-xs font-bold text-slate-500 uppercase">Tax Variance</label>
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <span className="text-slate-400">$</span>
-                                        <input type="number" defaultValue="5.00" className="w-full bg-slate-100 dark:bg-slate-800 p-2 rounded outline-none font-mono text-slate-800 dark:text-white" />
-                                    </div>
-                                </div>
-                                <div className="p-4 border border-slate-200 dark:border-slate-700 rounded-xl">
-                                    <label className="text-xs font-bold text-slate-500 uppercase">Freight / Shipping</label>
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <input type="number" defaultValue="2.0" className="w-full bg-slate-100 dark:bg-slate-800 p-2 rounded outline-none font-mono text-slate-800 dark:text-white" />
-                                        <span className="text-slate-400">%</span>
-                                    </div>
-                                </div>
-                                <div className="p-4 border border-slate-200 dark:border-slate-700 rounded-xl">
-                                    <label className="text-xs font-bold text-slate-500 uppercase">Unit Price</label>
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <span className="text-slate-400">$</span>
-                                        <input type="number" defaultValue="0.00" disabled className="w-full bg-slate-200 dark:bg-slate-700 p-2 rounded outline-none font-mono opacity-50 cursor-not-allowed" />
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-xl border border-blue-100 dark:border-blue-800">
-                                <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2"><Activity className="w-4 h-4" /> The "Shadow Mode" ROI Simulator</h4>
-                                <p className="text-xs text-blue-600 dark:text-blue-400 mb-4">Test these new thresholds against the last 90 days of historical invoice data before deploying to production.</p>
-                                
-                                {shadowModeResult ? (
-                                    <div className="bg-white dark:bg-slate-900 p-4 rounded-lg shadow-sm border border-emerald-200 dark:border-emerald-800">
-                                        <div className="flex items-start gap-3">
-                                            <CheckCircle2 className="w-5 h-5 text-emerald-500 mt-0.5 shrink-0" />
-                                            <div>
-                                                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                                                    If this rule was active last quarter, it would have auto-approved <strong>450 invoices</strong>, saving <strong>112 hours</strong> of manual review, resulting in a total financial leakage of only <strong className="text-red-500">$45.20</strong>.
-                                                </p>
-                                                <div className="mt-4 flex gap-2">
-                                                    <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-sm">Deploy Rule to Production</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <button 
-                                        onClick={() => {
-                                            setIsRunningShadowMode(true);
-                                            setTimeout(() => {
-                                                setIsRunningShadowMode(false);
-                                                setShadowModeResult(true);
-                                            }, 1500);
-                                        }} 
-                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors w-full"
-                                        disabled={isRunningShadowMode}
-                                    >
-                                        {isRunningShadowMode ? 'Simulating 90 Days of Data...' : 'Run Historical Simulation'}
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
@@ -1804,4 +1734,3 @@ function TreasuryDashboard() {
     );
 }
 
-function AnalyticsPortal() { return <div className="p-8 text-center font-bold text-slate-500">Analytics Engine Offline for Maintenance</div>; }
