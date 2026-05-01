@@ -291,6 +291,7 @@ export default function WarehousePortal({ user, onLogout }) {
     const [syncQueue, setSyncQueue] = useState([]);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isDarkMode, setIsDarkMode] = useState(true);
+    const [isFetching, setIsFetching] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
     const [isRejecting, setIsRejecting] = useState(false);
     const [dialog, setDialog] = useState(null);
@@ -524,6 +525,7 @@ export default function WarehousePortal({ user, onLogout }) {
             return;
         }
         isFetchingPOsRef.current = true;
+        setIsFetching(true);
 
         const currentFetchId = ++fetchCounterRef.current;
         console.log(`[WH] fetchPOs START (id=${currentFetchId}, preferCached=${preferCached}, online=${navigator.onLine})`);
@@ -537,6 +539,7 @@ export default function WarehousePortal({ user, onLogout }) {
         if (!navigator.onLine) {
             console.warn('[WH] Device is OFFLINE — using cache only');
             setLoading(false);
+            setIsFetching(false);
             isFetchingPOsRef.current = false;
             const cachedPOs = loadCachedPOs();
             if (cachedPOs.length > 0 && currentFetchId === fetchCounterRef.current) setPOs(cachedPOs);
@@ -584,6 +587,7 @@ export default function WarehousePortal({ user, onLogout }) {
             if (currentFetchId !== fetchCounterRef.current) {
                 console.warn(`[WH] fetchPOs id=${currentFetchId} superseded by id=${fetchCounterRef.current} — discarding`);
                 isFetchingPOsRef.current = false;
+                setIsFetching(false);
                 return;
             }
             console.log(`[WH] fetchPOs DONE — setting ${enhancedData.length} POs to state`);
@@ -602,6 +606,7 @@ export default function WarehousePortal({ user, onLogout }) {
             }
         } finally {
             setLoading(false);
+            setIsFetching(false);
             isFetchingPOsRef.current = false;
         }
     }, [loadCachedPOs, persistPOCache]);
@@ -1366,11 +1371,11 @@ export default function WarehousePortal({ user, onLogout }) {
 
                 <div className="flex items-center gap-1 sm:gap-4">
                     <button
-                        onClick={() => fetchPOs()}
+                        onClick={() => { isFetchingPOsRef.current = false; fetchPOs(); }}
                         className="p-2 sm:p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
                         title="Force Refresh Data"
                     >
-                        <RefreshCw className={`w-5 h-5 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw className={`w-5 h-5 sm:w-4 sm:h-4 ${isFetching ? 'animate-spin' : ''}`} />
                     </button>
                     <NotificationBell role="Warehouse" onNavigate={handleNotificationNavigate} />
                     {isOffline ? (
@@ -1856,6 +1861,12 @@ export default function WarehousePortal({ user, onLogout }) {
                             className="sticky bottom-0 left-0 w-full lg:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-safe z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
                             style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
                         >
+                            {/* Live sync indicator for mobile — mirrors the desktop navbar spinner */}
+                            {isFetching && (
+                                <div className="flex items-center justify-center gap-1.5 mb-3 text-[10px] font-bold text-blue-500 uppercase tracking-wider animate-pulse">
+                                    <RefreshCw className="w-3 h-3 animate-spin" /> Syncing live data...
+                                </div>
+                            )}
                             {(!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled'))) && (
                                 <button
                                     onClick={submitGRN}
