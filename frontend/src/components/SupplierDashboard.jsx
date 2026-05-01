@@ -572,6 +572,13 @@ export default function SupplierDashboard({ user, onLogout }) {
         }
     }, [isSandboxMode]);
 
+    // Sync UI state with tutorial step without causing infinite re-renders
+    useEffect(() => {
+        if (showSandboxTutorial && steps[sandboxTutorialStep]?.action) {
+            steps[sandboxTutorialStep].action();
+        }
+    }, [showSandboxTutorial, sandboxTutorialStep, steps]);
+
     const totalPOs = myPOs.length;
     const totalPOValue = myPOs.reduce((sum, po) => sum + (po.total_amount || 0), 0);
     const pendingPOs = myPOs.filter(po => !po.is_downloaded).length;
@@ -1369,60 +1376,52 @@ export default function SupplierDashboard({ user, onLogout }) {
                 SANDBOX TUTORIAL OVERLAY
                 Shows every time sandbox is ON
                 ============================ */}
-            {showSandboxTutorial && (() => {
-                const step = steps[sandboxTutorialStep] || steps[0];
-                const isLast = sandboxTutorialStep >= steps.length - 1;
-
-                // Sync UI state with tutorial step
-                if (step.action) step.action();
-
-                return (
-                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[2px]" onClick={() => setShowSandboxTutorial(false)}></div>
-                        
-                        <div className="relative max-w-md w-full bg-slate-900 border-2 border-purple-500/70 rounded-2xl shadow-2xl overflow-hidden z-[201] animate-in zoom-in-95">
-                            {/* Header */}
-                            <div className="bg-gradient-to-r from-purple-900/80 to-indigo-900/80 px-5 py-4 border-b border-purple-500/30 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-purple-300 uppercase tracking-wider bg-purple-900/50 px-2 py-0.5 rounded-full border border-purple-500/30">🛠️ Sandbox Tutorial</span>
-                                    <span className="text-xs text-slate-400">{sandboxTutorialStep + 1} / {steps.length}</span>
-                                </div>
-                                <button onClick={() => setShowSandboxTutorial(false)} className="text-slate-400 hover:text-white transition-colors text-xs font-bold px-2 py-1 rounded hover:bg-slate-800">Skip Tutorial ✕</button>
+            {showSandboxTutorial && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[2px]" onClick={() => setShowSandboxTutorial(false)}></div>
+                    
+                    <div className="relative max-w-md w-full bg-slate-900 border-2 border-purple-500/70 rounded-2xl shadow-2xl overflow-hidden z-[201] animate-in zoom-in-95">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-purple-900/80 to-indigo-900/80 px-5 py-4 border-b border-purple-500/30 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-purple-300 uppercase tracking-wider bg-purple-900/50 px-2 py-0.5 rounded-full border border-purple-500/30">🛠️ Sandbox Tutorial</span>
+                                <span className="text-xs text-slate-400">{sandboxTutorialStep + 1} / {steps.length}</span>
                             </div>
-                            {/* Progress bar */}
-                            <div className="h-1 bg-slate-800">
-                                <div className="h-1 bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-500" style={{ width: `${((sandboxTutorialStep + 1) / steps.length) * 100}%` }} />
-                            </div>
-                            {/* Body */}
-                            <div className="p-6 space-y-4">
-                                <h3 className="text-xl font-black text-white leading-tight">{step.title}</h3>
-                                <p className="text-sm text-slate-300 leading-relaxed">{step.body}</p>
-                                <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-xs text-slate-400 leading-relaxed">
-                                    {step.tip}
-                                </div>
-                            </div>
-                            {/* Footer */}
-                            <div className="px-6 pb-5 flex items-center justify-between gap-3">
-                                <button
-                                    onClick={() => setSandboxTutorialStep(s => Math.max(0, s - 1))}
-                                    disabled={sandboxTutorialStep === 0}
-                                    className="px-4 py-2 rounded-xl text-sm font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                >← Back</button>
-                                <button onClick={() => setShowSandboxTutorial(false)} className="text-xs text-slate-600 hover:text-slate-400 transition-colors">Skip</button>
-                                {isLast ? (
-                                    <button onClick={() => setShowSandboxTutorial(false)} className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-sm font-bold rounded-xl transition-colors shadow-lg">
-                                        Start Practicing ✅
-                                    </button>
-                                ) : (
-                                    <button onClick={() => setSandboxTutorialStep(s => s + 1)} className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-bold rounded-xl transition-colors shadow-lg">
-                                        Next →
-                                    </button>
-                                )}
+                            <button onClick={() => setShowSandboxTutorial(false)} className="text-slate-400 hover:text-white transition-colors text-xs font-bold px-2 py-1 rounded hover:bg-slate-800">Skip Tutorial ✕</button>
+                        </div>
+                        {/* Progress bar */}
+                        <div className="h-1 bg-slate-800">
+                            <div className="h-1 bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-500" style={{ width: `${((sandboxTutorialStep + 1) / steps.length) * 100}%` }} />
+                        </div>
+                        {/* Body */}
+                        <div className="p-6 space-y-4">
+                            <h3 className="text-xl font-black text-white leading-tight">{steps[sandboxTutorialStep]?.title || steps[0].title}</h3>
+                            <p className="text-sm text-slate-300 leading-relaxed">{steps[sandboxTutorialStep]?.body || steps[0].body}</p>
+                            <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-xs text-slate-400 leading-relaxed">
+                                {steps[sandboxTutorialStep]?.tip || steps[0].tip}
                             </div>
                         </div>
+                        {/* Footer */}
+                        <div className="px-6 pb-5 flex items-center justify-between gap-3">
+                            <button
+                                onClick={() => setSandboxTutorialStep(s => Math.max(0, s - 1))}
+                                disabled={sandboxTutorialStep === 0}
+                                className="px-4 py-2 rounded-xl text-sm font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            >← Back</button>
+                            <button onClick={() => setShowSandboxTutorial(false)} className="text-xs text-slate-600 hover:text-slate-400 transition-colors">Skip</button>
+                            {sandboxTutorialStep >= steps.length - 1 ? (
+                                <button onClick={() => setShowSandboxTutorial(false)} className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-sm font-bold rounded-xl transition-colors shadow-lg">
+                                    Start Practicing ✅
+                                </button>
+                            ) : (
+                                <button onClick={() => setSandboxTutorialStep(s => s + 1)} className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-bold rounded-xl transition-colors shadow-lg">
+                                    Next →
+                                </button>
+                            )}
+                        </div>
                     </div>
-                );
-            })()}
+                </div>
+            )}
         </div>
     );
 }
