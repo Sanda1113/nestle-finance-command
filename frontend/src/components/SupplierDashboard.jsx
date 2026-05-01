@@ -874,13 +874,14 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     return (
                                         <button
                                             type="button"
+                                            id={`tut-tab-${tab.id}`}
                                             key={tab.id}
                                             onClick={() => { setMode(tab.id); setMatchStatus('Pending'); setError(null); setExpandedLog(null); }}
                                             title={tab.title}
                                             className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-all ${mode === tab.id
                                                 ? `${colorMap[tab.color]} text-white shadow-md`
                                                 : 'text-slate-400 hover:bg-slate-800'
-                                                }`}
+                                                } ${isSandboxMode && sandboxTutorialStep > 0 && steps[sandboxTutorialStep]?.targetId === `tut-tab-${tab.id}` ? 'ring-4 ring-purple-500 ring-offset-4 ring-offset-slate-900 animate-pulse relative z-[201]' : ''}`}
                                         >
                                             {tab.label}
                                         </button>
@@ -973,15 +974,16 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                             </div>
 
                                                             <div className="flex flex-wrap gap-2 mt-4">
-                                                                <button type="button" onClick={() => handlePrintPO(po)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${po.is_downloaded ? 'bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 border border-emerald-700/50' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 shadow-sm'}`} title={po.is_downloaded ? 'Re-download the Purchase Order PDF' : 'Download the official Purchase Order document'}>
+                                                                <button type="button" id="tut-pdf-btn" onClick={() => handlePrintPO(po)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${po.is_downloaded ? 'bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 border border-emerald-700/50' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 shadow-sm'} ${isSandboxMode && steps[sandboxTutorialStep]?.targetId === 'tut-pdf-btn' ? 'ring-4 ring-purple-500 ring-offset-2 ring-offset-slate-900 animate-pulse z-[201]' : ''}`} title={po.is_downloaded ? 'Re-download the Purchase Order PDF' : 'Download the official Purchase Order document'}>
                                                                     {po.is_downloaded ? '✅ PO Downloaded' : '📄 Download PO'}
                                                                 </button>
 
                                                                 {!isDelivered ? (
                                                                     <button
                                                                         type="button"
+                                                                        id="tut-mark-delivered"
                                                                         onClick={() => handleMarkDelivered(po.po_number)}
-                                                                        className="flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 bg-amber-600 hover:bg-amber-500 text-white shadow-sm border border-amber-500"
+                                                                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 bg-amber-600 hover:bg-amber-500 text-white shadow-sm border border-amber-500 ${isSandboxMode && steps[sandboxTutorialStep]?.targetId === 'tut-mark-delivered' ? 'ring-4 ring-purple-500 ring-offset-2 ring-offset-slate-900 animate-pulse z-[201]' : ''}`}
                                                                         title="Notify the warehouse that your shipment has arrived at the dock"
                                                                     >
                                                                         🚚 Mark Delivered
@@ -992,7 +994,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                                     </div>
                                                                 )}
 
-                                                                <button type="button" onClick={() => setExpandedLog(isChatOpen ? null : po.id)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${isChatOpen ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`} title="Open a chat to resolve any disputes or issues with this shipment">
+                                                                <button type="button" id="tut-chat-btn" onClick={() => setExpandedLog(isChatOpen ? null : po.id)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${isChatOpen ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'} ${isSandboxMode && steps[sandboxTutorialStep]?.targetId === 'tut-chat-btn' ? 'ring-4 ring-purple-500 ring-offset-2 ring-offset-slate-900 animate-pulse z-[201]' : ''}`} title="Open a chat to resolve any disputes or issues with this shipment">
                                                                     💬 Chat
                                                                 </button>
                                                             </div>
@@ -1248,7 +1250,9 @@ export default function SupplierDashboard({ user, onLogout }) {
             </div>
             
             <AppNotifier role="Supplier" email={user.email} />
-            <FloatingChat userEmail={user.email} userRole="Supplier" />
+            <div id="tut-floating-chat">
+                <FloatingChat userEmail={user.email} userRole="Supplier" />
+            </div>
 
             {dialog && (
                 <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -1292,69 +1296,89 @@ export default function SupplierDashboard({ user, onLogout }) {
                     {
                         title: '🛠️ Welcome to Sandbox Mode',
                         body: 'You are now in a safe training environment. Every action you take here is simulated — nothing is sent to Finance, Warehouse, or any backend system. Use this to practice the full workflow risk-free.',
-                        tip: '✅ Safe to click anything — no real notifications will be triggered.'
+                        tip: '✅ Safe to click anything — no real notifications will be triggered.',
+                        targetId: null
                     },
                     {
                         title: '📥 Tab: My Shipments',
                         body: 'This tab shows all your active Purchase Orders (POs). Each card shows the shipment ID, amount, status, creation date, and expected delivery. You can download the official PO PDF and mark a shipment as delivered to the dock.',
-                        tip: '📄 "Download PO" button opens the PDF. Once downloaded, it turns green as "✅ PO Downloaded" — but you can still re-download anytime.'
+                        tip: '📄 "Download PO" button opens the PDF. Once downloaded, it turns green as "✅ PO Downloaded" — but you can still re-download anytime.',
+                        targetId: 'tut-tab-inbox',
+                        action: () => setMode('inbox')
+                    },
+                    {
+                        title: '📄 Download PO Button',
+                        body: 'Click here to access the official document. In Sandbox, this is a simulated PDF export.',
+                        tip: 'Highlighting the download button.',
+                        targetId: 'tut-pdf-btn',
+                        action: () => setMode('inbox')
                     },
                     {
                         title: '🚚 Mark Delivered Button',
                         body: 'Use this to notify Nestlé\'s Warehouse that your truck has arrived at the dock. In Sandbox Mode this is blocked — clicking it shows a training message instead of sending a real notification.',
-                        tip: '⚠️ In live mode this triggers a real-time alert to the Warehouse team.'
+                        tip: '⚠️ In live mode this triggers a real-time alert to the Warehouse team.',
+                        targetId: 'tut-mark-delivered',
+                        action: () => setMode('inbox')
                     },
                     {
                         title: '💬 Dispute Chat (Per Shipment)',
                         body: 'Each shipment card has a "💬 Chat" button. This opens a transaction-specific dispute channel between you and the Finance team. Use it when there is a discrepancy or issue with a specific PO/Invoice.',
-                        tip: '🔔 Finance gets notified when you send a message here. Use it for specific disputes only.'
+                        tip: '🔔 Finance gets notified when you send a message here. Use it for specific disputes only.',
+                        targetId: 'tut-chat-btn',
+                        action: () => setMode('inbox')
                     },
                     {
                         title: '📤 Tab: Step 1 – Submit Quote (BOQ)',
                         body: 'Upload your Bill of Quantities (BOQ) PDF or Excel here. Our AI digitizes it and sends it to the Nestlé Procurement team for review and approval. In Sandbox Mode, the OCR runs but no data is saved.',
-                        tip: '📑 After approval, Procurement generates a Purchase Order (PO) that appears in your "My Shipments" tab.'
+                        tip: '📑 After approval, Procurement generates a Purchase Order (PO) that appears in your "My Shipments" tab.',
+                        targetId: 'tut-tab-boq',
+                        action: () => setMode('boq')
                     },
                     {
                         title: '🔗 Tab: Step 2 – Submit Invoice (3-Way Match)',
                         body: 'Upload your Invoice AND the Nestlé PO here. Our engine runs a 3-Way Match: Invoice ↔ PO ↔ GRN. If amounts match within tolerance, it goes to Finance for final approval. In Sandbox, no data is sent to Finance.',
-                        tip: '⚠️ If a discrepancy is detected, Finance is alerted. You can then use the Dispute Chat to resolve it.'
+                        tip: '⚠️ If a discrepancy is detected, Finance is alerted. You can then use the Dispute Chat to resolve it.',
+                        targetId: 'tut-tab-match',
+                        action: () => setMode('match')
                     },
                     {
                         title: '📜 Tab: Timeline',
                         body: 'This tab shows the complete lifecycle of every transaction — from BOQ submission → PO generation → Invoice match → Warehouse receipt → Payout. Each event has a date/time stamp and status color.',
-                        tip: '💰 Once Finance approves and Warehouse confirms goods received, the Payout appears at the bottom of the timeline.'
+                        tip: '💰 Once Finance approves and Warehouse confirms goods received, the Payout appears at the bottom of the timeline.',
+                        targetId: 'tut-tab-logs',
+                        action: () => setMode('logs')
                     },
                     {
                         title: '💸 Tab: Liquidity & Payout Calendar',
                         body: 'This tab shows your scheduled payments on a Google Calendar-style view. Blue = Scheduled, Green = Paid, Yellow = On Hold. Click any event to see details. You can also request early payment at a small discount.',
-                        tip: '⚡ Early payment = get paid today, minus a small % fee. Finance is notified automatically.'
+                        tip: '⚡ Early payment = get paid today, minus a small % fee. Finance is notified automatically.',
+                        targetId: 'tut-tab-payouts',
+                        action: () => setMode('payouts')
                     },
                     {
                         title: '💬 Floating Chat (Bottom Right)',
                         body: 'The floating chat bubble (bottom-right corner) is a general-purpose Live Chat with the Finance team. Use this for broad questions not tied to a specific transaction — e.g., account questions, onboarding help.',
-                        tip: '📌 This is different from the Dispute Chat, which is per-transaction.'
-                    },
-                    {
-                        title: '🤖 AI Chat & Jargon Translator',
-                        body: 'You\'ll notice some terms are underlined with a dashed border — hover over them to see plain-English explanations (e.g., "GRN", "3-Way Match", "Discrepancy"). This is the built-in Jargon Translator.',
-                        tip: '💡 The AI also triggers personalized tips if it detects repeated errors (e.g., upload quality issues).'
-                    },
-                    {
-                        title: '🔔 Notifications Bell (Top Right)',
-                        body: 'The bell icon shows real-time in-app alerts: new POs, payout updates, Finance approvals/rejections, and Warehouse confirmations. Click any notification to jump directly to the relevant section.',
-                        tip: '📧 Each notification also triggers an email to your registered address.'
+                        tip: '📌 This is different from the Dispute Chat, which is per-transaction.',
+                        targetId: 'tut-floating-chat'
                     },
                     {
                         title: '✅ You\'re Ready!',
                         body: 'You\'ve completed the full Supplier Portal tutorial. In Sandbox Mode you can freely practice any workflow. When you\'re ready for live operations, toggle off Sandbox Mode using the switch in the top navigation bar.',
-                        tip: '🟢 Toggle off Sandbox to go live. All actions in live mode affect real Finance and Warehouse systems.'
+                        tip: '🟢 Toggle off Sandbox to go live. All actions in live mode affect real Finance and Warehouse systems.',
+                        targetId: null
                     }
                 ];
                 const step = steps[sandboxTutorialStep] || steps[0];
                 const isLast = sandboxTutorialStep >= steps.length - 1;
+
+                // Sync UI state with tutorial step
+                if (step.action) step.action();
+
                 return (
-                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm">
-                        <div className="relative max-w-md w-full bg-slate-900 border-2 border-purple-500/70 rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[2px]" onClick={() => setShowSandboxTutorial(false)}></div>
+                        
+                        <div className="relative max-w-md w-full bg-slate-900 border-2 border-purple-500/70 rounded-2xl shadow-2xl overflow-hidden z-[201] animate-in zoom-in-95">
                             {/* Header */}
                             <div className="bg-gradient-to-r from-purple-900/80 to-indigo-900/80 px-5 py-4 border-b border-purple-500/30 flex items-center justify-between">
                                 <div className="flex items-center gap-2">

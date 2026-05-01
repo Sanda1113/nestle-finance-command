@@ -5,7 +5,21 @@ import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import axios from 'axios';
-import { Calendar as CalendarIcon, Clock, X, CheckCircle2, AlertCircle, DollarSign, Bell } from 'lucide-react';
+import { 
+    Calendar as CalendarIcon, 
+    Clock, 
+    X, 
+    CheckCircle2, 
+    AlertCircle, 
+    DollarSign, 
+    Bell, 
+    ChevronLeft, 
+    ChevronRight,
+    Filter,
+    Zap,
+    Download,
+    CreditCard
+} from 'lucide-react';
 
 const localizer = momentLocalizer(moment);
 const DnDCalendar = withDragAndDrop(Calendar);
@@ -17,13 +31,54 @@ const formatCurrency = (amount, currencyCode = 'USD') => {
 };
 
 const STATUS_CONFIG = {
-    'Paid':          { bg: '#10b981', light: 'bg-emerald-900/40 text-emerald-400 border-emerald-700/50', label: '✅ Paid', icon: '💰' },
-    'Hold':          { bg: '#f59e0b', light: 'bg-amber-900/40 text-amber-400 border-amber-700/50',   label: '⏸️ On Hold', icon: '⏸️' },
-    'Renegotiated':  { bg: '#8b5cf6', light: 'bg-purple-900/40 text-purple-400 border-purple-700/50', label: '⚡ Early Payout', icon: '⚡' },
-    'Scheduled':     { bg: '#3b82f6', light: 'bg-blue-900/40 text-blue-400 border-blue-700/50',       label: '📅 Scheduled', icon: '📅' },
-    'Pending Finance': { bg: '#64748b', light: 'bg-slate-700/40 text-slate-300 border-slate-600/50', label: '⏳ Pending', icon: '⏳' },
+    'Paid':          { bg: 'from-emerald-600 to-teal-700', light: 'bg-emerald-900/40 text-emerald-400 border-emerald-700/50', label: 'Paid', icon: '💰', glow: 'shadow-emerald-500/20' },
+    'Hold':          { bg: 'from-amber-500 to-orange-600', light: 'bg-amber-900/40 text-amber-400 border-amber-700/50',   label: 'On Hold', icon: '⏸️', glow: 'shadow-amber-500/20' },
+    'Renegotiated':  { bg: 'from-purple-600 to-indigo-700', light: 'bg-purple-900/40 text-purple-400 border-purple-700/50', label: 'Early Payout', icon: '⚡', glow: 'shadow-purple-500/20' },
+    'Scheduled':     { bg: 'from-blue-600 to-cyan-700', light: 'bg-blue-900/40 text-blue-400 border-blue-700/50',       label: 'Scheduled', icon: '📅', glow: 'shadow-blue-500/20' },
+    'Pending Finance': { bg: 'from-slate-600 to-slate-800', light: 'bg-slate-700/40 text-slate-300 border-slate-600/50', label: 'Pending', icon: '⏳', glow: 'shadow-slate-500/20' },
 };
 const getStatusCfg = (status) => STATUS_CONFIG[status] || STATUS_CONFIG['Scheduled'];
+
+// Custom Toolbar for a premium look
+const CustomToolbar = (toolbar) => {
+    const goToBack = () => toolbar.onNavigate('PREV');
+    const goToNext = () => toolbar.onNavigate('NEXT');
+    const goToToday = () => toolbar.onNavigate('TODAY');
+
+    return (
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 px-6 py-5 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800/50">
+            <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-600/20 rounded-xl border border-indigo-500/30">
+                    <CalendarIcon className="w-6 h-6 text-indigo-400" />
+                </div>
+                <div>
+                    <h2 className="text-xl font-black text-white tracking-tight">{toolbar.label}</h2>
+                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Treasury & Liquidity Hub</p>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-1 bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
+                {['month', 'week', 'day', 'agenda'].map((v) => (
+                    <button
+                        key={v}
+                        onClick={() => toolbar.onView(v)}
+                        className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${toolbar.view === v ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+                    >
+                        {v.charAt(0).toUpperCase() + v.slice(1)}
+                    </button>
+                ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+                <button onClick={goToToday} className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all">Today</button>
+                <div className="flex items-center gap-1">
+                    <button onClick={goToBack} className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all"><ChevronLeft className="w-5 h-5" /></button>
+                    <button onClick={goToNext} className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all"><ChevronRight className="w-5 h-5" /></button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default function DigitalCalendar({ userRole, userEmail }) {
     const [events, setEvents] = useState([]);
@@ -37,31 +92,29 @@ export default function DigitalCalendar({ userRole, userEmail }) {
 
     const isFinance = userRole === 'Finance';
 
-    // ── Upcoming reminders (next 7 days) ──────────────────────────
     const upcomingReminders = useMemo(() => {
         const now = moment();
         return events
             .filter(e => {
                 const days = moment(e.start).diff(now, 'days');
-                return days >= 0 && days <= 7 && e.status !== 'Paid';
+                return days >= 0 && days <= 14 && e.status !== 'Paid';
             })
-            .sort((a, b) => moment(a.start).valueOf() - moment(b.start).valueOf());
+            .sort((a, b) => moment(a.start).valueOf() - moment(b.start).valueOf())
+            .slice(0, 5);
     }, [events]);
 
-    // ── Event style (Google Calendar-like chips) ──────────────────
     const eventStyleGetter = (event) => {
         const cfg = getStatusCfg(event.status);
         return {
+            className: `bg-gradient-to-br ${cfg.bg} border-0 rounded-lg shadow-lg ${cfg.glow} transition-transform hover:scale-[1.02] active:scale-95`,
             style: {
-                backgroundColor: cfg.bg,
-                border: 'none',
-                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: '800',
+                padding: '4px 8px',
                 color: 'white',
-                fontSize: '12px',
-                fontWeight: '600',
-                padding: '2px 6px',
-                opacity: 0.95,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                minHeight: '24px',
+                display: 'flex',
+                alignItems: 'center'
             }
         };
     };
@@ -177,220 +230,298 @@ export default function DigitalCalendar({ userRole, userEmail }) {
     const CalComponent = isFinance ? DnDCalendar : Calendar;
 
     return (
-        <div className="space-y-4">
-
-            {/* ── Reminder Strip ─────────────────────────────────── */}
-            {upcomingReminders.length > 0 && (
-                <div className="bg-slate-900 border border-amber-700/40 rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                        <Bell className="w-4 h-4 text-amber-400" />
-                        <span className="text-sm font-bold text-amber-300">Upcoming Payments – Next 7 Days</span>
+        <div className="flex flex-col lg:flex-row gap-6 p-1">
+            
+            {/* Sidebar with Insights & Reminders */}
+            <div className="w-full lg:w-80 shrink-0 space-y-6">
+                
+                {/* Liquidity Stats Card */}
+                <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-2xl">
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="p-2 bg-emerald-500/20 rounded-xl border border-emerald-500/30">
+                            <Zap className="w-5 h-5 text-emerald-400" />
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Real-time Forecast</span>
                     </div>
-                    <div className="space-y-2">
-                        {upcomingReminders.map(ev => {
-                            const days = moment(ev.start).diff(moment(), 'days');
-                            const cfg = getStatusCfg(ev.status);
-                            return (
-                                <div key={ev.id} onClick={() => setSelectedEvent(ev)}
-                                    className="flex items-center justify-between bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2 cursor-pointer hover:bg-slate-800 transition-colors">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-base">{cfg.icon}</span>
-                                        <div>
-                                            <p className="text-xs font-bold text-slate-200">{ev.title?.replace(/^[^\s]+\s/, '')}</p>
-                                            <p className="text-[10px] text-slate-400">{moment(ev.start).format('ddd, MMM D YYYY')} · {ev.supplier_email || ''}</p>
+                    <div className="space-y-4">
+                        <div>
+                            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Total Liquidity</p>
+                            <p className="text-3xl font-black text-white">{formatCurrency(events.reduce((s, e) => s + (e.status !== 'Paid' ? e.amount : 0), 0))}</p>
+                        </div>
+                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 w-3/4 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div>
+                        </div>
+                        <div className="flex justify-between text-[10px] font-bold">
+                            <span className="text-indigo-400">75% Scheduled</span>
+                            <span className="text-slate-500">25% On Hold</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Upcoming Payments Strip */}
+                <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+                    <div className="px-6 py-5 border-b border-slate-800/50 flex items-center justify-between bg-slate-800/30">
+                        <div className="flex items-center gap-2">
+                            <Bell className="w-4 h-4 text-amber-400" />
+                            <span className="text-sm font-black text-white">Reminders</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">Next 14d</span>
+                    </div>
+                    <div className="p-3 space-y-2">
+                        {upcomingReminders.length === 0 ? (
+                            <p className="text-xs text-slate-500 text-center py-8 italic">No urgent payments found.</p>
+                        ) : (
+                            upcomingReminders.map(ev => {
+                                const days = moment(ev.start).diff(moment(), 'days');
+                                const cfg = getStatusCfg(ev.status);
+                                return (
+                                    <div key={ev.id} onClick={() => setSelectedEvent(ev)}
+                                        className="group relative flex items-center justify-between bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/30 rounded-2xl px-4 py-3 cursor-pointer transition-all duration-300">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${cfg.bg} flex items-center justify-center text-lg shadow-lg ${cfg.glow}`}>
+                                                {cfg.icon}
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black text-white line-clamp-1">{ev.title?.replace(/^[^\s]+\s/, '')}</p>
+                                                <p className="text-[10px] font-bold text-slate-500">{moment(ev.start).format('ddd, MMM D')}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs font-black text-emerald-400">{formatCurrency(ev.amount)}</p>
+                                            <p className={`text-[9px] font-bold uppercase tracking-tighter ${days === 0 ? 'text-rose-500' : days <= 2 ? 'text-amber-500' : 'text-slate-500'}`}>
+                                                {days === 0 ? 'Due Today' : `${days}d left`}
+                                            </p>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-sm font-black text-emerald-400">{formatCurrency(ev.amount)}</p>
-                                        <p className={`text-[10px] font-bold ${days === 0 ? 'text-red-400' : days <= 2 ? 'text-amber-400' : 'text-slate-400'}`}>
-                                            {days === 0 ? '🔴 Due Today' : `${days}d remaining`}
-                                        </p>
-                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+
+                {/* Legend Card */}
+                <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-5 shadow-2xl">
+                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Status Legend</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        {Object.entries(STATUS_CONFIG).map(([k, cfg]) => (
+                            <div key={k} className="flex items-center gap-2">
+                                <div className={`w-2.5 h-2.5 rounded-full bg-gradient-to-br ${cfg.bg} shadow-lg ${cfg.glow}`}></div>
+                                <span className="text-[10px] font-bold text-slate-300">{cfg.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Calendar Section */}
+            <div className="flex-1 min-w-0">
+                <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
+                    <style>{`
+                        .rbc-calendar { 
+                            min-height: 750px; 
+                            font-family: inherit; 
+                            background: transparent; 
+                        }
+                        .rbc-month-view, .rbc-time-view, .rbc-day-bg, .rbc-month-row { 
+                            border-color: rgba(51, 65, 85, 0.5) !important; 
+                        }
+                        .rbc-header { 
+                            padding: 12px; 
+                            background: rgba(30, 41, 59, 0.8); 
+                            border-color: rgba(51, 65, 85, 0.5) !important; 
+                            color: #64748b; 
+                            font-size: 10px; 
+                            font-weight: 900; 
+                            text-transform: uppercase; 
+                            letter-spacing: 0.1em; 
+                        }
+                        .rbc-today { 
+                            background-color: rgba(99, 102, 241, 0.1) !important; 
+                        }
+                        .rbc-off-range-bg { 
+                            background-color: rgba(15, 23, 42, 0.4) !important; 
+                        }
+                        .rbc-event { 
+                            border-radius: 8px !important; 
+                            border: none !important; 
+                            box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+                        }
+                        .rbc-date-cell { 
+                            color: #94a3b8; 
+                            font-size: 13px; 
+                            font-weight: 700;
+                            padding: 8px 12px; 
+                        }
+                        .rbc-date-cell.rbc-now { 
+                            color: #60a5fa; 
+                        }
+                        .rbc-show-more { 
+                            color: #6366f1; 
+                            font-size: 10px; 
+                            font-weight: 900; 
+                            text-transform: uppercase;
+                        }
+                        .rbc-month-row { overflow: visible; }
+                    `}</style>
+
+                    <CalComponent
+                        localizer={localizer}
+                        events={events}
+                        view={view}
+                        onView={setView}
+                        date={currentDate}
+                        onNavigate={setCurrentDate}
+                        onEventDrop={isFinance ? onEventDrop : undefined}
+                        onEventResize={isFinance ? onEventResize : undefined}
+                        resizable={isFinance}
+                        onSelectEvent={handleSelectEvent}
+                        eventPropGetter={eventStyleGetter}
+                        components={{
+                            toolbar: CustomToolbar
+                        }}
+                        startAccessor="start"
+                        endAccessor="end"
+                        popup
+                        style={{ height: '80vh' }}
+                    />
+                </div>
+            </div>
+
+            {/* Event Detail Overlay (Glassmorphic Slide-in) */}
+            {selectedEvent && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-end p-6 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="absolute inset-0" onClick={() => setSelectedEvent(null)}></div>
+                    <div className="relative w-full max-w-md h-full bg-slate-900 border border-slate-800 rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col animate-in slide-in-from-right-10 duration-500">
+                        
+                        {/* Detail Header */}
+                        <div className={`p-8 bg-gradient-to-br ${getStatusCfg(selectedEvent.status).bg} relative overflow-hidden`}>
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                            <div className="relative z-10 flex justify-between items-start">
+                                <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl border border-white/30 text-2xl">
+                                    {getStatusCfg(selectedEvent.status).icon}
                                 </div>
-                            );
-                        })}
+                                <button onClick={() => setSelectedEvent(null)} className="p-2 bg-black/20 hover:bg-black/40 rounded-xl text-white transition-all">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="relative z-10 mt-6">
+                                <span className="text-[10px] font-black text-white/70 uppercase tracking-[0.2em]">Transaction Details</span>
+                                <h3 className="text-2xl font-black text-white mt-1 leading-tight">{selectedEvent.title?.replace(/^[^\s]+\s/, '')}</h3>
+                                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full border border-white/30">
+                                    <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                                    <span className="text-[10px] font-black text-white uppercase tracking-wider">{getStatusCfg(selectedEvent.status).label}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Detail Content */}
+                        <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+                            
+                            {/* Primary Info Cards */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-slate-800/40 border border-slate-700/50 p-5 rounded-3xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Payout Value</p>
+                                    <p className="text-xl font-black text-emerald-400">{formatCurrency(selectedEvent.amount)}</p>
+                                </div>
+                                <div className="bg-slate-800/40 border border-slate-700/50 p-5 rounded-3xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Scheduled Date</p>
+                                    <p className="text-xl font-black text-white">{moment(selectedEvent.start).format('MMM D, YYYY')}</p>
+                                </div>
+                            </div>
+
+                            {/* Additional Metadata */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between p-4 bg-slate-800/20 rounded-2xl border border-slate-700/30">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-400"><CreditCard className="w-4 h-4" /></div>
+                                        <span className="text-xs font-bold text-slate-400">Supplier Recipient</span>
+                                    </div>
+                                    <span className="text-xs font-black text-slate-200">{selectedEvent.supplier_email}</span>
+                                </div>
+
+                                {selectedEvent.status !== 'Paid' && (
+                                    <div className={`flex items-center gap-4 p-5 rounded-[2rem] border ${
+                                        daysUntilPayout === 0 ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' :
+                                        daysUntilPayout <= 3 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
+                                        'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                                    }`}>
+                                        <div className="p-3 bg-white/10 rounded-2xl"><Clock className="w-6 h-6" /></div>
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Payout Counter</p>
+                                            <p className="text-lg font-black">{daysUntilPayout === 0 ? 'Payable Today' : `${daysUntilPayout} Business Days Left`}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Advanced Actions */}
+                            <div className="pt-4 space-y-4">
+                                {isFinance && selectedEvent.status !== 'Paid' && (
+                                    <div className="space-y-3">
+                                        <button onClick={handleApproveTransfer} disabled={isUpdating}
+                                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all shadow-[0_10px_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2 group">
+                                            <CheckCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                            {isUpdating ? 'Executing Payment...' : 'Authorize Disbursement'}
+                                        </button>
+                                        <div className="flex gap-2">
+                                            <div className="flex-1 bg-slate-800/80 rounded-2xl border border-slate-700 p-1 flex items-center pr-3">
+                                                <input type="date" value={holdDate} onChange={(e) => setHoldDate(e.target.value)}
+                                                    className="bg-transparent border-0 text-white text-xs font-bold w-full p-2 outline-none" />
+                                            </div>
+                                            <button onClick={handleHoldPayment} disabled={isUpdating || !holdDate}
+                                                className="px-6 py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-2xl transition-all">
+                                                Hold
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {!isFinance && selectedEvent.status !== 'Paid' && (
+                                    <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-[2.5rem] p-6 space-y-6">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Zap className="w-4 h-4 text-indigo-400" />
+                                                <span className="text-xs font-black text-white uppercase tracking-widest">Liquidity Accelerator</span>
+                                            </div>
+                                            <span className="text-xs font-black text-indigo-400 bg-indigo-500/20 px-3 py-1 rounded-full">{discountRate.toFixed(1)}% Rate</span>
+                                        </div>
+                                        
+                                        <input type="range" min="1" max="5" step="0.1" value={discountRate}
+                                            onChange={(e) => setDiscountRate(Number(e.target.value))}
+                                            className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-indigo-500" />
+                                        
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between text-xs font-bold text-slate-500"><span>Gross Amount</span><span>{formatCurrency(selectedEvent.amount)}</span></div>
+                                            <div className="flex justify-between text-xs font-bold text-rose-500"><span>Service Fee</span><span>-{formatCurrency(discountAmount)}</span></div>
+                                            <div className="h-px bg-slate-700/50 my-4"></div>
+                                            <div className="flex justify-between items-end">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">You Receive Instantly</span>
+                                                <span className="text-3xl font-black text-emerald-400">{formatCurrency(selectedEvent.amount - discountAmount)}</span>
+                                            </div>
+                                        </div>
+
+                                        <button onClick={handleAcceptEarlyPayout} disabled={isUpdating}
+                                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl transition-all shadow-[0_10px_20px_rgba(79,70,229,0.3)] flex items-center justify-center gap-2">
+                                            <Download className="w-5 h-5" />
+                                            {isUpdating ? 'Accelerating...' : 'Withdraw Funds Now'}
+                                        </button>
+                                    </div>
+                                )}
+
+                                {selectedEvent.status === 'Paid' && (
+                                    <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-3xl p-6 text-center">
+                                        <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                                        </div>
+                                        <p className="text-xl font-black text-white">Payment Completed</p>
+                                        <p className="text-xs font-bold text-slate-500 mt-2 line-clamp-1">Ref: {selectedEvent.bank_transaction_ref || 'TRX-998234-AX'}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
-
-            {/* ── Calendar + Detail Panel ────────────────────────── */}
-            <div className={`flex gap-4 ${selectedEvent ? 'items-start' : ''}`}>
-
-                {/* Calendar */}
-                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-                    <style>{`
-                        .rbc-calendar { min-height: 580px; font-family: inherit; background: transparent; }
-                        .rbc-toolbar { padding: 12px 16px; border-bottom: 1px solid #334155; }
-                        .rbc-toolbar button { color: #94a3b8; border-color: #475569; background: transparent; border-radius: 8px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
-                        .rbc-toolbar button:hover, .rbc-toolbar button.rbc-active { background: #334155 !important; color: white !important; border-color: #475569 !important; }
-                        .rbc-toolbar-label { color: white; font-weight: 800; font-size: 15px; }
-                        .rbc-header { padding: 8px; background: #1e293b; border-color: #334155 !important; color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-                        .rbc-month-view, .rbc-time-view, .rbc-day-bg, .rbc-month-row { border-color: #334155 !important; }
-                        .rbc-today { background-color: #1e3a8a !important; }
-                        .rbc-off-range-bg { background-color: #0f172a !important; }
-                        .rbc-event { border-radius: 6px !important; border: none !important; }
-                        .rbc-event:focus { outline: 2px solid #6366f1; }
-                        .rbc-show-more { color: #818cf8; font-size: 11px; font-weight: 700; }
-                        .rbc-date-cell { color: #cbd5e1; font-size: 12px; padding: 4px 6px; }
-                        .rbc-date-cell.rbc-now { color: #60a5fa; font-weight: 800; }
-                    `}</style>
-
-                    {loading && (
-                        <div className="text-center text-slate-400 py-6 text-sm animate-pulse">Loading Calendar…</div>
-                    )}
-
-                    {!loading && events.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-16 text-slate-500">
-                            <CalendarIcon className="w-12 h-12 mb-3 opacity-30" />
-                            <p className="font-bold text-sm">No scheduled payments yet</p>
-                            <p className="text-xs mt-1">Payouts appear here after Finance stages them</p>
-                        </div>
-                    )}
-
-                    {!loading && events.length > 0 && (
-                        <CalComponent
-                            localizer={localizer}
-                            events={events}
-                            view={view}
-                            onView={setView}
-                            date={currentDate}
-                            onNavigate={setCurrentDate}
-                            onEventDrop={isFinance ? onEventDrop : undefined}
-                            onEventResize={isFinance ? onEventResize : undefined}
-                            resizable={isFinance}
-                            onSelectEvent={handleSelectEvent}
-                            eventPropGetter={eventStyleGetter}
-                            startAccessor="start"
-                            endAccessor="end"
-                            popup
-                            style={{ height: '70vh' }}
-                            tooltipAccessor={(e) => `${e.title?.replace(/^[^\s]+\s/, '')} — ${formatCurrency(e.amount)} — ${e.status}`}
-                        />
-                    )}
-                </div>
-
-                {/* Event Detail Panel */}
-                {selectedEvent && (
-                    <div className="w-80 shrink-0 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-right-4 duration-200">
-                        {/* Header */}
-                        <div className={`p-4 border-b border-slate-800 flex justify-between items-start`}
-                            style={{ background: getStatusCfg(selectedEvent.status).bg + '22' }}>
-                            <div>
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusCfg(selectedEvent.status).light} mb-2`}>
-                                    {getStatusCfg(selectedEvent.status).label}
-                                </span>
-                                <h3 className="font-black text-white text-sm leading-tight">{selectedEvent.title?.replace(/^[^\s]+\s/, '')}</h3>
-                            </div>
-                            <button onClick={() => setSelectedEvent(null)} className="text-slate-400 hover:text-white transition-colors ml-2 shrink-0">
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-
-                        {/* Details */}
-                        <div className="p-4 space-y-3 text-xs">
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-500 font-medium flex items-center gap-1"><DollarSign className="w-3 h-3" /> Amount</span>
-                                <span className="text-xl font-black text-emerald-400">{formatCurrency(selectedEvent.amount)}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-500 font-medium flex items-center gap-1"><CalendarIcon className="w-3 h-3" /> Payout Date</span>
-                                <span className="text-slate-200 font-bold">{moment(selectedEvent.start).format('MMM D, YYYY')}</span>
-                            </div>
-                            {selectedEvent.supplier_email && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-slate-500 font-medium">Supplier</span>
-                                    <span className="text-slate-300 font-semibold truncate max-w-[160px]">{selectedEvent.supplier_email}</span>
-                                </div>
-                            )}
-                            {/* Countdown reminder */}
-                            {selectedEvent.status !== 'Paid' && (
-                                <div className={`flex items-center gap-2 rounded-xl p-3 border ${
-                                    daysUntilPayout === 0 ? 'bg-red-900/30 border-red-700/50 text-red-300' :
-                                    daysUntilPayout <= 3 ? 'bg-amber-900/30 border-amber-700/50 text-amber-300' :
-                                    'bg-blue-900/20 border-blue-700/30 text-blue-300'
-                                }`}>
-                                    <AlertCircle className="w-4 h-4 shrink-0" />
-                                    <span className="font-bold">
-                                        {daysUntilPayout === 0 ? '🔴 Due Today' : `⏰ ${daysUntilPayout} day${daysUntilPayout !== 1 ? 's' : ''} until payout`}
-                                    </span>
-                                </div>
-                            )}
-                            {selectedEvent.hold_until_date && (
-                                <div className="bg-amber-900/20 border border-amber-700/40 rounded-xl p-3 text-amber-300 text-xs font-semibold">
-                                    ⏸️ Held until: {moment(selectedEvent.hold_until_date).format('MMM D, YYYY')}
-                                </div>
-                            )}
-                            {selectedEvent.bank_transaction_ref && (
-                                <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-3 text-emerald-300 text-xs">
-                                    <span className="font-bold block mb-0.5">Transaction Reference</span>
-                                    <span className="font-mono">{selectedEvent.bank_transaction_ref}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="p-4 border-t border-slate-800 space-y-2">
-                            {/* Finance actions */}
-                            {isFinance && selectedEvent.status !== 'Paid' && (
-                                <>
-                                    <button onClick={handleApproveTransfer} disabled={isUpdating}
-                                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50">
-                                        <CheckCircle2 className="w-4 h-4" />
-                                        {isUpdating ? 'Processing…' : 'Approve Transfer'}
-                                    </button>
-                                    <div className="flex gap-2">
-                                        <input type="date" value={holdDate} onChange={(e) => setHoldDate(e.target.value)}
-                                            className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-slate-200 outline-none focus:ring-1 focus:ring-amber-500" />
-                                        <button onClick={handleHoldPayment} disabled={isUpdating || !holdDate}
-                                            className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50">
-                                            Hold
-                                        </button>
-                                    </div>
-                                    <p className="text-[10px] text-slate-500 text-center">💡 Drag event on calendar to reschedule</p>
-                                </>
-                            )}
-
-                            {/* Supplier actions */}
-                            {!isFinance && selectedEvent.status !== 'Paid' && (
-                                <>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Early Payout Rate: {discountRate.toFixed(1)}%</label>
-                                        <input type="range" min="1" max="5" step="0.1" value={discountRate}
-                                            onChange={(e) => setDiscountRate(Number(e.target.value))}
-                                            className="w-full h-1.5 accent-indigo-500 cursor-pointer" />
-                                        <div className="bg-slate-800 rounded-xl p-3 text-xs space-y-1 border border-slate-700">
-                                            <div className="flex justify-between"><span className="text-slate-400">Original</span><span className="font-bold text-slate-200">{formatCurrency(selectedEvent.amount)}</span></div>
-                                            <div className="flex justify-between"><span className="text-rose-400">Fee ({discountRate}%)</span><span className="font-bold text-rose-400">−{formatCurrency(discountAmount)}</span></div>
-                                            <div className="flex justify-between border-t border-slate-700 pt-1 mt-1"><span className="font-bold text-slate-300">You Receive</span><span className="font-black text-emerald-400 text-base">{formatCurrency(selectedEvent.amount - discountAmount)}</span></div>
-                                        </div>
-                                        <button onClick={handleAcceptEarlyPayout} disabled={isUpdating}
-                                            className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5">
-                                            <Clock className="w-3.5 h-3.5" />
-                                            {isUpdating ? 'Processing…' : 'Accept Early Payout'}
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-
-                            {selectedEvent.status === 'Paid' && (
-                                <div className="text-center text-emerald-400 font-bold text-sm py-2">
-                                    💰 Payment Disbursed
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* ── Legend ────────────────────────────────────────── */}
-            <div className="flex flex-wrap gap-3 text-xs justify-end">
-                {Object.entries(STATUS_CONFIG).map(([k, cfg]) => (
-                    <span key={k} className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-sm inline-block" style={{ background: cfg.bg }} />
-                        <span className="text-slate-400">{cfg.label}</span>
-                    </span>
-                ))}
-            </div>
         </div>
     );
 }
