@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User, FileText, Clock, DollarSign, Search, Download, CreditCard, Calendar, Settings, Shield, Sliders, Zap, AlertTriangle, Briefcase, ChevronRight, Activity, Percent, ArrowRight, ShieldCheck, ShieldAlert, Target } from 'lucide-react';
+import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User, FileText, Clock, DollarSign, Search, Download, CreditCard, Calendar, Settings, Shield, Sliders, Zap, AlertTriangle, Briefcase, ChevronRight, Activity, Percent, ArrowRight, ShieldCheck, ShieldAlert, Target, TrendingUp, X } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import AppNotifier from './AppNotifier';
 import NotificationBell from './NotificationBell';
@@ -191,7 +191,10 @@ export default function Portal({ user, onLogout }) {
                             <BarChart2 className="w-4 h-4 shrink-0" /> Analytics
                         </button>
                         <button type="button" onClick={() => setActiveTab('payouts')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'payouts' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
-                            <CreditCard className="w-4 h-4 shrink-0" /> Payout Calendar
+                            <Calendar className="w-4 h-4 shrink-0" /> Payout Calendar
+                        </button>
+                        <button type="button" onClick={() => setActiveTab('treasury')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'treasury' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
+                            <Zap className="w-4 h-4 shrink-0" /> Treasury ROI
                         </button>
                     </div>
                 </div>
@@ -201,7 +204,8 @@ export default function Portal({ user, onLogout }) {
                     {activeTab === 'procurement' && <ProcurementPortal user={user} />}
                     {activeTab === 'finance' && <FinancePortal user={user} />}
                     {activeTab === 'analytics' && <AnalyticsPortal />}
-                    {activeTab === 'payouts' && <PayoutCalendar />}
+                    {activeTab === 'payouts' && <PayoutCalendar user={user} />}
+                    {activeTab === 'treasury' && <TreasuryDashboard />}
                 </div>
             </div>
 
@@ -749,11 +753,137 @@ function FinancePortal({ user }) {
                         <option value="Pending">Needs Review / Pending</option>
                         <option value="Approved">Approved / Payouts</option>
                     </select>
-                    <button onClick={() => setShowToleranceModal(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-900 dark:bg-blue-600 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-black dark:hover:bg-blue-700 transition-colors">
-                        <Target className="w-4 h-4" /> Smart Tolerance Engine
-                    </button>
-                </div>
             </div>
+
+            {/* Smart Tolerance Modal */}
+            {showToleranceModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/20"><Target className="w-6 h-6" /></div>
+                                <div>
+                                    <h3 className="text-xl font-black text-slate-800 dark:text-white">Smart Tolerance Rules</h3>
+                                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Autonomous Reconciliation Config</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowToleranceModal(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400"><X className="w-5 h-5" /></button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-10">
+                            <div className="space-y-6">
+                                <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest border-l-4 border-blue-600 pl-3">Active Rules</h4>
+                                
+                                <div className="space-y-3">
+                                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 flex justify-between items-center group hover:border-blue-500/50 transition-all">
+                                        <div>
+                                            <p className="text-xs font-black text-slate-800 dark:text-white">Global Tax Rounding</p>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase">Threshold: $1.00 Absolute</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded uppercase">Active</span>
+                                            <button className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"><Settings className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 flex justify-between items-center group hover:border-blue-500/50 transition-all">
+                                        <div>
+                                            <p className="text-xs font-black text-slate-800 dark:text-white">Freight Fluctuation</p>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase">Threshold: 2.0% Percentage</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded uppercase">Active</span>
+                                            <button className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"><Settings className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 flex justify-between items-center group hover:border-red-500/50 transition-all">
+                                        <div>
+                                            <p className="text-xs font-black text-slate-800 dark:text-white">Unit Price Strict Match</p>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase">Threshold: $0.00 Absolute</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-500 text-[10px] font-bold rounded uppercase">Strict</span>
+                                            <button className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"><Settings className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 bg-blue-600 rounded-3xl text-white shadow-xl shadow-blue-500/20">
+                                    <h5 className="font-black text-sm mb-2 flex items-center gap-2">
+                                        <Zap className="w-4 h-4" /> AI Dynamic Tiering
+                                    </h5>
+                                    <p className="text-xs text-blue-100 leading-relaxed">Strategic Partners (Tier 1) automatically receive <strong>2x</strong> tolerance thresholds based on a 99% accuracy rating over 6 months.</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest border-l-4 border-purple-600 pl-3">"Shadow Mode" ROI Simulator</h4>
+                                <div className="p-6 bg-slate-50 dark:bg-slate-800/80 rounded-3xl border border-slate-200 dark:border-slate-700 space-y-4">
+                                    <p className="text-xs text-slate-500 leading-relaxed">Test a new rule against the last 100 discrepancies to see the financial and operational impact before deploying.</p>
+                                    
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Category</label>
+                                            <select className="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 p-2 rounded-xl text-xs outline-none">
+                                                <option>Tax Rounding</option>
+                                                <option>Freight</option>
+                                                <option>General Variance</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">Threshold</label>
+                                            <input type="text" placeholder="$5.00" className="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 p-2 rounded-xl text-xs outline-none" />
+                                        </div>
+                                    </div>
+
+                                    <button 
+                                        onClick={async () => {
+                                            setIsRunningShadowMode(true);
+                                            try {
+                                                const res = await axios.post('https://nestle-finance-command-production.up.railway.app/api/tolerance/simulate', {
+                                                    category: 'General Variance',
+                                                    thresholdValue: 5.00
+                                                });
+                                                setShadowModeResult(res.data.results);
+                                            } catch (e) { alert("Simulation failed."); }
+                                            finally { setIsRunningShadowMode(false); }
+                                        }}
+                                        disabled={isRunningShadowMode}
+                                        className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-black rounded-2xl transition-all shadow-lg shadow-purple-500/20"
+                                    >
+                                        {isRunningShadowMode ? 'Processing History...' : 'Run Simulation'}
+                                    </button>
+
+                                    {shadowModeResult && (
+                                        <div className="mt-6 p-4 bg-slate-900 rounded-2xl space-y-3 animate-in zoom-in-95 duration-300">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Impacted Records</span>
+                                                <span className="text-sm font-black text-white">{shadowModeResult.impactedCount} invoices</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Manual Hours Saved</span>
+                                                <span className="text-sm font-black text-blue-400">{shadowModeResult.hoursSaved} hrs</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Projected Financial Leakage</span>
+                                                <span className="text-sm font-black text-rose-500">-{formatCurrency(shadowModeResult.leakage)}</span>
+                                            </div>
+                                            <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
+                                                <span className="text-[10px] font-bold text-emerald-500 uppercase">Net Monthly ROI</span>
+                                                <span className="text-lg font-black text-emerald-400">+{formatCurrency(shadowModeResult.netROI)}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-6 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+                            <button onClick={() => setShowToleranceModal(false)} className="px-6 py-2.5 text-slate-500 hover:text-slate-800 font-bold text-sm transition-colors">Discard</button>
+                            <button className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl transition-all shadow-lg shadow-blue-500/20">Commit Changes</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden overflow-x-auto">
                 {loading ? (
@@ -1582,3 +1712,96 @@ function PayoutCalendar() {
         </div>
     );
 }
+
+function TreasuryDashboard() {
+    const [stats, setStats] = useState({ totalDeployed: 0, yieldCaptured: 0, cap: 5000000 });
+    const [payouts, setPayouts] = useState([]);
+
+    useEffect(() => {
+        const fetchTreasuryData = async () => {
+            const { data: ps } = await supabase.from('payout_schedules').select('*').eq('early_payout_requested', true);
+            const { data: capSetting } = await supabase.from('treasury_settings').select('value_numeric').eq('key', 'monthly_early_payout_cap').single();
+            
+            const deployed = ps?.reduce((sum, p) => sum + Number(p.final_amount), 0) || 0;
+            const yieldVal = ps?.reduce((sum, p) => sum + (Number(p.final_amount) / (1 - Number(p.discount_applied || 0)) - Number(p.final_amount)), 0) || 0;
+            
+            setStats({ totalDeployed: deployed, yieldCaptured: yieldVal, cap: capSetting?.value_numeric || 5000000 });
+            setPayouts(ps || []);
+        };
+        fetchTreasuryData();
+    }, []);
+
+    return (
+        <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h2 className="text-3xl font-black text-slate-800 dark:text-white">Treasury Yield Dashboard</h2>
+                    <p className="text-slate-500 dark:text-slate-400">Monitoring ROI from the Dynamic Discounting program.</p>
+                </div>
+                <div className="bg-indigo-600 px-4 py-2 rounded-xl text-white font-bold shadow-lg shadow-indigo-500/20 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4" /> Capital Safe
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Total Early Liquidity Deployed</p>
+                    <p className="text-4xl font-black text-slate-800 dark:text-white">{formatCurrency(stats.totalDeployed)}</p>
+                    <div className="mt-4 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500" style={{ width: `${Math.min(100, (stats.totalDeployed / stats.cap) * 100)}%` }}></div>
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-500 mt-2 uppercase tracking-widest">Cap: {formatCurrency(stats.cap)} / Month</p>
+                </div>
+                
+                <div className="bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-500/20 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700"></div>
+                    <p className="text-xs font-bold text-indigo-100 uppercase tracking-widest mb-2 relative z-10">Net Discount Revenue (ROI)</p>
+                    <p className="text-4xl font-black text-white relative z-10">{formatCurrency(stats.yieldCaptured)}</p>
+                    <div className="mt-4 inline-flex items-center gap-1.5 px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold text-white relative z-10">
+                        <TrendingUp className="w-3 h-3" /> +12.4% vs last month
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Active Discount Agreements</p>
+                    <p className="text-4xl font-black text-slate-800 dark:text-white">{payouts.length}</p>
+                    <p className="text-[10px] font-bold text-emerald-500 mt-2 uppercase tracking-widest">Avg. Discount: 2.1%</p>
+                </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                    <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Recently Captured Yields</h3>
+                </div>
+                <table className="w-full text-left text-sm">
+                    <thead>
+                        <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">
+                            <th className="p-4">Supplier</th>
+                            <th className="p-4">Original Value</th>
+                            <th className="p-4">Net Payout</th>
+                            <th className="p-4 text-emerald-500">Yield Capture</th>
+                            <th className="p-4">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {payouts.map(p => {
+                            const original = Number(p.final_amount) / (1 - Number(p.discount_applied || 0));
+                            const yieldVal = original - Number(p.final_amount);
+                            return (
+                                <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                                    <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{p.vendor_name}</td>
+                                    <td className="p-4 text-slate-500">{formatCurrency(original)}</td>
+                                    <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{formatCurrency(p.final_amount)}</td>
+                                    <td className="p-4 font-black text-emerald-500">+{formatCurrency(yieldVal)}</td>
+                                    <td className="p-4 text-[10px] font-mono text-slate-400">{new Date(p.early_payout_accepted_at).toLocaleDateString()}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+function AnalyticsPortal() { return <div className="p-8 text-center font-bold text-slate-500">Analytics Engine Offline for Maintenance</div>; }

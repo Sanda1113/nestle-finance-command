@@ -45,6 +45,15 @@ const CustomToolbar = (toolbar) => {
     const goToNext = () => toolbar.onNavigate('NEXT');
     const goToToday = () => toolbar.onNavigate('TODAY');
 
+    // MVP 6: Calculate Daily "Cash Burn" for current view
+    const dailyBurn = useMemo(() => {
+        const events = toolbar.events || [];
+        const todayStr = moment().format('YYYY-MM-DD');
+        const total = events.filter(e => moment(e.start).format('YYYY-MM-DD') === todayStr && e.status !== 'Paid')
+                          .reduce((s, e) => s + (e.amount || 0), 0);
+        return total;
+    }, [toolbar.events]);
+
     return (
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 px-6 py-5 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800/50">
             <div className="flex items-center gap-3">
@@ -54,6 +63,21 @@ const CustomToolbar = (toolbar) => {
                 <div>
                     <h2 className="text-xl font-black text-white tracking-tight">{toolbar.label}</h2>
                     <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Treasury & Liquidity Hub</p>
+                </div>
+            </div>
+
+            <div className="hidden lg:flex items-center gap-4 px-6 border-x border-slate-800/50">
+                <div>
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Today's Cash Burn</p>
+                    <p className="text-lg font-black text-rose-500">{formatCurrency(dailyBurn)}</p>
+                </div>
+                <div className="w-px h-8 bg-slate-800"></div>
+                <div>
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">SLA Health</p>
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <span className="text-xs font-black text-emerald-400">98.2%</span>
+                    </div>
                 </div>
             </div>
 
@@ -105,8 +129,9 @@ export default function DigitalCalendar({ userRole, userEmail }) {
 
     const eventStyleGetter = (event) => {
         const cfg = getStatusCfg(event.status);
+        const isOverdue = moment(event.start).isBefore(moment(), 'day') && event.status !== 'Paid';
         return {
-            className: `bg-gradient-to-br ${cfg.bg} border-0 rounded-lg shadow-lg ${cfg.glow} transition-transform hover:scale-[1.02] active:scale-95`,
+            className: `bg-gradient-to-br ${cfg.bg} border-0 rounded-lg shadow-lg ${cfg.glow} transition-transform hover:scale-[1.02] active:scale-95 ${isOverdue ? 'ring-2 ring-rose-500 animate-pulse' : ''}`,
             style: {
                 fontSize: '11px',
                 fontWeight: '800',
@@ -114,7 +139,8 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                 color: 'white',
                 minHeight: '24px',
                 display: 'flex',
-                alignItems: 'center'
+                alignItems: 'center',
+                border: isOverdue ? '2px solid #f43f5e' : 'none'
             }
         };
     };
@@ -216,14 +242,18 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         if (!selectedEvent) return;
         setIsUpdating(true);
         try {
-            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${selectedEvent.id}/discount`, {
-                early_date: new Date().toISOString(),
-                new_amount: selectedEvent.amount - discountAmount
+            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/payouts/${selectedEvent.id}/discount`, {
+                requestedDate: new Date().toISOString(),
+                discountRate: discountRate / 100,
+                finalAmount: selectedEvent.amount - discountAmount
             });
             await fetchEvents();
             setSelectedEvent(null);
-            alert('⚡ Early payout requested! Finance has been notified.');
-        } catch { alert('Failed to request early payout'); }
+            alert('⚡ Liquidity successfully accelerated! Your funds are being transferred.');
+        } catch (error) { 
+            const msg = error.response?.data?.error || 'Failed to request early payout';
+            alert('❌ ' + msg); 
+        }
         finally { setIsUpdating(false); }
     };
 

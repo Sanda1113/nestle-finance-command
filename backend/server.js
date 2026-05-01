@@ -417,33 +417,51 @@ app.post('/api/save-reconciliation', async (req, res) => {
             let willAutoApprove = false;
             let ruleName = null;
 
-            // 1. Fetch vendor trust score (simulate Tier 1 like frontend)
-            const isTier1 = invoiceData.vendorName && invoiceData.vendorName.length % 3 === 0;
+            // 1. Fetch vendor trust profile
+            const { data: trustProfile } = await supabase
+                .from('vendor_trust_profiles')
+                .select('*')
+                .eq('supplier_email', supplierEmail)
+                .single();
+            
+            const trustMultiplier = trustProfile?.trust_tier === 1 ? 2.0 : (trustProfile?.trust_tier === 3 ? 0.0 : 1.0);
+            const vendorTierLabel = trustProfile?.trust_tier === 1 ? 'Strategic Partner (Tier 1)' : (trustProfile?.trust_tier === 3 ? 'High Risk (Tier 3)' : 'Standard (Tier 2)');
 
             // 2. Fetch tolerance rules from DB
             const { data: rules } = await supabase.from('tolerance_rules').select('*').eq('is_active', true);
-            let taxRule = rules?.find(r => r.rule_type === 'tax_rounding') || { threshold_value: 1.00 };
-            let currencyRule = rules?.find(r => r.rule_type === 'currency_decimal') || { threshold_value: 0.10 };
-            let priceRule = rules?.find(r => r.rule_type === 'minor_variance') || { threshold_value: 0.005 };
+            
+            // Rules applied based on category
+            const taxRule = rules?.find(r => r.category === 'Tax') || { threshold_value: 1.00 };
+            const freightRule = rules?.find(r => r.category === 'Freight') || { threshold_value: 0.02, rule_type: 'percentage' };
+            const unitPriceRule = rules?.find(r => r.category === 'Unit Price') || { threshold_value: 0.00 };
 
-            if (delta < taxRule.threshold_value && Math.abs(invTax - poTax) > 0) {
-                classification = 'tax rounding error';
-                willAutoApprove = isTier1;
-                ruleName = 'Global Tax Rounding';
-            } else if (delta < currencyRule.threshold_value) {
-                classification = 'currency decimal mismatch';
-                willAutoApprove = isTier1;
-                ruleName = 'Currency Decimal Tolerance';
-            } else if (percentageDelta <= priceRule.threshold_value) {
-                classification = 'minor price variance';
-                willAutoApprove = isTier1;
-                ruleName = 'Minor Price Variance';
-            } else if (invQty < poQty) {
-                classification = 'missing line item';
-            } else if (percentageDelta > priceRule.threshold_value) {
-                classification = 'significant price mismatch';
+            // Logic for classification and auto-approval
+            const taxDelta = Math.abs(invTax - poTax);
+            
+            if (taxDelta > 0 && delta <= taxRule.threshold_value * trustMultiplier) {
+                classification = 'Tax Rounding Difference';
+                willAutoApprove = true;
+                ruleName = 'Tax Tolerance Rule';
+            } else if (percentageDelta <= (freightRule.rule_type === 'percentage' ? freightRule.threshold_value : 0.02) * trustMultiplier) {
+                classification = 'Freight Fluctuation';
+                willAutoApprove = true;
+                ruleName = 'Freight Variance Rule';
+            } else if (delta === 0) {
+                classification = 'Perfect Match';
+                willAutoApprove = true;
             } else {
-                classification = 'unknown variance';
+                classification = 'Price/Quantity Discrepancy';
+                willAutoApprove = delta <= 0.05 * trustMultiplier; // Minimal catch-all for pennies
+                ruleName = 'Minor Variance Catch-all';
+            }
+
+            // Strict $0.00 for Unit Price discrepancies if flagged (simulation)
+            if (unitPriceRule.threshold_value === 0 && delta > 0 && !classification.includes('Tax') && !classification.includes('Freight')) {
+                // If it's a core line item price mismatch, we might override auto-approval if trust is low
+                if (trustProfile?.trust_tier === 3) {
+                    willAutoApprove = false;
+                    classification = 'Strict Unit Price Variance (High Risk Vendor)';
+                }
             }
 
             if (willAutoApprove) {
@@ -1377,42 +1395,144 @@ app.patch('/api/payouts/:id/paid', async (req, res) => {
     }
 });
 
-app.post('/api/payouts/:id/accept-early-payment', async (req, res) => {
-    const { id } = req.params;
-    const { discountAmount, earlyPaymentAmount, discountRate } = req.body;
+// ==========================================
+// 📊 MVP 5: SHADOW MODE ROI SIMULATOR
+// ==========================================
+app.post('/api/tolerance/simulate', async (req, res) => {
+    const { ruleType, thresholdValue, category } = req.body;
     try {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        console.log(`📊 Simulating Shadow Mode: ${category} rule at ${thresholdValue}`);
         
-        const { data, error } = await supabase.from('payout_schedule')
+        // Fetch last 100 discrepancies
+        const { data: historical } = await supabase
+            .from('reconciliations')
+            .select('*')
+            .not('match_status', 'eq', 'Approved')
+            .limit(100);
+
+        if (!historical) return res.json({ hoursSaved: 0, leakage: 0, impactedCount: 0 });
+
+        let leakage = 0;
+        let impactedCount = 0;
+        const LABOR_COST_PER_HOUR = 45; 
+        const TIME_PER_REVIEW_MINS = 15; 
+
+        historical.forEach(recon => {
+            const invTotal = Number(recon.invoice_total) || 0;
+            const poTotal = Number(recon.po_total) || 0;
+            const delta = Math.abs(invTotal - poTotal);
+            const percentageDelta = poTotal > 0 ? delta / poTotal : 0;
+            
+            let wouldApprove = false;
+            if (category === 'Tax' && delta <= thresholdValue) wouldApprove = true;
+            else if (category === 'Freight' && percentageDelta <= thresholdValue) wouldApprove = true;
+            else if (delta <= thresholdValue) wouldApprove = true;
+
+            if (wouldApprove) {
+                leakage += delta;
+                impactedCount++;
+            }
+        });
+
+        const hoursSaved = (impactedCount * TIME_PER_REVIEW_MINS) / 60;
+        const totalLaborSavings = hoursSaved * LABOR_COST_PER_HOUR;
+        const netROI = totalLaborSavings - leakage;
+
+        res.json({
+            success: true,
+            results: {
+                hoursSaved: hoursSaved.toFixed(1),
+                leakage: leakage.toFixed(2),
+                impactedCount,
+                laborSavings: totalLaborSavings.toFixed(2),
+                netROI: netROI.toFixed(2)
+            }
+        });
+    } catch (error) {
+        logError('Shadow Mode Simulation', error);
+        res.status(500).json({ error: 'Simulation failed' });
+    }
+});
+
+// ==========================================
+// 💸 MVP 7: DYNAMIC DISCOUNTING ENGINE
+// ==========================================
+app.patch('/api/payouts/:id/discount', async (req, res) => {
+    const { id } = req.params;
+    const { requestedDate, discountRate, finalAmount } = req.body;
+    try {
+        console.log(`💸 Dynamic Discount Accepted: Payout ${id} for ${finalAmount} on ${requestedDate}`);
+
+        // 1. Check Capital Deployment Cap
+        const { data: capSetting } = await supabase
+            .from('treasury_settings')
+            .select('value_numeric')
+            .eq('key', 'monthly_early_payout_cap')
+            .single();
+        
+        const cap = capSetting?.value_numeric || 5000000;
+        
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        const { data: deployed } = await supabase
+            .from('payout_schedules')
+            .select('final_amount')
+            .eq('early_payout_requested', true)
+            .gte('early_payout_accepted_at', startOfMonth.toISOString());
+        
+        const currentTotal = deployed?.reduce((sum, p) => sum + Number(p.final_amount), 0) || 0;
+
+        if (currentTotal + Number(finalAmount) > cap) {
+            return res.status(403).json({ error: 'Monthly capital deployment cap reached. Early payouts suspended.' });
+        }
+
+        const { data: pData, error: updateErr } = await supabase
+            .from('payout_schedules')
             .update({
-                status: 'Early Payment Requested',
-                due_date: tomorrow.toISOString(),
-                early_payment_accepted_at: new Date().toISOString(),
-                early_payment_amount: earlyPaymentAmount,
-                early_payment_discount: discountAmount,
-                early_payment_discount_rate: discountRate
+                scheduled_date: requestedDate,
+                final_amount: finalAmount,
+                discount_applied: Number(discountRate),
+                early_payout_requested: true,
+                early_payout_accepted_at: new Date().toISOString(),
+                status: 'Early Payment Renegotiated'
             })
             .eq('id', id).select().single();
-        if (error) throw error;
-        
-        console.log(`📄 MVP7: Automatically generated Debit Memo PDF for Invoice ${data.invoice_number}`);
-        console.log(`📎 MVP7: Attached Debit Memo to PO ${data.po_number} for Audit Compliance`);
-        
-        // Notify Finance about the updated payout schedule
+
+        if (updateErr) throw updateErr;
+
+        const discountCaptured = (Number(finalAmount) / (1 - Number(discountRate))) - Number(finalAmount);
+
         await supabase.from('notifications').insert([{
             user_role: 'Finance',
-            title: `⚡ Early Payment Requested`,
-            message: `Supplier ${data.supplier_email} accepted early payment for ${data.invoice_number} at ${discountRate}%. New payout date: Tomorrow.`,
-            link: `/finance?filter=payouts`,
+            title: '💰 Yield Captured',
+            message: `Supplier ${pData?.supplier_email || 'partner'} accepted a ${ (Number(discountRate) * 100).toFixed(1) }% discount. $${discountCaptured.toFixed(2)} ROI generated.`,
+            link: '/finance/treasury',
             is_read: false
         }]);
 
-        res.json({ success: true, data });
-    } catch (err) {
-        logError('Accept Early Payment', err);
-        res.status(500).json({ error: 'Failed to accept offer' });
+        res.json({ success: true, message: 'Early payout scheduled and discount applied.', data: pData });
+    } catch (error) {
+        logError('Dynamic Discounting', error);
+        res.status(500).json({ error: 'Discount application failed' });
     }
+});
+
+// Old endpoint wrapper for backward compatibility
+app.post('/api/payouts/:id/accept-early-payment', async (req, res) => {
+    const { id } = req.params;
+    const { discountRate, earlyPaymentAmount } = req.body;
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // Redirect to the new logic
+    req.url = `/api/payouts/${id}/discount`;
+    req.method = 'PATCH';
+    req.body = { 
+        requestedDate: tomorrow.toISOString(), 
+        discountRate: discountRate / 100, 
+        finalAmount: earlyPaymentAmount 
+    };
+    return app._router.handle(req, res);
 });
 
 // Global error handlers
