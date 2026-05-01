@@ -76,6 +76,84 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [isSandboxMode, setIsSandboxMode] = useState(false);
     const [sandboxTutorialStep, setSandboxTutorialStep] = useState(0);
     const [showSandboxTutorial, setShowSandboxTutorial] = useState(false);
+
+    const steps = useMemo(() => [
+        {
+            title: '🛠️ Welcome to Sandbox Mode',
+            body: 'You are now in a safe training environment. Every action you take here is simulated — nothing is sent to Finance, Warehouse, or any backend system. Use this to practice the full workflow risk-free.',
+            tip: '✅ Safe to click anything — no real notifications will be triggered.',
+            targetId: null
+        },
+        {
+            title: '📥 Tab: My Shipments',
+            body: 'This tab shows all your active Purchase Orders (POs). Each card shows the shipment ID, amount, status, creation date, and expected delivery. You can download the official PO PDF and mark a shipment as delivered to the dock.',
+            tip: '📄 "Download PO" button opens the PDF. Once downloaded, it turns green as "✅ PO Downloaded" — but you can still re-download anytime.',
+            targetId: 'tut-tab-inbox',
+            action: () => setMode('inbox')
+        },
+        {
+            title: '📄 Download PO Button',
+            body: 'Click here to access the official document. In Sandbox, this is a simulated PDF export.',
+            tip: 'Highlighting the download button.',
+            targetId: 'tut-pdf-btn',
+            action: () => setMode('inbox')
+        },
+        {
+            title: '🚚 Mark Delivered Button',
+            body: 'Use this to notify Nestlé\'s Warehouse that your truck has arrived at the dock. In Sandbox Mode this is blocked — clicking it shows a training message instead of sending a real notification.',
+            tip: '⚠️ In live mode this triggers a real-time alert to the Warehouse team.',
+            targetId: 'tut-mark-delivered',
+            action: () => setMode('inbox')
+        },
+        {
+            title: '💬 Dispute Chat (Per Shipment)',
+            body: 'Each shipment card has a "💬 Chat" button. This opens a transaction-specific dispute channel between you and the Finance team. Use it when there is a discrepancy or issue with a specific PO/Invoice.',
+            tip: '🔔 Finance gets notified when you send a message here. Use it for specific disputes only.',
+            targetId: 'tut-chat-btn',
+            action: () => setMode('inbox')
+        },
+        {
+            title: '📤 Tab: Step 1 – Submit Quote (BOQ)',
+            body: 'Upload your Bill of Quantities (BOQ) PDF or Excel here. Our AI digitizes it and sends it to the Nestlé Procurement team for review and approval. In Sandbox Mode, the OCR runs but no data is saved.',
+            tip: '📑 After approval, Procurement generates a Purchase Order (PO) that appears in your "My Shipments" tab.',
+            targetId: 'tut-tab-boq',
+            action: () => setMode('boq')
+        },
+        {
+            title: '🔗 Tab: Step 2 – Submit Invoice (3-Way Match)',
+            body: 'Upload your Invoice AND the Nestlé PO here. Our engine runs a 3-Way Match: Invoice ↔ PO ↔ GRN. If amounts match within tolerance, it goes to Finance for final approval. In Sandbox, no data is sent to Finance.',
+            tip: '⚠️ If a discrepancy is detected, Finance is alerted. You can then use the Dispute Chat to resolve it.',
+            targetId: 'tut-tab-match',
+            action: () => setMode('match')
+        },
+        {
+            title: '📜 Tab: Timeline',
+            body: 'This tab shows the complete lifecycle of every transaction — from BOQ submission → PO generation → Invoice match → Warehouse receipt → Payout. Each event has a date/time stamp and status color.',
+            tip: '💰 Once Finance approves and Warehouse confirms goods received, the Payout appears at the bottom of the timeline.',
+            targetId: 'tut-tab-logs',
+            action: () => setMode('logs')
+        },
+        {
+            title: '💸 Tab: Liquidity & Payout Calendar',
+            body: 'This tab shows your scheduled payments on a Google Calendar-style view. Blue = Scheduled, Green = Paid, Yellow = On Hold. Click any event to see details. You can also request early payment at a small discount.',
+            tip: '⚡ Early payment = get paid today, minus a small % fee. Finance is notified automatically.',
+            targetId: 'tut-tab-payouts',
+            action: () => setMode('payouts')
+        },
+        {
+            title: '💬 Floating Chat (Bottom Right)',
+            body: 'The floating chat bubble (bottom-right corner) is a general-purpose Live Chat with the Finance team. Use this for broad questions not tied to a specific transaction — e.g., account questions, onboarding help.',
+            tip: '📌 This is different from the Dispute Chat, which is per-transaction.',
+            targetId: 'tut-floating-chat'
+        },
+        {
+            title: '✅ You\'re Ready!',
+            body: 'You\'ve completed the full Supplier Portal tutorial. In Sandbox Mode you can freely practice any workflow. When you\'re ready for live operations, toggle off Sandbox Mode using the switch in the top navigation bar.',
+            tip: '🟢 Toggle off Sandbox to go live. All actions in live mode affect real Finance and Warehouse systems.',
+            targetId: null
+        }
+    ], [setMode]);
+
     const [showWalkthrough, setShowWalkthrough] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('hasSeenWalkthrough') !== 'true' : false);
     const [showMicroLearning, setShowMicroLearning] = useState(false);
     const [invoiceFile, setInvoiceFile] = useState(null);
@@ -1292,82 +1370,6 @@ export default function SupplierDashboard({ user, onLogout }) {
                 Shows every time sandbox is ON
                 ============================ */}
             {showSandboxTutorial && (() => {
-                const steps = [
-                    {
-                        title: '🛠️ Welcome to Sandbox Mode',
-                        body: 'You are now in a safe training environment. Every action you take here is simulated — nothing is sent to Finance, Warehouse, or any backend system. Use this to practice the full workflow risk-free.',
-                        tip: '✅ Safe to click anything — no real notifications will be triggered.',
-                        targetId: null
-                    },
-                    {
-                        title: '📥 Tab: My Shipments',
-                        body: 'This tab shows all your active Purchase Orders (POs). Each card shows the shipment ID, amount, status, creation date, and expected delivery. You can download the official PO PDF and mark a shipment as delivered to the dock.',
-                        tip: '📄 "Download PO" button opens the PDF. Once downloaded, it turns green as "✅ PO Downloaded" — but you can still re-download anytime.',
-                        targetId: 'tut-tab-inbox',
-                        action: () => setMode('inbox')
-                    },
-                    {
-                        title: '📄 Download PO Button',
-                        body: 'Click here to access the official document. In Sandbox, this is a simulated PDF export.',
-                        tip: 'Highlighting the download button.',
-                        targetId: 'tut-pdf-btn',
-                        action: () => setMode('inbox')
-                    },
-                    {
-                        title: '🚚 Mark Delivered Button',
-                        body: 'Use this to notify Nestlé\'s Warehouse that your truck has arrived at the dock. In Sandbox Mode this is blocked — clicking it shows a training message instead of sending a real notification.',
-                        tip: '⚠️ In live mode this triggers a real-time alert to the Warehouse team.',
-                        targetId: 'tut-mark-delivered',
-                        action: () => setMode('inbox')
-                    },
-                    {
-                        title: '💬 Dispute Chat (Per Shipment)',
-                        body: 'Each shipment card has a "💬 Chat" button. This opens a transaction-specific dispute channel between you and the Finance team. Use it when there is a discrepancy or issue with a specific PO/Invoice.',
-                        tip: '🔔 Finance gets notified when you send a message here. Use it for specific disputes only.',
-                        targetId: 'tut-chat-btn',
-                        action: () => setMode('inbox')
-                    },
-                    {
-                        title: '📤 Tab: Step 1 – Submit Quote (BOQ)',
-                        body: 'Upload your Bill of Quantities (BOQ) PDF or Excel here. Our AI digitizes it and sends it to the Nestlé Procurement team for review and approval. In Sandbox Mode, the OCR runs but no data is saved.',
-                        tip: '📑 After approval, Procurement generates a Purchase Order (PO) that appears in your "My Shipments" tab.',
-                        targetId: 'tut-tab-boq',
-                        action: () => setMode('boq')
-                    },
-                    {
-                        title: '🔗 Tab: Step 2 – Submit Invoice (3-Way Match)',
-                        body: 'Upload your Invoice AND the Nestlé PO here. Our engine runs a 3-Way Match: Invoice ↔ PO ↔ GRN. If amounts match within tolerance, it goes to Finance for final approval. In Sandbox, no data is sent to Finance.',
-                        tip: '⚠️ If a discrepancy is detected, Finance is alerted. You can then use the Dispute Chat to resolve it.',
-                        targetId: 'tut-tab-match',
-                        action: () => setMode('match')
-                    },
-                    {
-                        title: '📜 Tab: Timeline',
-                        body: 'This tab shows the complete lifecycle of every transaction — from BOQ submission → PO generation → Invoice match → Warehouse receipt → Payout. Each event has a date/time stamp and status color.',
-                        tip: '💰 Once Finance approves and Warehouse confirms goods received, the Payout appears at the bottom of the timeline.',
-                        targetId: 'tut-tab-logs',
-                        action: () => setMode('logs')
-                    },
-                    {
-                        title: '💸 Tab: Liquidity & Payout Calendar',
-                        body: 'This tab shows your scheduled payments on a Google Calendar-style view. Blue = Scheduled, Green = Paid, Yellow = On Hold. Click any event to see details. You can also request early payment at a small discount.',
-                        tip: '⚡ Early payment = get paid today, minus a small % fee. Finance is notified automatically.',
-                        targetId: 'tut-tab-payouts',
-                        action: () => setMode('payouts')
-                    },
-                    {
-                        title: '💬 Floating Chat (Bottom Right)',
-                        body: 'The floating chat bubble (bottom-right corner) is a general-purpose Live Chat with the Finance team. Use this for broad questions not tied to a specific transaction — e.g., account questions, onboarding help.',
-                        tip: '📌 This is different from the Dispute Chat, which is per-transaction.',
-                        targetId: 'tut-floating-chat'
-                    },
-                    {
-                        title: '✅ You\'re Ready!',
-                        body: 'You\'ve completed the full Supplier Portal tutorial. In Sandbox Mode you can freely practice any workflow. When you\'re ready for live operations, toggle off Sandbox Mode using the switch in the top navigation bar.',
-                        tip: '🟢 Toggle off Sandbox to go live. All actions in live mode affect real Finance and Warehouse systems.',
-                        targetId: null
-                    }
-                ];
                 const step = steps[sandboxTutorialStep] || steps[0];
                 const isLast = sandboxTutorialStep >= steps.length - 1;
 

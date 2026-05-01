@@ -1450,23 +1450,6 @@ function PayoutCalendar() {
                 <div className="p-12 text-center text-slate-500 font-bold animate-pulse">Loading Payouts...</div>
             ) : (
                 <div className="space-y-8">
-                    {/* KPI Header */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
-                            <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Total Scheduled</p>
-                            <p className="text-4xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(upcoming.reduce((sum, p) => sum + (p.final_amount || p.base_amount || 0), 0))}</p>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
-                            <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Paid Out</p>
-                            <p className="text-4xl font-black text-emerald-500 dark:text-emerald-400">{formatCurrency(past.reduce((sum, p) => sum + (p.final_amount || p.base_amount || 0), 0))}</p>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
-                            <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Early Payment Savings</p>
-                            <p className="text-4xl font-black text-purple-500 dark:text-purple-400">{formatCurrency(past.reduce((sum, p) => sum + ((p.base_amount || 0) - (p.final_amount || 0)), 0))}</p>
-                        </div>
-                    </div>
-
-                    {/* SLA Risk Banner */}
                     <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r shadow-sm">
                         <div className="flex items-start gap-3">
                             <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
@@ -1477,22 +1460,7 @@ function PayoutCalendar() {
                         </div>
                     </div>
 
-                    {/* Cash Burn Calendar */}
-                    <div>
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2"><Calendar className="w-5 h-5" /> Digital Payout Calendar</h3>
-                        <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
-                            {calendarDays.map((day, i) => (
-                                <div key={i} className={`p-4 rounded-xl border ${day.date.toDateString() === today.toDateString() ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md ring-1 ring-blue-500' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm'} ${day.isWeekend ? 'opacity-60' : ''}`}>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <span className="text-xs font-bold text-slate-500 uppercase">{day.dayName}</span>
-                                        <span className={`text-sm font-black ${day.date.toDateString() === today.toDateString() ? 'text-blue-600' : 'text-slate-800 dark:text-slate-200'}`}>{day.dayNum}</span>
-                                    </div>
-                                    <p className="text-xl font-black text-slate-800 dark:text-slate-100">{formatCurrency(day.total)}</p>
-                                    <p className="text-[10px] text-slate-500 mt-1">{day.payouts.length} Invoices</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <DigitalCalendar userRole="Finance" userEmail={user.email} />
 
                     {/* Intelligent Batching Suggestion */}
                     {batchedPayments.length > 0 && (
