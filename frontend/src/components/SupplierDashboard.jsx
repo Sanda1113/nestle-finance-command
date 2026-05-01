@@ -77,6 +77,7 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [sandboxTutorialStep, setSandboxTutorialStep] = useState(0);
     const [showSandboxTutorial, setShowSandboxTutorial] = useState(false);
     const [tooltipPos, setTooltipPos] = useState({ top: null, left: null, placement: 'center' });
+    const [spotlightRect, setSpotlightRect] = useState(null);
     const tooltipRef = useRef(null);
 
     const steps = useMemo(() => [
@@ -268,9 +269,10 @@ export default function SupplierDashboard({ user, onLogout }) {
         }
     ], [setMode]);
 
+    // Elevates the target element above the backdrop — the SVG cutout handles the visual spotlight
     const spotlightClass = (id) => {
         return isSandboxMode && showSandboxTutorial && steps[sandboxTutorialStep]?.targetId === id
-            ? 'ring-4 ring-purple-500 ring-offset-4 ring-offset-slate-900 animate-pulse relative z-[201]'
+            ? 'relative z-[220]'
             : '';
     };
 
@@ -699,36 +701,48 @@ export default function SupplierDashboard({ user, onLogout }) {
         }
     }, [showSandboxTutorial, sandboxTutorialStep, steps]);
 
-    // Smart tooltip positioning — anchors the tutorial box near the target element
+    // Smart tooltip + spotlight positioning
     useEffect(() => {
         if (!showSandboxTutorial) return;
         const targetId = steps[sandboxTutorialStep]?.targetId;
         if (!targetId) {
             setTooltipPos({ top: null, left: null, placement: 'center' });
+            setSpotlightRect(null);
             return;
         }
-        const positionTooltip = () => {
+        const run = () => {
             const el = document.getElementById(targetId);
-            if (!el) { setTooltipPos({ top: null, left: null, placement: 'center' }); return; }
+            if (!el) {
+                setTooltipPos({ top: null, left: null, placement: 'center' });
+                setSpotlightRect(null);
+                return;
+            }
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             setTimeout(() => {
                 const rect = el.getBoundingClientRect();
-                const ttW = 360, ttH = 260;
+                const PAD = 8;
+                setSpotlightRect({
+                    x: rect.left - PAD,
+                    y: rect.top - PAD,
+                    w: rect.width + PAD * 2,
+                    h: rect.height + PAD * 2,
+                });
+                const ttW = 370, ttH = 300;
                 const vw = window.innerWidth, vh = window.innerHeight;
                 let top, left, placement;
                 if (rect.bottom + ttH + 16 < vh) {
-                    top = rect.bottom + 12; left = Math.min(Math.max(rect.left, 8), vw - ttW - 8); placement = 'below';
+                    top = rect.bottom + 14; left = Math.min(Math.max(rect.left, 8), vw - ttW - 8); placement = 'below';
                 } else if (rect.top - ttH - 16 > 0) {
-                    top = rect.top - ttH - 12; left = Math.min(Math.max(rect.left, 8), vw - ttW - 8); placement = 'above';
+                    top = rect.top - ttH - 14; left = Math.min(Math.max(rect.left, 8), vw - ttW - 8); placement = 'above';
                 } else if (rect.right + ttW + 16 < vw) {
-                    top = Math.min(Math.max(rect.top, 8), vh - ttH - 8); left = rect.right + 12; placement = 'right';
+                    top = Math.min(Math.max(rect.top, 8), vh - ttH - 8); left = rect.right + 14; placement = 'right';
                 } else {
-                    top = Math.min(Math.max(rect.top, 8), vh - ttH - 8); left = Math.max(rect.left - ttW - 12, 8); placement = 'left';
+                    top = Math.min(Math.max(rect.top, 8), vh - ttH - 8); left = Math.max(rect.left - ttW - 14, 8); placement = 'left';
                 }
                 setTooltipPos({ top, left, placement });
-            }, 350);
+            }, 380);
         };
-        positionTooltip();
+        run();
     }, [showSandboxTutorial, sandboxTutorialStep, steps]);
 
     const totalPOs = myPOs.length;
@@ -1528,12 +1542,16 @@ export default function SupplierDashboard({ user, onLogout }) {
             )}
 
             {/* ============================
-                SANDBOX TUTORIAL OVERLAY v2
-                Smart-positioned, beacon-equipped
+                SANDBOX TUTORIAL OVERLAY v3
+                SVG cutout spotlight + action buttons
                 ============================ */}
             {showSandboxTutorial && (() => {
                 const step = steps[sandboxTutorialStep] || steps[0];
                 const isCentered = !step.targetId || tooltipPos.placement === 'center';
+                const sr = spotlightRect;
+                const vw = typeof window !== 'undefined' ? window.innerWidth : 1920;
+                const vh = typeof window !== 'undefined' ? window.innerHeight : 1080;
+
                 const phaseGroups = [
                     { label: 'Overview', range: [0, 0], color: 'bg-purple-500' },
                     { label: 'Tabs', range: [1, 8], color: 'bg-blue-500' },
@@ -1548,53 +1566,88 @@ export default function SupplierDashboard({ user, onLogout }) {
 
                 const boxStyle = isCentered
                     ? {}
-                    : { position: 'fixed', top: tooltipPos.top, left: tooltipPos.left, width: 360, zIndex: 210 };
+                    : { position: 'fixed', top: tooltipPos.top, left: tooltipPos.left, width: 370, zIndex: 230 };
 
                 return (
                     <div className="fixed inset-0 z-[200] pointer-events-none">
-                        {/* Dimmed backdrop */}
-                        <div
-                            className="absolute inset-0 bg-slate-950/75 backdrop-blur-[2px] pointer-events-auto"
-                            onClick={() => setShowSandboxTutorial(false)}
-                        />
 
-                        {/* Animated beacon on target element */}
-                        {step.targetId && (() => {
-                            const el = document.getElementById(step.targetId);
-                            if (!el) return null;
-                            const r = el.getBoundingClientRect();
-                            return (
-                                <div
-                                    className="pointer-events-none"
-                                    style={{ position: 'fixed', top: r.top - 6, left: r.right - 6, zIndex: 215 }}
-                                >
-                                    <span className="relative flex h-4 w-4">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75" />
-                                        <span className="relative inline-flex rounded-full h-4 w-4 bg-purple-500 border-2 border-white" />
-                                    </span>
-                                </div>
-                            );
-                        })()}
+                        {/* === SVG CUTOUT SPOTLIGHT === */}
+                        {sr ? (
+                            <svg
+                                className="absolute inset-0 w-full h-full pointer-events-auto"
+                                style={{ zIndex: 201 }}
+                                onClick={() => setShowSandboxTutorial(false)}
+                            >
+                                <defs>
+                                    <mask id="tutMask">
+                                        {/* White = show backdrop; black = transparent hole */}
+                                        <rect x="0" y="0" width={vw} height={vh} fill="white" />
+                                        <rect
+                                            x={sr.x} y={sr.y}
+                                            width={sr.w} height={sr.h}
+                                            rx="8" ry="8"
+                                            fill="black"
+                                        />
+                                    </mask>
+                                </defs>
+                                <rect
+                                    x="0" y="0" width={vw} height={vh}
+                                    fill="rgba(2,6,23,0.82)"
+                                    mask="url(#tutMask)"
+                                />
+                                {/* Glowing border ring around the spotlight hole */}
+                                <rect
+                                    x={sr.x} y={sr.y}
+                                    width={sr.w} height={sr.h}
+                                    rx="8" ry="8"
+                                    fill="none"
+                                    stroke="#a855f7"
+                                    strokeWidth="2"
+                                    strokeDasharray="6 3"
+                                    style={{ filter: 'drop-shadow(0 0 6px #a855f7)' }}
+                                />
+                            </svg>
+                        ) : (
+                            /* Fallback solid backdrop when no target yet */
+                            <div
+                                className="absolute inset-0 bg-slate-950/80 backdrop-blur-[2px] pointer-events-auto"
+                                style={{ zIndex: 201 }}
+                                onClick={() => setShowSandboxTutorial(false)}
+                            />
+                        )}
 
-                        {/* Tooltip box */}
+                        {/* === PULSING BEACON (top-right corner of target) === */}
+                        {sr && (
+                            <div
+                                className="pointer-events-none"
+                                style={{ position: 'fixed', top: sr.y - 2, left: sr.x + sr.w - 6, zIndex: 225 }}
+                            >
+                                <span className="relative flex h-5 w-5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-80" />
+                                    <span className="relative inline-flex h-5 w-5 rounded-full bg-purple-600 border-2 border-white shadow-lg" />
+                                </span>
+                            </div>
+                        )}
+
+                        {/* === TOOLTIP BOX === */}
                         <div
                             ref={tooltipRef}
-                            className={`pointer-events-auto bg-slate-900 border border-purple-500/60 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ${
-                                isCentered ? 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[380px]' : ''
+                            className={`pointer-events-auto bg-slate-900 border border-purple-500/50 rounded-2xl shadow-2xl overflow-hidden ${
+                                isCentered ? 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[390px]' : ''
                             }`}
-                            style={!isCentered ? boxStyle : {}}
+                            style={!isCentered ? boxStyle : { zIndex: 230 }}
                         >
-                            {/* Phase + step header */}
+                            {/* Header: phase label + exit */}
                             <div className="bg-gradient-to-r from-purple-950 to-indigo-950 px-4 py-3 border-b border-purple-500/20 flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 min-w-0">
-                                    <span className={`w-2 h-2 rounded-full shrink-0 ${phaseDot}`} />
+                                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${phaseDot} shadow-[0_0_6px_currentColor]`} />
                                     <span className="text-[10px] font-bold text-purple-300 uppercase tracking-widest truncate">
-                                        {currentPhase?.label} · Step {sandboxTutorialStep + 1}/{steps.length}
+                                        {currentPhase?.label} · Step {sandboxTutorialStep + 1} of {steps.length}
                                     </span>
                                 </div>
                                 <button
                                     onClick={() => setShowSandboxTutorial(false)}
-                                    className="text-slate-500 hover:text-white text-xs px-2 py-0.5 rounded hover:bg-slate-800 transition-colors shrink-0"
+                                    className="text-slate-500 hover:text-white text-xs font-bold px-2 py-0.5 rounded hover:bg-slate-800 transition-colors shrink-0"
                                 >✕ Exit</button>
                             </div>
 
@@ -1607,38 +1660,51 @@ export default function SupplierDashboard({ user, onLogout }) {
                             </div>
 
                             {/* Phase mini-map */}
-                            <div className="flex gap-1 px-4 pt-3 pb-1">
+                            <div className="flex gap-1 px-4 pt-3 pb-0">
                                 {phaseGroups.map((pg, i) => (
                                     <div
                                         key={i}
                                         title={pg.label}
-                                        className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                                        className={`h-1.5 flex-1 rounded-full transition-all duration-300 cursor-pointer ${
                                             sandboxTutorialStep >= pg.range[0] && sandboxTutorialStep <= pg.range[1]
-                                                ? pg.color
+                                                ? pg.color + ' shadow-sm'
                                                 : sandboxTutorialStep > pg.range[1]
                                                     ? 'bg-slate-600'
                                                     : 'bg-slate-800'
                                         }`}
+                                        onClick={() => setSandboxTutorialStep(pg.range[0])}
                                     />
                                 ))}
                             </div>
 
                             {/* Body */}
-                            <div className="px-5 pt-3 pb-4 space-y-3">
-                                <h3 className="text-lg font-black text-white leading-snug">{step.title}</h3>
+                            <div className="px-5 pt-4 pb-3 space-y-3">
+                                <h3 className="text-base font-black text-white leading-snug">{step.title}</h3>
                                 <p className="text-sm text-slate-300 leading-relaxed">{step.body}</p>
-                                <div className="flex items-start gap-2 bg-slate-800/70 border border-slate-700/60 rounded-xl p-3">
-                                    <span className="text-base shrink-0 mt-0.5">💡</span>
+                                <div className="flex items-start gap-2 bg-indigo-950/50 border border-indigo-500/20 rounded-xl p-3">
+                                    <span className="text-sm shrink-0 mt-0.5">💡</span>
                                     <p className="text-xs text-slate-400 leading-relaxed">{step.tip}</p>
                                 </div>
                             </div>
 
+                            {/* Action button row — navigates to the relevant tab */}
+                            {step.action && (
+                                <div className="px-5 pb-3">
+                                    <button
+                                        onClick={() => { step.action(); }}
+                                        className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1.5 transition-all hover:border-purple-500/50"
+                                    >
+                                        <span>🔍</span> Go to this section
+                                    </button>
+                                </div>
+                            )}
+
                             {/* Footer nav */}
-                            <div className="px-5 pb-4 flex items-center justify-between gap-2">
+                            <div className="px-5 pb-4 flex items-center justify-between gap-2 border-t border-slate-800 pt-3">
                                 <button
                                     onClick={() => setSandboxTutorialStep(s => Math.max(0, s - 1))}
                                     disabled={sandboxTutorialStep === 0}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                                    className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all border border-slate-700 hover:border-slate-500 disabled:opacity-25 disabled:cursor-not-allowed"
                                 >← Back</button>
 
                                 <button
@@ -1649,12 +1715,12 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 {sandboxTutorialStep >= steps.length - 1 ? (
                                     <button
                                         onClick={() => setShowSandboxTutorial(false)}
-                                        className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg"
-                                    >Start Practicing ✅</button>
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg"
+                                    >✅ Start Practicing</button>
                                 ) : (
                                     <button
                                         onClick={() => setSandboxTutorialStep(s => s + 1)}
-                                        className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg"
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg"
                                     >Next →</button>
                                 )}
                             </div>
