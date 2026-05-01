@@ -1610,7 +1610,6 @@ export default function SupplierDashboard({ user, onLogout }) {
                             >
                                 <defs>
                                     <mask id="tutMask">
-                                        {/* White = show backdrop; black = transparent hole */}
                                         <rect x="0" y="0" width={vw} height={vh} fill="white" />
                                         <rect
                                             x={sr.x} y={sr.y}
@@ -1619,13 +1618,17 @@ export default function SupplierDashboard({ user, onLogout }) {
                                             fill="black"
                                         />
                                     </mask>
+                                    {/* Isolated SVG filter — does NOT bleed onto sibling DOM elements */}
+                                    <filter id="tutGlow" x="-20%" y="-20%" width="140%" height="140%">
+                                        <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#a855f7" floodOpacity="0.9" />
+                                    </filter>
                                 </defs>
                                 <rect
                                     x="0" y="0" width={vw} height={vh}
                                     fill="rgba(2,6,23,0.55)"
                                     mask="url(#tutMask)"
                                 />
-                                {/* Glowing border ring around the spotlight hole */}
+                                {/* Glowing border ring — uses SVG filter, not CSS filter */}
                                 <rect
                                     x={sr.x} y={sr.y}
                                     width={sr.w} height={sr.h}
@@ -1634,7 +1637,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     stroke="#a855f7"
                                     strokeWidth="2"
                                     strokeDasharray="6 3"
-                                    style={{ filter: 'drop-shadow(0 0 6px #a855f7)' }}
+                                    filter="url(#tutGlow)"
                                 />
                             </svg>
                         ) : (
@@ -1674,7 +1677,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                             {/* Header: phase label + exit */}
                             <div className="bg-gradient-to-r from-purple-950 to-indigo-950 px-4 py-3 border-b border-purple-500/20 flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 min-w-0">
-                                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${phaseDot} shadow-[0_0_6px_currentColor]`} />
+                                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${phaseDot}`} />
                                     <span className="text-[10px] font-bold text-purple-300 uppercase tracking-widest truncate">
                                         {currentPhase?.label} · Step {sandboxTutorialStep + 1} of {steps.length}
                                     </span>
