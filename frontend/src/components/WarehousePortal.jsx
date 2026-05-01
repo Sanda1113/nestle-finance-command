@@ -616,6 +616,19 @@ export default function WarehousePortal({ user, onLogout }) {
 
         if (isOffline) return;
 
+        // Debounced scheduler — collapses rapid Realtime/poll events into one fetch.
+        // We do NOT reset isFetchingPOsRef here; if a fetch is already running, the
+        // debounced call will simply be skipped by the guard inside fetchPOs.
+        let debounceTimer = null;
+        const scheduleFetch = () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                if (!document.hidden && navigator.onLine) {
+                    fetchPOs();
+                }
+            }, 300);
+        };
+
         // Supabase Realtime for instant push-based updates
         const channels = [
             'purchase_orders',
@@ -627,20 +640,20 @@ export default function WarehousePortal({ user, onLogout }) {
                 .on(
                     'postgres_changes',
                     { event: '*', schema: 'public', table },
-                    () => { isFetchingPOsRef.current = false; fetchPOs(); }
+                    scheduleFetch
                 )
                 .subscribe()
         );
 
-        // Polling fallback – ensures data stays fresh even if Realtime WebSocket drops
+        // Polling fallback – respects the in-flight guard; skips if a fetch is running
         const pollInterval = setInterval(() => {
-            if (!document.hidden && navigator.onLine) {
-                isFetchingPOsRef.current = false; // allow poll to bypass in-flight guard
+            if (!document.hidden && navigator.onLine && !isFetchingPOsRef.current) {
                 fetchPOs();
             }
         }, WAREHOUSE_POLL_INTERVAL_MS);
 
         return () => {
+            clearTimeout(debounceTimer);
             channels.forEach(ch => supabase.removeChannel(ch));
             clearInterval(pollInterval);
         };
@@ -655,9 +668,10 @@ export default function WarehousePortal({ user, onLogout }) {
             return true;
         };
 
+        // Does NOT reset isFetchingPOsRef — guard is respected.
+        // If a fetch is already running, this is a no-op (fetchPOs returns early).
         const refreshImmediately = () => {
             if (shouldRefreshImmediately()) {
-                isFetchingPOsRef.current = false;
                 fetchPOs();
             }
         };
