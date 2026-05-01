@@ -74,6 +74,8 @@ const JargonText = ({ text, className = "" }) => {
 export default function SupplierDashboard({ user, onLogout }) {
     const [mode, setMode] = useState('inbox');
     const [isSandboxMode, setIsSandboxMode] = useState(false);
+    const [sandboxTutorialStep, setSandboxTutorialStep] = useState(0);
+    const [showSandboxTutorial, setShowSandboxTutorial] = useState(false);
     const [showWalkthrough, setShowWalkthrough] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('hasSeenWalkthrough') !== 'true' : false);
     const [showMicroLearning, setShowMicroLearning] = useState(false);
     const [invoiceFile, setInvoiceFile] = useState(null);
@@ -320,18 +322,21 @@ export default function SupplierDashboard({ user, onLogout }) {
         setLoading(true); setError(null); setMatchStatus('Pending'); setDbStatus('Processing...');
         setResultData(null);
 
-        const boqForm = new FormData(); boqForm.append('invoiceFile', boqFile);
-
         try {
-            const res = await axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', boqForm);
+            const form = new FormData(); form.append('invoiceFile', boqFile);
+            const res = await axios.post('https://nestle-finance-command-production.up.railway.app/api/extract-invoice', form);
             if (res.data.success) {
                 const data = res.data.extractedData;
                 setResultData(data);
                 setMatchStatus('Submitted');
-                await axios.post('https://nestle-finance-command-production.up.railway.app/api/save-boq', {
-                    boqData: data, supplierEmail: user.email, vendorId: user.id || user.email
-                });
-                setDbStatus('Sent to Procurement Team');
+                if (isSandboxMode) {
+                    setDbStatus('🛠️ Sandbox: BOQ digitized. No data sent to Procurement.');
+                } else {
+                    await axios.post('https://nestle-finance-command-production.up.railway.app/api/save-boq', {
+                        boqData: data, supplierEmail: user.email, vendorId: user.id || user.email
+                    });
+                    setDbStatus('Sent to Procurement Team');
+                }
             }
         } catch { setError("Processing failed."); setMatchStatus('Error'); }
         finally { setLoading(false); }
@@ -460,6 +465,10 @@ export default function SupplierDashboard({ user, onLogout }) {
     };
 
     const handleMarkDelivered = async (poNumber) => {
+        if (isSandboxMode) {
+            setDialog({ title: "🛠️ Sandbox Mode", message: "In a real scenario this would notify the Warehouse Dock. No notification was sent — this is a safe training environment.", type: "alert" });
+            return;
+        }
         setDialog({
             title: "Confirm Arrival",
             message: "Are you physically at the Nestle Dock or confirming handover to the carrier?",
@@ -474,6 +483,16 @@ export default function SupplierDashboard({ user, onLogout }) {
             }
         });
     };
+
+    // Show sandbox tutorial every time sandbox mode is enabled
+    useEffect(() => {
+        if (isSandboxMode) {
+            setSandboxTutorialStep(0);
+            setShowSandboxTutorial(true);
+        } else {
+            setShowSandboxTutorial(false);
+        }
+    }, [isSandboxMode]);
 
     const totalPOs = myPOs.length;
     const totalPOValue = myPOs.reduce((sum, po) => sum + (po.total_amount || 0), 0);
@@ -912,9 +931,50 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                             </div>
                                                             <p className="text-xl font-bold text-slate-100 mt-1">{formatCurrency(po.total_amount, po.po_data?.currency)}</p>
 
+                                                            {/* Detail rows */}
+                                                            <div className="mt-3 space-y-1.5 text-xs border-t border-slate-800 pt-3">
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-slate-500 font-medium">📅 Created</span>
+                                                                    <span className="text-slate-300 font-semibold">{po.created_at ? new Date(po.created_at).toLocaleString() : '—'}</span>
+                                                                </div>
+                                                                {po.updated_at && po.updated_at !== po.created_at && (
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-slate-500 font-medium">🔄 Last Updated</span>
+                                                                        <span className="text-slate-300 font-semibold">{new Date(po.updated_at).toLocaleString()}</span>
+                                                                    </div>
+                                                                )}
+                                                                {po.po_data?.delivery_timestamp && (
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-slate-500 font-medium">🚚 Delivered</span>
+                                                                        <span className="text-emerald-400 font-semibold">{new Date(po.po_data.delivery_timestamp).toLocaleString()}</span>
+                                                                    </div>
+                                                                )}
+                                                                {po.po_data?.deliveryDate && (
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-slate-500 font-medium">📦 Expected Delivery</span>
+                                                                        <span className="text-amber-400 font-semibold">{po.po_data.deliveryDate}</span>
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-slate-500 font-medium">📋 Status</span>
+                                                                    <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                                                                        String(po.status || '').includes('Paid') || String(po.status || '').includes('Cleared') ? 'bg-emerald-900/50 text-emerald-400 ring-1 ring-emerald-600/30' :
+                                                                        String(po.status || '').includes('Cancelled') || String(po.status || '').includes('Rejected') ? 'bg-red-900/50 text-red-400 ring-1 ring-red-600/30' :
+                                                                        String(po.status || '').includes('Dock') || String(po.status || '').includes('Transit') ? 'bg-amber-900/50 text-amber-400 ring-1 ring-amber-600/30' :
+                                                                        'bg-blue-900/50 text-blue-400 ring-1 ring-blue-600/30'
+                                                                    }`}>{po.status || 'Pending'}</span>
+                                                                </div>
+                                                                {po.po_data?.paymentTerms && (
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-slate-500 font-medium">💳 Payment Terms</span>
+                                                                        <span className="text-purple-400 font-semibold">{po.po_data.paymentTerms}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
                                                             <div className="flex flex-wrap gap-2 mt-4">
-                                                                <button type="button" onClick={() => handlePrintPO(po)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${po.is_downloaded ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 shadow-sm'}`} title="Download or print the official Purchase Order document">
-                                                                    📄 PDF
+                                                                <button type="button" onClick={() => handlePrintPO(po)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${po.is_downloaded ? 'bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 border border-emerald-700/50' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 shadow-sm'}`} title={po.is_downloaded ? 'Re-download the Purchase Order PDF' : 'Download the official Purchase Order document'}>
+                                                                    {po.is_downloaded ? '✅ PO Downloaded' : '📄 Download PO'}
                                                                 </button>
 
                                                                 {!isDelivered ? (
@@ -1222,6 +1282,121 @@ export default function SupplierDashboard({ user, onLogout }) {
                     </div>
                 </div>
             )}
+
+            {/* ============================
+                SANDBOX TUTORIAL OVERLAY
+                Shows every time sandbox is ON
+                ============================ */}
+            {showSandboxTutorial && (() => {
+                const steps = [
+                    {
+                        title: '🛠️ Welcome to Sandbox Mode',
+                        body: 'You are now in a safe training environment. Every action you take here is simulated — nothing is sent to Finance, Warehouse, or any backend system. Use this to practice the full workflow risk-free.',
+                        tip: '✅ Safe to click anything — no real notifications will be triggered.'
+                    },
+                    {
+                        title: '📥 Tab: My Shipments',
+                        body: 'This tab shows all your active Purchase Orders (POs). Each card shows the shipment ID, amount, status, creation date, and expected delivery. You can download the official PO PDF and mark a shipment as delivered to the dock.',
+                        tip: '📄 "Download PO" button opens the PDF. Once downloaded, it turns green as "✅ PO Downloaded" — but you can still re-download anytime.'
+                    },
+                    {
+                        title: '🚚 Mark Delivered Button',
+                        body: 'Use this to notify Nestlé\'s Warehouse that your truck has arrived at the dock. In Sandbox Mode this is blocked — clicking it shows a training message instead of sending a real notification.',
+                        tip: '⚠️ In live mode this triggers a real-time alert to the Warehouse team.'
+                    },
+                    {
+                        title: '💬 Dispute Chat (Per Shipment)',
+                        body: 'Each shipment card has a "💬 Chat" button. This opens a transaction-specific dispute channel between you and the Finance team. Use it when there is a discrepancy or issue with a specific PO/Invoice.',
+                        tip: '🔔 Finance gets notified when you send a message here. Use it for specific disputes only.'
+                    },
+                    {
+                        title: '📤 Tab: Step 1 – Submit Quote (BOQ)',
+                        body: 'Upload your Bill of Quantities (BOQ) PDF or Excel here. Our AI digitizes it and sends it to the Nestlé Procurement team for review and approval. In Sandbox Mode, the OCR runs but no data is saved.',
+                        tip: '📑 After approval, Procurement generates a Purchase Order (PO) that appears in your "My Shipments" tab.'
+                    },
+                    {
+                        title: '🔗 Tab: Step 2 – Submit Invoice (3-Way Match)',
+                        body: 'Upload your Invoice AND the Nestlé PO here. Our engine runs a 3-Way Match: Invoice ↔ PO ↔ GRN. If amounts match within tolerance, it goes to Finance for final approval. In Sandbox, no data is sent to Finance.',
+                        tip: '⚠️ If a discrepancy is detected, Finance is alerted. You can then use the Dispute Chat to resolve it.'
+                    },
+                    {
+                        title: '📜 Tab: Timeline',
+                        body: 'This tab shows the complete lifecycle of every transaction — from BOQ submission → PO generation → Invoice match → Warehouse receipt → Payout. Each event has a date/time stamp and status color.',
+                        tip: '💰 Once Finance approves and Warehouse confirms goods received, the Payout appears at the bottom of the timeline.'
+                    },
+                    {
+                        title: '💸 Tab: Liquidity & Payout Calendar',
+                        body: 'This tab shows your scheduled payments on a Google Calendar-style view. Blue = Scheduled, Green = Paid, Yellow = On Hold. Click any event to see details. You can also request early payment at a small discount.',
+                        tip: '⚡ Early payment = get paid today, minus a small % fee. Finance is notified automatically.'
+                    },
+                    {
+                        title: '💬 Floating Chat (Bottom Right)',
+                        body: 'The floating chat bubble (bottom-right corner) is a general-purpose Live Chat with the Finance team. Use this for broad questions not tied to a specific transaction — e.g., account questions, onboarding help.',
+                        tip: '📌 This is different from the Dispute Chat, which is per-transaction.'
+                    },
+                    {
+                        title: '🤖 AI Chat & Jargon Translator',
+                        body: 'You\'ll notice some terms are underlined with a dashed border — hover over them to see plain-English explanations (e.g., "GRN", "3-Way Match", "Discrepancy"). This is the built-in Jargon Translator.',
+                        tip: '💡 The AI also triggers personalized tips if it detects repeated errors (e.g., upload quality issues).'
+                    },
+                    {
+                        title: '🔔 Notifications Bell (Top Right)',
+                        body: 'The bell icon shows real-time in-app alerts: new POs, payout updates, Finance approvals/rejections, and Warehouse confirmations. Click any notification to jump directly to the relevant section.',
+                        tip: '📧 Each notification also triggers an email to your registered address.'
+                    },
+                    {
+                        title: '✅ You\'re Ready!',
+                        body: 'You\'ve completed the full Supplier Portal tutorial. In Sandbox Mode you can freely practice any workflow. When you\'re ready for live operations, toggle off Sandbox Mode using the switch in the top navigation bar.',
+                        tip: '🟢 Toggle off Sandbox to go live. All actions in live mode affect real Finance and Warehouse systems.'
+                    }
+                ];
+                const step = steps[sandboxTutorialStep] || steps[0];
+                const isLast = sandboxTutorialStep >= steps.length - 1;
+                return (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm">
+                        <div className="relative max-w-md w-full bg-slate-900 border-2 border-purple-500/70 rounded-2xl shadow-2xl overflow-hidden">
+                            {/* Header */}
+                            <div className="bg-gradient-to-r from-purple-900/80 to-indigo-900/80 px-5 py-4 border-b border-purple-500/30 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-purple-300 uppercase tracking-wider bg-purple-900/50 px-2 py-0.5 rounded-full border border-purple-500/30">🛠️ Sandbox Tutorial</span>
+                                    <span className="text-xs text-slate-400">{sandboxTutorialStep + 1} / {steps.length}</span>
+                                </div>
+                                <button onClick={() => setShowSandboxTutorial(false)} className="text-slate-400 hover:text-white transition-colors text-xs font-bold px-2 py-1 rounded hover:bg-slate-800">Skip Tutorial ✕</button>
+                            </div>
+                            {/* Progress bar */}
+                            <div className="h-1 bg-slate-800">
+                                <div className="h-1 bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-500" style={{ width: `${((sandboxTutorialStep + 1) / steps.length) * 100}%` }} />
+                            </div>
+                            {/* Body */}
+                            <div className="p-6 space-y-4">
+                                <h3 className="text-xl font-black text-white leading-tight">{step.title}</h3>
+                                <p className="text-sm text-slate-300 leading-relaxed">{step.body}</p>
+                                <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-xs text-slate-400 leading-relaxed">
+                                    {step.tip}
+                                </div>
+                            </div>
+                            {/* Footer */}
+                            <div className="px-6 pb-5 flex items-center justify-between gap-3">
+                                <button
+                                    onClick={() => setSandboxTutorialStep(s => Math.max(0, s - 1))}
+                                    disabled={sandboxTutorialStep === 0}
+                                    className="px-4 py-2 rounded-xl text-sm font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                >← Back</button>
+                                <button onClick={() => setShowSandboxTutorial(false)} className="text-xs text-slate-600 hover:text-slate-400 transition-colors">Skip</button>
+                                {isLast ? (
+                                    <button onClick={() => setShowSandboxTutorial(false)} className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-sm font-bold rounded-xl transition-colors shadow-lg">
+                                        Start Practicing ✅
+                                    </button>
+                                ) : (
+                                    <button onClick={() => setSandboxTutorialStep(s => s + 1)} className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-bold rounded-xl transition-colors shadow-lg">
+                                        Next →
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 }
