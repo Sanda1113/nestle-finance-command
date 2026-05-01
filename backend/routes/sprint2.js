@@ -1222,6 +1222,23 @@ router.post('/payouts/stage', async (req, res) => {
             link: '/payouts'
         });
 
+        // 📧 Email supplier about payout scheduled
+        const scheduledDateFormatted = scheduledDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        const payoutEmailBody = `
+            <p>Hello,</p>
+            <p>Your payout of <strong>${total_amount}</strong> has been successfully scheduled and added to the payment calendar.</p>
+            <p><strong>Reference:</strong> Invoice Payout: ${supplier_email}</p>
+            <p><strong>Scheduled Payout Date:</strong> ${scheduledDateFormatted} (Net-30 Terms)</p>
+            <p>You can monitor the status of this payout in real-time through your Supplier Dashboard under the <strong>Payout Calendar</strong> section.</p>
+            <p>Thank you for your continued partnership with Nestlé.</p>
+        `;
+        sendSupplierEmail(
+            supplier_email,
+            `Payout Scheduled – ${total_amount}`,
+            payoutEmailBody,
+            { amount: total_amount }
+        ).catch(err => console.warn('[Payouts Stage] Email failed:', err.message));
+
         res.status(200).json({ success: true, data });
     } catch (error) {
         console.error('Stage Error:', error);

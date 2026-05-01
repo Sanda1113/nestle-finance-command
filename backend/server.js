@@ -1345,6 +1345,29 @@ app.patch('/api/payouts/:id/paid', async (req, res) => {
             } catch (notifErr) {
                 console.warn('[Mark Payout Paid] Notification skipped due to error:', notifErr.message);
             }
+
+            // 📧 Email supplier about payment processed
+            if (data.supplier_email) {
+                const invoiceRef = data.invoice_number || data.title || 'your invoice';
+                const paymentEmailBody = `
+                    <p>Hello,</p>
+                    <p>Nestlé Finance has successfully processed payment for <strong>${invoiceRef}</strong>.</p>
+                    <p><strong>Amount Paid:</strong> ${data.payout_amount || data.final_amount || data.base_amount || ''}</p>
+                    <p><strong>Payment Date:</strong> ${new Date().toLocaleDateString()}</p>
+                    <p>The funds have been disbursed as per your agreed payment terms. You can view the full transaction history in your Supplier Dashboard.</p>
+                    <p>Thank you for your continued partnership with Nestlé.</p>
+                `;
+                sendSupplierEmail(
+                    data.supplier_email,
+                    `Payment Processed – ${invoiceRef}`,
+                    paymentEmailBody,
+                    {
+                        invoiceNumber: data.invoice_number,
+                        poNumber: data.po_number,
+                        amount: data.payout_amount || data.final_amount || data.base_amount
+                    }
+                ).catch(err => console.warn('[Mark Payout Paid] Email failed:', err.message));
+            }
         }
 
         res.json({ success: true, data });
