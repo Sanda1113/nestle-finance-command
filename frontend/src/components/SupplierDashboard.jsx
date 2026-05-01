@@ -701,7 +701,7 @@ export default function SupplierDashboard({ user, onLogout }) {
         }
     }, [showSandboxTutorial, sandboxTutorialStep, steps]);
 
-    // Smart tooltip + spotlight positioning
+    // Smart tooltip + spotlight positioning — anti-collision across all 4 quadrants
     useEffect(() => {
         if (!showSandboxTutorial) return;
         const targetId = steps[sandboxTutorialStep]?.targetId;
@@ -720,26 +720,50 @@ export default function SupplierDashboard({ user, onLogout }) {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             setTimeout(() => {
                 const rect = el.getBoundingClientRect();
-                const PAD = 8;
-                setSpotlightRect({
-                    x: rect.left - PAD,
-                    y: rect.top - PAD,
-                    w: rect.width + PAD * 2,
-                    h: rect.height + PAD * 2,
-                });
-                const ttW = 370, ttH = 300;
+                const PAD = 10;
+                const sr = {
+                    x: rect.left - PAD, y: rect.top - PAD,
+                    w: rect.width + PAD * 2, h: rect.height + PAD * 2,
+                };
+                setSpotlightRect(sr);
+
                 const vw = window.innerWidth, vh = window.innerHeight;
-                let top, left, placement;
-                if (rect.bottom + ttH + 16 < vh) {
-                    top = rect.bottom + 14; left = Math.min(Math.max(rect.left, 8), vw - ttW - 8); placement = 'below';
-                } else if (rect.top - ttH - 16 > 0) {
-                    top = rect.top - ttH - 14; left = Math.min(Math.max(rect.left, 8), vw - ttW - 8); placement = 'above';
-                } else if (rect.right + ttW + 16 < vw) {
-                    top = Math.min(Math.max(rect.top, 8), vh - ttH - 8); left = rect.right + 14; placement = 'right';
-                } else {
-                    top = Math.min(Math.max(rect.top, 8), vh - ttH - 8); left = Math.max(rect.left - ttW - 14, 8); placement = 'left';
-                }
-                setTooltipPos({ top, left, placement });
+                // Responsive: tooltip width = min(370, viewport-32), but never less than 280
+                const ttW = Math.max(280, Math.min(370, vw - 32));
+                const ttH = 320; // worst-case height estimate
+                const GAP = 14;
+
+                // Checks if a candidate box [t, l, ttW, ttH] overlaps the spotlight rect
+                const overlaps = (t, l) => {
+                    const r2 = sr;
+                    return !(l + ttW < r2.x || l > r2.x + r2.w || t + ttH < r2.y || t > r2.y + r2.h);
+                };
+
+                // Clamp helpers
+                const clampL = (l) => Math.min(Math.max(l, 8), vw - ttW - 8);
+                const clampT = (t) => Math.min(Math.max(t, 8), vh - ttH - 8);
+
+                // Candidate placements in preference order
+                const candidates = [
+                    { placement: 'below', top: rect.bottom + GAP, left: clampL(rect.left) },
+                    { placement: 'above', top: rect.top - ttH - GAP, left: clampL(rect.left) },
+                    { placement: 'right', top: clampT(rect.top), left: rect.right + GAP },
+                    { placement: 'left', top: clampT(rect.top), left: rect.left - ttW - GAP },
+                ];
+
+                // Filter to candidates that fit in viewport
+                const fits = candidates.filter(c =>
+                    c.top >= 8 && c.top + ttH <= vh - 8 &&
+                    c.left >= 8 && c.left + ttW <= vw - 8
+                );
+
+                // Pick first that doesn't overlap; fallback to first fitting; fallback safe corner
+                const chosen =
+                    fits.find(c => !overlaps(c.top, c.left)) ||
+                    fits[0] ||
+                    { placement: 'corner', top: clampT(vh - ttH - 16), left: clampL(8) };
+
+                setTooltipPos({ top: chosen.top, left: chosen.left, placement: chosen.placement });
             }, 380);
         };
         run();
@@ -1547,10 +1571,13 @@ export default function SupplierDashboard({ user, onLogout }) {
                 ============================ */}
             {showSandboxTutorial && (() => {
                 const step = steps[sandboxTutorialStep] || steps[0];
+                const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
                 const isCentered = !step.targetId || tooltipPos.placement === 'center';
                 const sr = spotlightRect;
                 const vw = typeof window !== 'undefined' ? window.innerWidth : 1920;
                 const vh = typeof window !== 'undefined' ? window.innerHeight : 1080;
+                // Responsive tooltip width
+                const ttW = Math.max(280, Math.min(370, vw - 32));
 
                 const phaseGroups = [
                     { label: 'Overview', range: [0, 0], color: 'bg-purple-500' },
@@ -1564,9 +1591,12 @@ export default function SupplierDashboard({ user, onLogout }) {
                 const currentPhase = phaseGroups.find(p => sandboxTutorialStep >= p.range[0] && sandboxTutorialStep <= p.range[1]);
                 const phaseDot = currentPhase?.color || 'bg-purple-500';
 
-                const boxStyle = isCentered
-                    ? {}
-                    : { position: 'fixed', top: tooltipPos.top, left: tooltipPos.left, width: 370, zIndex: 230 };
+                const boxStyle = isMobile
+                    // Mobile: full-width bottom sheet
+                    ? { position: 'fixed', bottom: 0, left: 0, right: 0, width: '100%', zIndex: 230, borderRadius: '1rem 1rem 0 0' }
+                    : isCentered
+                        ? {}
+                        : { position: 'fixed', top: tooltipPos.top, left: tooltipPos.left, width: ttW, zIndex: 230 };
 
                 return (
                     <div className="fixed inset-0 z-[200] pointer-events-none">
@@ -1632,10 +1662,14 @@ export default function SupplierDashboard({ user, onLogout }) {
                         {/* === TOOLTIP BOX === */}
                         <div
                             ref={tooltipRef}
-                            className={`pointer-events-auto bg-slate-900 border border-purple-500/50 rounded-2xl shadow-2xl overflow-hidden ${
-                                isCentered ? 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[390px]' : ''
+                            className={`pointer-events-auto bg-slate-900 border border-purple-500/50 shadow-2xl overflow-hidden ${
+                                isMobile
+                                    ? 'rounded-t-2xl'
+                                    : isCentered
+                                        ? `absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-2xl`
+                                        : 'rounded-2xl'
                             }`}
-                            style={!isCentered ? boxStyle : { zIndex: 230 }}
+                            style={boxStyle}
                         >
                             {/* Header: phase label + exit */}
                             <div className="bg-gradient-to-r from-purple-950 to-indigo-950 px-4 py-3 border-b border-purple-500/20 flex items-center justify-between gap-2">
