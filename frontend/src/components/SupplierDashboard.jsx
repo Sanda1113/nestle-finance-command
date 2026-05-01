@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2, Search, FileText, ChevronRight, ShieldCheck, Zap, Activity, Percent, Calendar, TrendingUp } from 'lucide-react';
 import DisputeChat from './DisputeChat';
@@ -76,6 +76,8 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [isSandboxMode, setIsSandboxMode] = useState(false);
     const [sandboxTutorialStep, setSandboxTutorialStep] = useState(0);
     const [showSandboxTutorial, setShowSandboxTutorial] = useState(false);
+    const [tooltipPos, setTooltipPos] = useState({ top: null, left: null, placement: 'center' });
+    const tooltipRef = useRef(null);
 
     const steps = useMemo(() => [
         {
@@ -695,6 +697,38 @@ export default function SupplierDashboard({ user, onLogout }) {
         if (showSandboxTutorial && steps[sandboxTutorialStep]?.action) {
             steps[sandboxTutorialStep].action();
         }
+    }, [showSandboxTutorial, sandboxTutorialStep, steps]);
+
+    // Smart tooltip positioning — anchors the tutorial box near the target element
+    useEffect(() => {
+        if (!showSandboxTutorial) return;
+        const targetId = steps[sandboxTutorialStep]?.targetId;
+        if (!targetId) {
+            setTooltipPos({ top: null, left: null, placement: 'center' });
+            return;
+        }
+        const positionTooltip = () => {
+            const el = document.getElementById(targetId);
+            if (!el) { setTooltipPos({ top: null, left: null, placement: 'center' }); return; }
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+                const rect = el.getBoundingClientRect();
+                const ttW = 360, ttH = 260;
+                const vw = window.innerWidth, vh = window.innerHeight;
+                let top, left, placement;
+                if (rect.bottom + ttH + 16 < vh) {
+                    top = rect.bottom + 12; left = Math.min(Math.max(rect.left, 8), vw - ttW - 8); placement = 'below';
+                } else if (rect.top - ttH - 16 > 0) {
+                    top = rect.top - ttH - 12; left = Math.min(Math.max(rect.left, 8), vw - ttW - 8); placement = 'above';
+                } else if (rect.right + ttW + 16 < vw) {
+                    top = Math.min(Math.max(rect.top, 8), vh - ttH - 8); left = rect.right + 12; placement = 'right';
+                } else {
+                    top = Math.min(Math.max(rect.top, 8), vh - ttH - 8); left = Math.max(rect.left - ttW - 12, 8); placement = 'left';
+                }
+                setTooltipPos({ top, left, placement });
+            }, 350);
+        };
+        positionTooltip();
     }, [showSandboxTutorial, sandboxTutorialStep, steps]);
 
     const totalPOs = myPOs.length;
@@ -1494,55 +1528,140 @@ export default function SupplierDashboard({ user, onLogout }) {
             )}
 
             {/* ============================
-                SANDBOX TUTORIAL OVERLAY
-                Shows every time sandbox is ON
+                SANDBOX TUTORIAL OVERLAY v2
+                Smart-positioned, beacon-equipped
                 ============================ */}
-            {showSandboxTutorial && (
-                <div className={`fixed inset-0 z-[200] flex ${steps[sandboxTutorialStep]?.targetId ? 'items-end justify-start' : 'items-center justify-center'} p-4 pointer-events-none transition-all duration-500`}>
-                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[2px] pointer-events-auto" onClick={() => setShowSandboxTutorial(false)}></div>
-                    
-                    <div className="relative max-w-md w-full bg-slate-900 border-2 border-purple-500/70 rounded-2xl shadow-2xl overflow-hidden z-[201] animate-in zoom-in-95 pointer-events-auto">
-                        {/* Header */}
-                        <div className="bg-gradient-to-r from-purple-900/80 to-indigo-900/80 px-5 py-4 border-b border-purple-500/30 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-purple-300 uppercase tracking-wider bg-purple-900/50 px-2 py-0.5 rounded-full border border-purple-500/30">🛠️ Sandbox Tutorial</span>
-                                <span className="text-xs text-slate-400">{sandboxTutorialStep + 1} / {steps.length}</span>
+            {showSandboxTutorial && (() => {
+                const step = steps[sandboxTutorialStep] || steps[0];
+                const isCentered = !step.targetId || tooltipPos.placement === 'center';
+                const phaseGroups = [
+                    { label: 'Overview', range: [0, 0], color: 'bg-purple-500' },
+                    { label: 'Tabs', range: [1, 8], color: 'bg-blue-500' },
+                    { label: 'Tools', range: [9, 12], color: 'bg-emerald-500' },
+                    { label: 'Header', range: [13, 17], color: 'bg-amber-500' },
+                    { label: 'Stats', range: [18, 22], color: 'bg-pink-500' },
+                    { label: 'Actions', range: [23, 26], color: 'bg-indigo-500' },
+                    { label: 'Done', range: [27, 27], color: 'bg-teal-500' },
+                ];
+                const currentPhase = phaseGroups.find(p => sandboxTutorialStep >= p.range[0] && sandboxTutorialStep <= p.range[1]);
+                const phaseDot = currentPhase?.color || 'bg-purple-500';
+
+                const boxStyle = isCentered
+                    ? {}
+                    : { position: 'fixed', top: tooltipPos.top, left: tooltipPos.left, width: 360, zIndex: 210 };
+
+                return (
+                    <div className="fixed inset-0 z-[200] pointer-events-none">
+                        {/* Dimmed backdrop */}
+                        <div
+                            className="absolute inset-0 bg-slate-950/75 backdrop-blur-[2px] pointer-events-auto"
+                            onClick={() => setShowSandboxTutorial(false)}
+                        />
+
+                        {/* Animated beacon on target element */}
+                        {step.targetId && (() => {
+                            const el = document.getElementById(step.targetId);
+                            if (!el) return null;
+                            const r = el.getBoundingClientRect();
+                            return (
+                                <div
+                                    className="pointer-events-none"
+                                    style={{ position: 'fixed', top: r.top - 6, left: r.right - 6, zIndex: 215 }}
+                                >
+                                    <span className="relative flex h-4 w-4">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75" />
+                                        <span className="relative inline-flex rounded-full h-4 w-4 bg-purple-500 border-2 border-white" />
+                                    </span>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Tooltip box */}
+                        <div
+                            ref={tooltipRef}
+                            className={`pointer-events-auto bg-slate-900 border border-purple-500/60 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ${
+                                isCentered ? 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[380px]' : ''
+                            }`}
+                            style={!isCentered ? boxStyle : {}}
+                        >
+                            {/* Phase + step header */}
+                            <div className="bg-gradient-to-r from-purple-950 to-indigo-950 px-4 py-3 border-b border-purple-500/20 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <span className={`w-2 h-2 rounded-full shrink-0 ${phaseDot}`} />
+                                    <span className="text-[10px] font-bold text-purple-300 uppercase tracking-widest truncate">
+                                        {currentPhase?.label} · Step {sandboxTutorialStep + 1}/{steps.length}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => setShowSandboxTutorial(false)}
+                                    className="text-slate-500 hover:text-white text-xs px-2 py-0.5 rounded hover:bg-slate-800 transition-colors shrink-0"
+                                >✕ Exit</button>
                             </div>
-                            <button onClick={() => setShowSandboxTutorial(false)} className="text-slate-400 hover:text-white transition-colors text-xs font-bold px-2 py-1 rounded hover:bg-slate-800">Skip Tutorial ✕</button>
-                        </div>
-                        {/* Progress bar */}
-                        <div className="h-1 bg-slate-800">
-                            <div className="h-1 bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-500" style={{ width: `${((sandboxTutorialStep + 1) / steps.length) * 100}%` }} />
-                        </div>
-                        {/* Body */}
-                        <div className="p-6 space-y-4">
-                            <h3 className="text-xl font-black text-white leading-tight">{steps[sandboxTutorialStep]?.title || steps[0].title}</h3>
-                            <p className="text-sm text-slate-300 leading-relaxed">{steps[sandboxTutorialStep]?.body || steps[0].body}</p>
-                            <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-xs text-slate-400 leading-relaxed">
-                                {steps[sandboxTutorialStep]?.tip || steps[0].tip}
+
+                            {/* Progress bar */}
+                            <div className="h-[3px] bg-slate-800">
+                                <div
+                                    className="h-full bg-gradient-to-r from-purple-500 to-indigo-400 transition-all duration-500"
+                                    style={{ width: `${((sandboxTutorialStep + 1) / steps.length) * 100}%` }}
+                                />
                             </div>
-                        </div>
-                        {/* Footer */}
-                        <div className="px-6 pb-5 flex items-center justify-between gap-3">
-                            <button
-                                onClick={() => setSandboxTutorialStep(s => Math.max(0, s - 1))}
-                                disabled={sandboxTutorialStep === 0}
-                                className="px-4 py-2 rounded-xl text-sm font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            >← Back</button>
-                            <button onClick={() => setShowSandboxTutorial(false)} className="text-xs text-slate-600 hover:text-slate-400 transition-colors">Skip</button>
-                            {sandboxTutorialStep >= steps.length - 1 ? (
-                                <button onClick={() => setShowSandboxTutorial(false)} className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-sm font-bold rounded-xl transition-colors shadow-lg">
-                                    Start Practicing ✅
-                                </button>
-                            ) : (
-                                <button onClick={() => setSandboxTutorialStep(s => s + 1)} className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-bold rounded-xl transition-colors shadow-lg">
-                                    Next →
-                                </button>
-                            )}
+
+                            {/* Phase mini-map */}
+                            <div className="flex gap-1 px-4 pt-3 pb-1">
+                                {phaseGroups.map((pg, i) => (
+                                    <div
+                                        key={i}
+                                        title={pg.label}
+                                        className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                                            sandboxTutorialStep >= pg.range[0] && sandboxTutorialStep <= pg.range[1]
+                                                ? pg.color
+                                                : sandboxTutorialStep > pg.range[1]
+                                                    ? 'bg-slate-600'
+                                                    : 'bg-slate-800'
+                                        }`}
+                                    />
+                                ))}
+                            </div>
+
+                            {/* Body */}
+                            <div className="px-5 pt-3 pb-4 space-y-3">
+                                <h3 className="text-lg font-black text-white leading-snug">{step.title}</h3>
+                                <p className="text-sm text-slate-300 leading-relaxed">{step.body}</p>
+                                <div className="flex items-start gap-2 bg-slate-800/70 border border-slate-700/60 rounded-xl p-3">
+                                    <span className="text-base shrink-0 mt-0.5">💡</span>
+                                    <p className="text-xs text-slate-400 leading-relaxed">{step.tip}</p>
+                                </div>
+                            </div>
+
+                            {/* Footer nav */}
+                            <div className="px-5 pb-4 flex items-center justify-between gap-2">
+                                <button
+                                    onClick={() => setSandboxTutorialStep(s => Math.max(0, s - 1))}
+                                    disabled={sandboxTutorialStep === 0}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                                >← Back</button>
+
+                                <button
+                                    onClick={() => setShowSandboxTutorial(false)}
+                                    className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors"
+                                >Skip all</button>
+
+                                {sandboxTutorialStep >= steps.length - 1 ? (
+                                    <button
+                                        onClick={() => setShowSandboxTutorial(false)}
+                                        className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg"
+                                    >Start Practicing ✅</button>
+                                ) : (
+                                    <button
+                                        onClick={() => setSandboxTutorialStep(s => s + 1)}
+                                        className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg"
+                                    >Next →</button>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
         </div>
     );
 }
