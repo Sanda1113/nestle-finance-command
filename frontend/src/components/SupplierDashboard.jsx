@@ -1622,7 +1622,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 </defs>
                                 <rect
                                     x="0" y="0" width={vw} height={vh}
-                                    fill="rgba(2,6,23,0.82)"
+                                    fill="rgba(2,6,23,0.55)"
                                     mask="url(#tutMask)"
                                 />
                                 {/* Glowing border ring around the spotlight hole */}
@@ -1640,7 +1640,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                         ) : (
                             /* Fallback solid backdrop when no target yet */
                             <div
-                                className="absolute inset-0 bg-slate-950/80 backdrop-blur-[2px] pointer-events-auto"
+                                className="absolute inset-0 bg-slate-950/50 pointer-events-auto"
                                 style={{ zIndex: 201 }}
                                 onClick={() => setShowSandboxTutorial(false)}
                             />
