@@ -215,8 +215,8 @@ export default function ProcurementPortal({ user, onLogout }) {
                                     <h3 className="text-sm font-black text-white uppercase tracking-wider">Spend vs Allocation (MTD)</h3>
                                     <BarIcon className="w-4 h-4 text-slate-500" />
                                 </div>
-                                <div className="h-64 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
+                                <div className="h-64 w-full" style={{ minHeight: '256px', minWidth: '100%' }}>
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                                         <BarChart data={chartData}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                                             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 10, fontWeight: 'bold' }} />
@@ -235,8 +235,8 @@ export default function ProcurementPortal({ user, onLogout }) {
                                     <PieIcon className="w-4 h-4 text-slate-500" />
                                 </div>
                                 <div className="flex-1 flex items-center justify-center">
-                                    <div className="relative h-64 w-64">
-                                        <ResponsiveContainer width="100%" height="100%">
+                                    <div className="relative h-64 w-64" style={{ minHeight: '256px', minWidth: '256px' }}>
+                                        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                                             <PieChart>
                                                 <Pie data={budgetData} innerRadius={70} outerRadius={90} paddingAngle={5} dataKey="value">
                                                     {budgetData.map((entry, index) => (
