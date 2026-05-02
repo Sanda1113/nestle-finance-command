@@ -1384,7 +1384,7 @@ function AnalyticsPortal() {
     );
 }
 
-function PayoutCalendar() {
+function PayoutCalendar({ user }) {
     const [payouts, setPayouts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [schedulingPayout, setSchedulingPayout] = useState(null);
