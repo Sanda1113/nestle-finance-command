@@ -1726,6 +1726,21 @@ function TreasuryDashboard({ user, bankBalance, setBankBalance, topUpRequests, s
         setTopUpRequests(updatedRequests);
         localStorage.setItem('nestle_topup_requests', JSON.stringify(updatedRequests));
         
+        supabase.from('notifications').insert([{
+            user_role: 'Procurement',
+            title: '💸 Top-up Request',
+            message: `${user.email} requested a top-up of $${parseFloat(requestAmount).toLocaleString()}.`,
+            is_read: false
+        }]).then(() => {});
+
+        // Also update app_notifications if you use that for real-time channel sync
+        supabase.from('app_notifications').insert({
+            role: 'Procurement',
+            title: '💸 Top-up Request',
+            message: `${user.email} requested a top-up of $${parseFloat(requestAmount).toLocaleString()}.`,
+            type: 'topup_request'
+        }).then(() => {});
+
         setIsRequesting(false);
         setRequestAmount('');
         alert("Top-up request sent to Procurement Manager for approval.");
