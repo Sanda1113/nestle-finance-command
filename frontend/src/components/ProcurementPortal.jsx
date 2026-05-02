@@ -15,7 +15,8 @@ import {
     Users,
     Briefcase,
     Zap,
-    Download
+    Download,
+    RefreshCw
 } from 'lucide-react';
 import {
     PieChart, Pie, Cell,
@@ -157,6 +158,14 @@ export default function ProcurementPortal({ user, onLogout }) {
                         <p className="text-slate-400 text-sm font-medium mt-1">Welcome back, <span className="text-indigo-400">{user.name}</span>. You have {stats.pendingCount} pending capital requests.</p>
                     </div>
                     <div className="flex items-center gap-4">
+                        <button
+                            onClick={fetchRequests}
+                            disabled={loading}
+                            className="p-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-2xl shadow-sm transition-all text-slate-400 hover:text-indigo-400 disabled:opacity-50"
+                            title="Refresh Dashboard Data"
+                        >
+                            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin text-indigo-500' : ''}`} />
+                        </button>
                         <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 px-4 py-2 rounded-2xl shadow-sm">
                             <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center font-black text-white text-xs">PM</div>
                             <div className="text-left">
