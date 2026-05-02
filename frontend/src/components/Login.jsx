@@ -19,7 +19,8 @@ export default function Login({ onLogin }) {
             const devAccounts = {
                 'nestlesupplier1@gmail.com': { password: '123', role: 'supplier', name: 'Nestlé Supplier 1' },
                 'employee1@nestle.lk': { password: '123', role: 'finance', name: 'Finance Admin 1' },
-                'dock1@nestle.lk': { password: '123', role: 'warehouse', name: 'Dock Inspector 1' }
+                'dock1@nestle.lk': { password: '123', role: 'warehouse', name: 'Dock Inspector 1' },
+                'manager@nestle.lk': { password: '123', role: 'procurement', name: 'Procurement Manager' }
             };
 
             const devUser = devAccounts[email.toLowerCase()];
@@ -102,6 +103,10 @@ export default function Login({ onLogin }) {
                             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full">
                                 <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
                                 <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Warehouse</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
+                                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Procurement</span>
                             </div>
                         </div>
                     </div>
@@ -197,6 +202,16 @@ export default function Login({ onLogin }) {
                                         }`}
                                 >
                                     📦 Dock
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setRole('procurement')}
+                                    className={`py-2 text-[11px] font-bold rounded-lg transition-all duration-300 ${role === 'procurement'
+                                        ? 'bg-slate-800 text-white shadow-sm border border-slate-700'
+                                        : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                                        }`}
+                                >
+                                    🛡️ Manager
                                 </button>
                             </div>
                         </div>

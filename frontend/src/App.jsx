@@ -3,6 +3,7 @@ import Login from './components/Login';
 import SupplierDashboard from './components/SupplierDashboard';
 import Portal from './components/Portal';
 import WarehousePortal from './components/WarehousePortal';
+import ProcurementPortal from './components/ProcurementPortal';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -24,6 +25,11 @@ function App() {
   // 3. Route for Finance / Admins
   if (user.role === 'finance' || user.role === 'admin') {
     return <Portal user={user} onLogout={() => setUser(null)} />;
+  }
+
+  // 4. Route for Procurement Managers
+  if (user.role === 'procurement') {
+    return <ProcurementPortal user={user} onLogout={() => setUser(null)} />;
   }
 
   // Fallback if an unknown role logs in

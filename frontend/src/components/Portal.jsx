@@ -121,6 +121,36 @@ export default function Portal({ user, onLogout }) {
     const BALANCE_THRESHOLD = 500000; // $500k threshold
 
     useEffect(() => {
+        const syncTreasury = () => {
+            const storedBalance = localStorage.getItem('nestle_treasury_balance');
+            if (storedBalance) setBankBalance(parseFloat(storedBalance));
+            
+            const storedRequests = localStorage.getItem('nestle_topup_requests');
+            if (storedRequests) setTopUpRequests(JSON.parse(storedRequests));
+        };
+
+        syncTreasury();
+
+        // 1. Listen for Storage Events (cross-tab sync)
+        window.addEventListener('storage', syncTreasury);
+
+        // 2. Listen for Supabase Notifications (role-based sync)
+        const channel = supabase
+            .channel('treasury_sync')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'app_notifications', filter: `role=eq.Finance` }, (payload) => {
+                if (payload.new.type === 'topup_approved') {
+                    syncTreasury();
+                }
+            })
+            .subscribe();
+
+        return () => {
+            window.removeEventListener('storage', syncTreasury);
+            supabase.removeChannel(channel);
+        };
+    }, [activeTab]);
+
+    useEffect(() => {
         if (isDarkMode) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
     }, [isDarkMode]);
@@ -1691,20 +1721,14 @@ function TreasuryDashboard({ user, bankBalance, setBankBalance, topUpRequests, s
             status: 'Pending',
             created_at: new Date().toISOString()
         };
-        setTopUpRequests([...topUpRequests, newRequest]);
+        
+        const updatedRequests = [...topUpRequests, newRequest];
+        setTopUpRequests(updatedRequests);
+        localStorage.setItem('nestle_topup_requests', JSON.stringify(updatedRequests));
+        
         setIsRequesting(false);
         setRequestAmount('');
-        alert("Top-up request sent to Procurement/Management for approval.");
-    };
-
-    const handleApproveTopUp = (req) => {
-        setBankBalance(prev => prev + req.amount);
-        setTopUpRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'Approved' } : r));
-        alert(`Request approved! ${formatCurrency(req.amount)} added to Treasury Balance.`);
-    };
-
-    const handleRejectTopUp = (req) => {
-        setTopUpRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'Rejected' } : r));
+        alert("Top-up request sent to Procurement Manager for approval.");
     };
 
     const isLowBalance = bankBalance < threshold;
@@ -1773,39 +1797,38 @@ function TreasuryDashboard({ user, bankBalance, setBankBalance, topUpRequests, s
                 </div>
             </div>
 
-            {/* Approval / Requests Section */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                {/* Approver View (Simulator) */}
+            {/* Requests Section */}
+            <div className="grid grid-cols-1 gap-8">
+                {/* Status Section */}
                 <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
                     <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex justify-between items-center">
                         <div>
-                            <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Approval Queue (Management View)</h3>
-                            <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Responsible for approving Top-ups</p>
+                            <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Top-up Request Status</h3>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Real-time status of capital injection requests</p>
                         </div>
-                        <Shield className="w-5 h-5 text-blue-500" />
+                        <Shield className="w-5 h-5 text-indigo-500" />
                     </div>
                     <div className="p-4">
                         {topUpRequests.filter(r => r.status === 'Pending').length === 0 ? (
                             <div className="py-12 text-center text-slate-400">
                                 <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                                <p className="text-xs font-bold uppercase tracking-widest">No pending top-up requests</p>
+                                <p className="text-xs font-bold uppercase tracking-widest">No pending requests</p>
                             </div>
                         ) : (
                             <div className="space-y-4">
                                 {topUpRequests.filter(r => r.status === 'Pending').map(req => (
-                                    <div key={req.id} className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-between group hover:border-blue-500/50 transition-all">
+                                    <div key={req.id} className="p-6 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[2rem] flex items-center justify-between">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                                                <DollarSign className="w-5 h-5 text-blue-600" />
+                                            <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center">
+                                                <Clock className="w-6 h-6 text-indigo-600" />
                                             </div>
                                             <div>
-                                                <p className="text-sm font-black text-slate-800 dark:text-white">{formatCurrency(req.amount)}</p>
-                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">From: {req.requester}</p>
+                                                <p className="text-lg font-black text-slate-800 dark:text-white">{formatCurrency(req.amount)}</p>
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Submitted to Procurement Manager</p>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => handleRejectTopUp(req)} className="p-2 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-rose-500 hover:text-white rounded-lg transition-colors"><X className="w-4 h-4" /></button>
-                                            <button onClick={() => handleApproveTopUp(req)} className="p-2 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-emerald-500 hover:text-white rounded-lg transition-colors"><CheckCircle2 className="w-4 h-4" /></button>
+                                        <div className="px-4 py-2 bg-amber-500/10 text-amber-500 text-[10px] font-black uppercase rounded-lg border border-amber-500/20 animate-pulse">
+                                            Awaiting Approval
                                         </div>
                                     </div>
                                 ))}
@@ -1826,7 +1849,7 @@ function TreasuryDashboard({ user, bankBalance, setBankBalance, topUpRequests, s
                                     <th className="p-6">Description</th>
                                     <th className="p-6">Amount</th>
                                     <th className="p-6">Status</th>
-                                    <th className="p-6">Date</th>
+                                    <th className="p-6">Outcome</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1834,7 +1857,7 @@ function TreasuryDashboard({ user, bankBalance, setBankBalance, topUpRequests, s
                                     <tr key={req.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                                         <td className="p-6">
                                             <p className="font-black text-slate-800 dark:text-white">Top-up Request</p>
-                                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{req.requester}</p>
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{new Date(req.created_at).toLocaleDateString()}</p>
                                         </td>
                                         <td className="p-6 text-indigo-600 dark:text-indigo-400 font-black">{formatCurrency(req.amount)}</td>
                                         <td className="p-6">
@@ -1846,12 +1869,11 @@ function TreasuryDashboard({ user, bankBalance, setBankBalance, topUpRequests, s
                                                 {req.status}
                                             </span>
                                         </td>
-                                        <td className="p-6 text-[10px] font-mono text-slate-400">{new Date(req.created_at).toLocaleDateString()}</td>
+                                        <td className="p-6 text-[10px] font-bold text-slate-500 uppercase">
+                                            {req.status === 'Approved' ? 'Funded' : req.status === 'Rejected' ? 'Risk-Hold' : 'Processing'}
+                                        </td>
                                     </tr>
                                 ))}
-                                {topUpRequests.length === 0 && (
-                                    <tr><td colSpan="4" className="p-12 text-center text-slate-400 italic">No treasury transactions recorded yet.</td></tr>
-                                )}
                             </tbody>
                         </table>
                     </div>
