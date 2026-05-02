@@ -36,7 +36,7 @@ const STATUS_CONFIG = {
     'Hold':          { bg: 'from-amber-500 to-orange-600', light: 'bg-amber-900/40 text-amber-400 border-amber-700/50',   label: 'On Hold', icon: '⏸️', glow: 'shadow-amber-500/20' },
     'Renegotiated':  { bg: 'from-purple-600 to-indigo-700', light: 'bg-purple-900/40 text-purple-400 border-purple-700/50', label: 'Early Payout', icon: '⚡', glow: 'shadow-purple-500/20' },
     'Scheduled':     { bg: 'from-blue-600 to-cyan-700', light: 'bg-blue-900/40 text-blue-400 border-blue-700/50',       label: 'Scheduled', icon: '📅', glow: 'shadow-blue-500/20' },
-    'Pending Finance': { bg: 'from-slate-600 to-slate-800', light: 'bg-slate-700/40 text-slate-300 border-slate-600/50', label: 'Pending', icon: '⏳', glow: 'shadow-slate-500/20' },
+    'Pending':       { bg: 'from-slate-600 to-slate-800', light: 'bg-slate-700/40 text-slate-300 border-slate-600/50', label: 'Pending', icon: '⏳', glow: 'shadow-slate-500/20' },
 };
 const getStatusCfg = (status) => STATUS_CONFIG[status] || STATUS_CONFIG['Scheduled'];
 
@@ -184,9 +184,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
     const fetchEvents = useCallback(async () => {
         setLoading(true);
         try {
-            const url = isFinance
-                ? 'https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts'
-                : `https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts?email=${encodeURIComponent(userEmail)}`;
+            const url = 'https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts';
             const res = await axios.get(url);
             if (res.data.success) {
                 const mapped = (res.data.data || []).map(p => ({
