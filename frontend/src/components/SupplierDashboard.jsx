@@ -1469,6 +1469,22 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                         </div>
                                                     </div>
 
+                                                    {/* Domino's Pizza Timeline Tracker */}
+                                                    <div className="p-4 bg-slate-900 border-b border-slate-800">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex-1 text-center"><div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center text-xs ${tx.events.some(e => e.label.includes('Invoice')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>1</div><p className="text-[10px] mt-1 font-bold text-slate-400">Invoice Received</p></div>
+                                                            <div className="flex-1 h-1 bg-slate-700"><div className={`h-full bg-emerald-500 ${tx.events.some(e => e.label.includes('Delivered') || e.label.includes('Goods')) ? 'w-full' : 'w-0'}`}></div></div>
+                                                            <div className="flex-1 text-center"><div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center text-xs ${tx.events.some(e => e.label.includes('Delivered') || e.label.includes('Goods')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>2</div><p className="text-[10px] mt-1 font-bold text-slate-400">Goods Cleared</p></div>
+                                                            <div className="flex-1 h-1 bg-slate-700"><div className={`h-full bg-emerald-500 ${tx.events.some(e => e.label.includes('Scheduled')) ? 'w-full' : 'w-0'}`}></div></div>
+                                                            <div className="flex-1 text-center"><div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center text-xs ${tx.events.some(e => e.label.includes('Scheduled')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>3</div><p className="text-[10px] mt-1 font-bold text-slate-400">Scheduled</p></div>
+                                                            <div className="flex-1 h-1 bg-slate-700"><div className={`h-full bg-emerald-500 ${tx.events.some(e => e.isPaid) ? 'w-full' : 'w-0'}`}></div></div>
+                                                            <div className="flex-1 text-center"><div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center text-xs ${tx.events.some(e => e.isPaid) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>4</div><p className="text-[10px] mt-1 font-bold text-slate-400">Paid</p></div>
+                                                        </div>
+                                                        {tx.events.some(e => e.label.includes('Scheduled')) && !tx.events.some(e => e.isPaid) && (
+                                                            <p className="text-center text-xs text-blue-400 mt-3 bg-blue-900/20 py-1.5 rounded-lg border border-blue-800/50">Based on historical data, Nestlé usually processes your invoices 3 days early. Expected Bank Arrival: Nov 12th.</p>
+                                                        )}
+                                                    </div>
+
                                                     <div className="p-5">
                                                         <div className="relative">
                                                             <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-700"></div>
@@ -1491,7 +1507,18 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                                                             }}
                                                                                             className="ml-2 px-2 py-0.5 bg-emerald-900/40 text-emerald-400 border border-emerald-700 rounded text-[10px] uppercase font-bold hover:bg-emerald-800 transition-colors"
                                                                                         >
-                                                                                            📄 Receipt
+                                                                                            📄 Download Receipt
+                                                                                        </button>
+                                                                                    )}
+                                                                                    {event.label === 'Scheduled (Calendar)' && (
+                                                                                        <button 
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                setMode('payouts');
+                                                                                            }}
+                                                                                            className="ml-2 px-2 py-0.5 bg-indigo-900/40 text-indigo-400 border border-indigo-700 rounded text-[10px] uppercase font-bold hover:bg-indigo-800 transition-colors"
+                                                                                        >
+                                                                                            ⚡ Request Early Payout
                                                                                         </button>
                                                                                     )}
                                                                                 </div>
@@ -1513,10 +1540,20 @@ export default function SupplierDashboard({ user, onLogout }) {
                             {mode === 'payouts' && (
                                 <div className="animate-in fade-in duration-300 space-y-6">
                                     <div className="mb-4">
-                                        <h2 className="text-2xl font-bold tracking-tight">Payouts & Liquidity</h2>
+                                        <h2 className="text-2xl font-bold tracking-tight">My Payout Calendar</h2>
                                         <p className="text-sm text-slate-400">Manage cash flow and request early payouts.</p>
                                     </div>
                                     
+                                    <div className="bg-gradient-to-r from-indigo-900/80 to-purple-900/80 border border-indigo-500/50 p-5 rounded-xl shadow-lg flex items-start gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center shrink-0">
+                                            <Zap className="w-5 h-5 text-indigo-400" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-base font-bold text-white">Smart Cash-Flow Alert</h3>
+                                            <p className="text-sm text-indigo-100 mt-1">We noticed you usually require fast liquidity in September. Secure a discounted 1.5% early-payout rate on all active invoices if you claim it this week.</p>
+                                        </div>
+                                    </div>
+
                                     <DigitalCalendar userRole="Supplier" userEmail={user?.email} />
                                 </div>
                             )}

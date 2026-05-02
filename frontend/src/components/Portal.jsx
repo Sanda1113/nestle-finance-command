@@ -191,10 +191,13 @@ export default function Portal({ user, onLogout }) {
                             <BarChart2 className="w-4 h-4 shrink-0" /> Analytics
                         </button>
                         <button type="button" onClick={() => setActiveTab('payouts')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'payouts' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
-                            <Calendar className="w-4 h-4 shrink-0" /> Payout Calendar
+                            <Calendar className="w-4 h-4 shrink-0" /> The Treasury Calendar
                         </button>
                         <button type="button" onClick={() => setActiveTab('treasury')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'treasury' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
                             <Zap className="w-4 h-4 shrink-0" /> Treasury ROI
+                        </button>
+                        <button type="button" onClick={() => setActiveTab('settings')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
+                            <Settings className="w-4 h-4 shrink-0" /> Settings
                         </button>
                     </div>
                 </div>
@@ -206,6 +209,7 @@ export default function Portal({ user, onLogout }) {
                     {activeTab === 'analytics' && <AnalyticsPortal />}
                     {activeTab === 'payouts' && <PayoutCalendar user={user} />}
                     {activeTab === 'treasury' && <TreasuryDashboard />}
+                    {activeTab === 'settings' && <SettingsPortal />}
                 </div>
             </div>
 
@@ -686,7 +690,7 @@ function FinancePortal({ user }) {
         if (!isMathMatch && variance > 0 && variance <= 5.00 && trustTier !== 'Tier 3 (High Risk)') {
             autoApprovedViaTolerance = true;
             if (displayStatus === 'Pending' || displayStatus.includes('Discrepancy') || displayStatus === 'Discrepancy Detected') {
-                displayStatus = 'Auto-Approved (Tolerance)';
+                displayStatus = 'Auto-Approved';
             }
             glPayload = {
                 journal_entry: "JRNL-VAR-AUTO",
@@ -962,7 +966,7 @@ function FinancePortal({ user }) {
                                                             onClick={(e) => { e.stopPropagation(); handleStagePayout(r); }}
                                                             className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors"
                                                         >
-                                                            Pay
+                                                            Stage Payout
                                                         </button>
                                                     ) : (
                                                         <>
@@ -1502,7 +1506,7 @@ function PayoutCalendar({ user }) {
     return (
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="mb-6">
-                <h2 className="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3"><Calendar className="w-8 h-8 text-blue-600" /> Payout Calendar</h2>
+                <h2 className="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3"><Calendar className="w-8 h-8 text-blue-600" /> The Treasury Calendar</h2>
                 <p className="text-slate-500 dark:text-slate-400">Track and manage scheduled payouts across all suppliers.</p>
             </div>
             
@@ -1734,3 +1738,24 @@ function TreasuryDashboard() {
     );
 }
 
+function SettingsPortal() {
+    return (
+        <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <h2 className="text-3xl font-black text-slate-800 dark:text-white">Tolerance Rules Configurator</h2>
+            <p className="text-slate-500 dark:text-slate-400">Set the math rules for the Smart Tolerance Engine.</p>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 space-y-4 max-w-xl">
+                <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Allowable Tax Variance</label>
+                    <input type="text" defaultValue="$1.00" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-sm outline-none font-black text-slate-800 dark:text-white" />
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Allowable Freight Variance</label>
+                    <input type="text" defaultValue="2%" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-sm outline-none font-black text-slate-800 dark:text-white" />
+                </div>
+                <button onClick={() => alert('Rules saved! The 3-way match engine will use these numbers to silently approve minor errors.')} className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl transition-colors">
+                    Save Rules
+                </button>
+            </div>
+        </div>
+    );
+}

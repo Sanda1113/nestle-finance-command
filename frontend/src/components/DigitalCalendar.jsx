@@ -544,7 +544,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                                         <button onClick={handleApproveTransfer} disabled={isUpdating}
                                             className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all shadow-[0_10px_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2 group">
                                             <CheckCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                            {isUpdating ? 'Executing Payment...' : 'Authorize Disbursement'}
+                                            {isUpdating ? 'Executing Payment...' : 'Disburse Funds'}
                                         </button>
                                         <div className="flex gap-2">
                                             <div className="flex-1 bg-slate-800/80 rounded-2xl border border-slate-700 p-1 flex items-center pr-3">
@@ -553,7 +553,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                                             </div>
                                             <button onClick={handleHoldPayment} disabled={isUpdating || !holdDate}
                                                 className="px-6 py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-2xl transition-all">
-                                                Hold
+                                                Hold Payment
                                             </button>
                                         </div>
                                     </div>
@@ -564,7 +564,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <Zap className="w-4 h-4 text-indigo-400" />
-                                                <span className="text-xs font-black text-white uppercase tracking-widest">Liquidity Accelerator</span>
+                                                <span className="text-xs font-black text-white uppercase tracking-widest">The Liquidity Slider</span>
                                             </div>
                                             <span className="text-xs font-black text-indigo-400 bg-indigo-500/20 px-3 py-1 rounded-full">{discountRate.toFixed(1)}% Rate</span>
                                         </div>
@@ -586,7 +586,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                                         <button onClick={handleAcceptEarlyPayout} disabled={isUpdating}
                                             className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl transition-all shadow-[0_10px_20px_rgba(79,70,229,0.3)] flex items-center justify-center gap-2">
                                             <Download className="w-5 h-5" />
-                                            {isUpdating ? 'Accelerating...' : 'Withdraw Funds Now'}
+                                            {isUpdating ? 'Accelerating...' : 'Accept Offer'}
                                         </button>
                                     </div>
                                 )}
