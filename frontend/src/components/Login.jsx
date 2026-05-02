@@ -15,6 +15,20 @@ export default function Login({ onLogin }) {
         setLoading(true); setError(''); setSuccessMsg('');
 
         try {
+            // 🔥 HARDCODED DEV-LOGIN BYPASS (Localhost Testing)
+            const devAccounts = {
+                'nestlesupplier1@gmail.com': { password: '123', role: 'supplier', name: 'Nestlé Supplier 1' },
+                'employee1@nestle.lk': { password: '123', role: 'finance', name: 'Finance Admin 1' },
+                'dock1@nestle.lk': { password: '123', role: 'warehouse', name: 'Dock Inspector 1' }
+            };
+
+            const devUser = devAccounts[email.toLowerCase()];
+            if (devUser && password === devUser.password) {
+                console.log("🛠️ Dev Bypass Login Success:", devUser.role);
+                onLogin({ email: email.toLowerCase(), role: devUser.role, name: devUser.name });
+                return;
+            }
+
             if (isLoginView) {
                 const res = await axios.post('https://nestle-finance-command-production.up.railway.app/api/auth/login', { email, password });
                 if (res.data.success) onLogin(res.data.user);
