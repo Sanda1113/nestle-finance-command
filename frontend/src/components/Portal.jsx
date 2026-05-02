@@ -115,6 +115,11 @@ export default function Portal({ user, onLogout }) {
     const [activeTab, setActiveTab] = useState('procurement');
     const [isDarkMode, setIsDarkMode] = useState(true);
 
+    // 🔥 TREASURY & BANK BALANCE STATE
+    const [bankBalance, setBankBalance] = useState(1250000.50); // Initial mock balance
+    const [topUpRequests, setTopUpRequests] = useState([]);
+    const BALANCE_THRESHOLD = 500000; // $500k threshold
+
     useEffect(() => {
         if (isDarkMode) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
@@ -195,7 +200,7 @@ export default function Portal({ user, onLogout }) {
                             <Calendar className="w-4 h-4 shrink-0" /> The Treasury Calendar
                         </button>
                         <button type="button" onClick={() => setActiveTab('treasury')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'treasury' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
-                            <Zap className="w-4 h-4 shrink-0" /> Treasury ROI
+                            <Zap className="w-4 h-4 shrink-0" /> Treasury Management
                         </button>
                         <button type="button" onClick={() => setActiveTab('settings')} className={`text-left px-3 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-3 ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}>
                             <Settings className="w-4 h-4 shrink-0" /> Settings
@@ -209,7 +214,16 @@ export default function Portal({ user, onLogout }) {
                     {activeTab === 'finance' && <FinancePortal user={user} />}
                     {activeTab === 'analytics' && <AnalyticsPortal />}
                     {activeTab === 'payouts' && <PayoutCalendar user={user} />}
-                    {activeTab === 'treasury' && <TreasuryDashboard />}
+                    {activeTab === 'treasury' && (
+                        <TreasuryDashboard 
+                            user={user} 
+                            bankBalance={bankBalance} 
+                            setBankBalance={setBankBalance}
+                            topUpRequests={topUpRequests}
+                            setTopUpRequests={setTopUpRequests}
+                            threshold={BALANCE_THRESHOLD}
+                        />
+                    )}
                     {activeTab === 'settings' && <SettingsPortal />}
                 </div>
             </div>
@@ -1648,9 +1662,11 @@ function PayoutCalendar({ user }) {
     );
 }
 
-function TreasuryDashboard() {
+function TreasuryDashboard({ user, bankBalance, setBankBalance, topUpRequests, setTopUpRequests, threshold }) {
     const [stats, setStats] = useState({ totalDeployed: 0, yieldCaptured: 0, cap: 5000000 });
     const [payouts, setPayouts] = useState([]);
+    const [isRequesting, setIsRequesting] = useState(false);
+    const [requestAmount, setRequestAmount] = useState('');
 
     useEffect(() => {
         const fetchTreasuryData = async () => {
@@ -1666,75 +1682,228 @@ function TreasuryDashboard() {
         fetchTreasuryData();
     }, []);
 
+    const handleRequestTopUp = () => {
+        if (!requestAmount || isNaN(requestAmount)) return alert("Please enter a valid amount.");
+        const newRequest = {
+            id: Date.now(),
+            amount: parseFloat(requestAmount),
+            requester: user.email,
+            status: 'Pending',
+            created_at: new Date().toISOString()
+        };
+        setTopUpRequests([...topUpRequests, newRequest]);
+        setIsRequesting(false);
+        setRequestAmount('');
+        alert("Top-up request sent to Procurement/Management for approval.");
+    };
+
+    const handleApproveTopUp = (req) => {
+        setBankBalance(prev => prev + req.amount);
+        setTopUpRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'Approved' } : r));
+        alert(`Request approved! ${formatCurrency(req.amount)} added to Treasury Balance.`);
+    };
+
+    const handleRejectTopUp = (req) => {
+        setTopUpRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'Rejected' } : r));
+    };
+
+    const isLowBalance = bankBalance < threshold;
+
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div className="flex justify-between items-center">
+            {/* Header with Balance and Alerts */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-3xl font-black text-slate-800 dark:text-white">Treasury Yield Dashboard</h2>
-                    <p className="text-slate-500 dark:text-slate-400">Monitoring ROI from the Dynamic Discounting program.</p>
+                    <h2 className="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
+                        <DollarSign className="w-8 h-8 text-indigo-600" /> Treasury Management
+                    </h2>
+                    <p className="text-slate-500 dark:text-slate-400">Monitoring ROI and liquidity for expenditure.</p>
                 </div>
-                <div className="bg-indigo-600 px-4 py-2 rounded-xl text-white font-bold shadow-lg shadow-indigo-500/20 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4" /> Capital Safe
+                <div className="flex items-center gap-3">
+                    <div className={`px-4 py-2 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-colors ${isLowBalance ? 'bg-rose-600 text-white shadow-rose-500/20 animate-pulse' : 'bg-emerald-600 text-white shadow-emerald-500/20'}`}>
+                        <ShieldCheck className="w-4 h-4" /> 
+                        {isLowBalance ? 'Low Liquidity Alert' : 'Treasury Capital Healthy'}
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Total Early Liquidity Deployed</p>
-                    <p className="text-4xl font-black text-slate-800 dark:text-white">{formatCurrency(stats.totalDeployed)}</p>
-                    <div className="mt-4 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500" style={{ width: `${Math.min(100, (stats.totalDeployed / stats.cap) * 100)}%` }}></div>
+            {/* Main Stats and Balance */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700"></div>
+                    <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Available Bank Balance</p>
+                    <p className={`text-4xl font-black transition-colors ${isLowBalance ? 'text-rose-500' : 'text-slate-800 dark:text-white'}`}>
+                        {formatCurrency(bankBalance)}
+                    </p>
+                    <div className="mt-6 flex gap-3">
+                        <button 
+                            onClick={() => setIsRequesting(true)}
+                            className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-indigo-600/20 active:scale-[0.98]"
+                        >
+                            Request Top-up
+                        </button>
                     </div>
-                    <p className="text-[10px] font-bold text-slate-500 mt-2 uppercase tracking-widest">Cap: {formatCurrency(stats.cap)} / Month</p>
+                    {isLowBalance && (
+                        <p className="text-[10px] font-bold text-rose-500 mt-4 flex items-center gap-1.5 uppercase tracking-widest">
+                            <AlertTriangle className="w-3 h-3" /> Balance below threshold ({formatCurrency(threshold)})
+                        </p>
+                    )}
                 </div>
 
-                <div className="bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-500/20 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700"></div>
+                <div className="bg-indigo-600 p-8 rounded-[2.5rem] shadow-2xl shadow-indigo-500/30 relative overflow-hidden group text-white">
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -mr-24 -mt-24 group-hover:scale-125 transition-transform duration-700"></div>
                     <p className="text-xs font-bold text-indigo-100 uppercase tracking-widest mb-2 relative z-10">Net Discount Revenue (ROI)</p>
-                    <p className="text-4xl font-black text-white relative z-10">{formatCurrency(stats.yieldCaptured)}</p>
-                    <div className="mt-4 inline-flex items-center gap-1.5 px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold text-white relative z-10">
+                    <p className="text-4xl font-black relative z-10">{formatCurrency(stats.yieldCaptured)}</p>
+                    <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-[10px] font-bold text-white relative z-10">
                         <TrendingUp className="w-3 h-3" /> +12.4% vs last month
                     </div>
+                    <p className="mt-6 text-[10px] text-indigo-100/70 font-medium relative z-10">Total early capital deployed: {formatCurrency(stats.totalDeployed)}</p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Active Discount Agreements</p>
-                    <p className="text-4xl font-black text-slate-800 dark:text-white">{payouts.length}</p>
-                    <p className="text-[10px] font-bold text-emerald-500 mt-2 uppercase tracking-widest">Avg. Discount: 2.1%</p>
+                <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl">
+                    <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Operational Capacity</p>
+                    <div className="flex items-end gap-2">
+                        <p className="text-4xl font-black text-slate-800 dark:text-white">{( (stats.totalDeployed / stats.cap) * 100 ).toFixed(1)}%</p>
+                        <p className="text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wider">of Cap</p>
+                    </div>
+                    <div className="mt-6 h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
+                        <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" style={{ width: `${Math.min(100, (stats.totalDeployed / stats.cap) * 100)}%` }}></div>
+                    </div>
+                    <p className="text-[10px] font-black text-slate-500 mt-4 uppercase tracking-widest">Monthly Limit: {formatCurrency(stats.cap)}</p>
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                    <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Recently Captured Yields</h3>
+            {/* Approval / Requests Section */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                {/* Approver View (Simulator) */}
+                <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+                    <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex justify-between items-center">
+                        <div>
+                            <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Approval Queue (Management View)</h3>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Responsible for approving Top-ups</p>
+                        </div>
+                        <Shield className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <div className="p-4">
+                        {topUpRequests.filter(r => r.status === 'Pending').length === 0 ? (
+                            <div className="py-12 text-center text-slate-400">
+                                <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                                <p className="text-xs font-bold uppercase tracking-widest">No pending top-up requests</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {topUpRequests.filter(r => r.status === 'Pending').map(req => (
+                                    <div key={req.id} className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-between group hover:border-blue-500/50 transition-all">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                                                <DollarSign className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-black text-slate-800 dark:text-white">{formatCurrency(req.amount)}</p>
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">From: {req.requester}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => handleRejectTopUp(req)} className="p-2 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-rose-500 hover:text-white rounded-lg transition-colors"><X className="w-4 h-4" /></button>
+                                            <button onClick={() => handleApproveTopUp(req)} className="p-2 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-emerald-500 hover:text-white rounded-lg transition-colors"><CheckCircle2 className="w-4 h-4" /></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <table className="w-full text-left text-sm">
-                    <thead>
-                        <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">
-                            <th className="p-4">Supplier</th>
-                            <th className="p-4">Original Value</th>
-                            <th className="p-4">Net Payout</th>
-                            <th className="p-4 text-emerald-500">Yield Capture</th>
-                            <th className="p-4">Date</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {payouts.map(p => {
-                            const original = Number(p.final_amount) / (1 - Number(p.discount_applied || 0));
-                            const yieldVal = original - Number(p.final_amount);
-                            return (
-                                <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                                    <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{p.vendor_name}</td>
-                                    <td className="p-4 text-slate-500">{formatCurrency(original)}</td>
-                                    <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{formatCurrency(p.final_amount)}</td>
-                                    <td className="p-4 font-black text-emerald-500">+{formatCurrency(yieldVal)}</td>
-                                    <td className="p-4 text-[10px] font-mono text-slate-400">{new Date(p.early_payout_accepted_at).toLocaleDateString()}</td>
+
+                {/* History Section */}
+                <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+                    <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                        <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Treasury History</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead>
+                                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">
+                                    <th className="p-6">Description</th>
+                                    <th className="p-6">Amount</th>
+                                    <th className="p-6">Status</th>
+                                    <th className="p-6">Date</th>
                                 </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {topUpRequests.map(req => (
+                                    <tr key={req.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                                        <td className="p-6">
+                                            <p className="font-black text-slate-800 dark:text-white">Top-up Request</p>
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{req.requester}</p>
+                                        </td>
+                                        <td className="p-6 text-indigo-600 dark:text-indigo-400 font-black">{formatCurrency(req.amount)}</td>
+                                        <td className="p-6">
+                                            <span className={`px-2.5 py-1 text-[10px] font-black uppercase rounded-full ${
+                                                req.status === 'Approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                req.status === 'Rejected' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' :
+                                                'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                            }`}>
+                                                {req.status}
+                                            </span>
+                                        </td>
+                                        <td className="p-6 text-[10px] font-mono text-slate-400">{new Date(req.created_at).toLocaleDateString()}</td>
+                                    </tr>
+                                ))}
+                                {topUpRequests.length === 0 && (
+                                    <tr><td colSpan="4" className="p-12 text-center text-slate-400 italic">No treasury transactions recorded yet.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
+
+            {/* Modal for Requesting Top-up */}
+            {isRequesting && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-8 space-y-6">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className="text-2xl font-black text-slate-800 dark:text-white">Top-up Request</h3>
+                                    <p className="text-sm text-slate-500 font-bold uppercase tracking-widest mt-1">Capital Injection for Payouts</p>
+                                </div>
+                                <button onClick={() => setIsRequesting(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 transition-colors"><X className="w-5 h-5" /></button>
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Requested Amount ($)</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                        <span className="text-slate-400 font-bold">$</span>
+                                    </div>
+                                    <input 
+                                        type="number" 
+                                        autoFocus
+                                        placeholder="0.00"
+                                        value={requestAmount}
+                                        onChange={(e) => setRequestAmount(e.target.value)}
+                                        className="w-full pl-8 pr-4 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-xl font-black outline-none focus:border-indigo-500 transition-colors"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-800/50">
+                                <p className="text-xs text-indigo-700 dark:text-indigo-300 leading-relaxed">
+                                    <strong>Note:</strong> Your request will be sent to the Procurement and Finance Management team for verification of approved expenditure limits.
+                                </p>
+                            </div>
+
+                            <button 
+                                onClick={handleRequestTopUp}
+                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-sm font-black uppercase tracking-wider transition-all shadow-xl shadow-indigo-600/30 active:scale-[0.98]"
+                            >
+                                Submit Request
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

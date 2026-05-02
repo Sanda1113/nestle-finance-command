@@ -298,6 +298,18 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                 discountRate: discountRate / 100,
                 finalAmount: selectedEvent.amount - discountAmount
             });
+
+            // 🔥 NOTIFY FINANCE
+            await supabase.from('app_notifications').insert({
+                role: 'Finance',
+                title: '⚡ Early Payout Accepted',
+                message: `Supplier ${userEmail} accepted an early payout offer for ${formatCurrency(selectedEvent.amount - discountAmount)}. Please review in Treasury.`,
+                type: 'payout_accepted',
+                link: '/portal?tab=treasury',
+                is_read: false,
+                created_at: new Date().toISOString()
+            });
+
             await fetchEvents();
             setSelectedEvent(null);
             alert('⚡ Liquidity successfully accelerated! Your funds are being transferred.');
@@ -576,7 +588,10 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                                             <div className="flex justify-between text-xs font-bold text-rose-500"><span>Service Fee</span><span>-{formatCurrency(discountAmount)}</span></div>
                                             <div className="h-px bg-slate-700/50 my-4"></div>
                                             <div className="flex justify-between items-end">
-                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">You Receive Instantly</span>
+                                                <div>
+                                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">You Receive within 30 min</span>
+                                                    <span className="text-[9px] font-bold text-indigo-400">Est. Arrival: {moment().add(30, 'minutes').format('MMM D, h:mm A')}</span>
+                                                </div>
                                                 <span className="text-3xl font-black text-emerald-400">{formatCurrency(selectedEvent.amount - discountAmount)}</span>
                                             </div>
                                         </div>
