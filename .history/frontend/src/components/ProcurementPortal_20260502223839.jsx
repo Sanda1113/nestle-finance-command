@@ -28,7 +28,7 @@ import { supabase } from '../utils/supabaseClient';
 const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
 
 export default function ProcurementPortal({ user, onLogout }) {
-    const [balance, setBalance] = useState(1250000000.50);
+    const [balance, setBalance] = useState(1250000.50);
     const [requests, setRequests] = useState([]);
     const [stats, setStats] = useState({
         totalApproved: 45000000,
@@ -349,8 +349,8 @@ export default function ProcurementPortal({ user, onLogout }) {
                                                 <td className="px-10 py-6 text-sm font-medium text-slate-400">{req.requester}</td>
                                                 <td className="px-10 py-6">
                                                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${req.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                                        req.status === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
-                                                            'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                                            req.status === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                                                                'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
                                                         }`}>
                                                         {req.status}
                                                     </span>

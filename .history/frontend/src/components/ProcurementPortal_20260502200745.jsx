@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
-import {
-    ShieldCheck,
-    DollarSign,
-    Clock,
-    CheckCircle2,
-    X,
-    TrendingUp,
-    AlertTriangle,
-    LogOut,
-    Activity,
+import { 
+    ShieldCheck, 
+    DollarSign, 
+    Clock, 
+    CheckCircle2, 
+    X, 
+    TrendingUp, 
+    AlertTriangle, 
+    LogOut, 
+    Activity, 
     PieChart as PieIcon,
     BarChart as BarIcon,
     ArrowUpRight,
@@ -17,23 +17,23 @@ import {
     Zap,
     Download
 } from 'lucide-react';
-import {
-    PieChart, Pie, Cell,
-    BarChart, Bar, XAxis, YAxis,
-    CartesianGrid, Tooltip, Legend,
-    ResponsiveContainer
+import { 
+    PieChart, Pie, Cell, 
+    BarChart, Bar, XAxis, YAxis, 
+    CartesianGrid, Tooltip, Legend, 
+    ResponsiveContainer 
 } from 'recharts';
 import { supabase } from '../utils/supabaseClient';
 
 const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
 
 export default function ProcurementPortal({ user, onLogout }) {
-    const [balance, setBalance] = useState(1250000000.50);
+    const [balance, setBalance] = useState(1250000.50);
     const [requests, setRequests] = useState([]);
     const [stats, setStats] = useState({
-        totalApproved: 45000000,
+        totalApproved: 4500000,
         pendingCount: 0,
-        monthlyBudget: 1000000
+        monthlyBudget: 10000000
     });
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('overview');
@@ -55,7 +55,7 @@ export default function ProcurementPortal({ user, onLogout }) {
         const stored = localStorage.getItem('nestle_topup_requests');
         const parsed = stored ? JSON.parse(stored) : [];
         setRequests(parsed);
-
+        
         const pending = parsed.filter(r => r.status === 'Pending');
         setStats(prev => ({ ...prev, pendingCount: pending.length }));
 
@@ -69,20 +69,20 @@ export default function ProcurementPortal({ user, onLogout }) {
     const handleApprove = (req) => {
         const updatedRequests = requests.map(r => r.id === req.id ? { ...r, status: 'Approved', approved_by: user.email } : r);
         const newBalance = balance + req.amount;
-
+        
         localStorage.setItem('nestle_topup_requests', JSON.stringify(updatedRequests));
         localStorage.setItem('nestle_treasury_balance', newBalance.toString());
-
+        
         setRequests(updatedRequests);
         setBalance(newBalance);
-
+        
         // Notify Finance
         supabase.from('app_notifications').insert({
             role: 'Finance',
             title: '✅ Top-up Approved',
             message: `Your request for ${formatCurrency(req.amount)} has been approved and funded.`,
             type: 'topup_approved'
-        }).then(() => { });
+        }).then(() => {});
 
         alert(`Request for ${formatCurrency(req.amount)} approved.`);
     };
@@ -91,7 +91,7 @@ export default function ProcurementPortal({ user, onLogout }) {
         const updatedRequests = requests.map(r => r.id === req.id ? { ...r, status: 'Rejected', approved_by: user.email } : r);
         localStorage.setItem('nestle_topup_requests', JSON.stringify(updatedRequests));
         setRequests(updatedRequests);
-
+        
         alert(`Request for ${formatCurrency(req.amount)} rejected.`);
     };
 
@@ -219,9 +219,9 @@ export default function ProcurementPortal({ user, onLogout }) {
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={chartData}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 10, fontWeight: 'bold' }} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 10, fontWeight: 'bold' }} />
-                                            <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }} />
+                                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#475569', fontSize: 10, fontWeight: 'bold'}} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{fill: '#475569', fontSize: 10, fontWeight: 'bold'}} />
+                                            <Tooltip contentStyle={{backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px'}} />
                                             <Bar dataKey="approved" fill="#6366f1" radius={[4, 4, 0, 0]} />
                                             <Bar dataKey="requested" fill="#1e293b" radius={[4, 4, 0, 0]} />
                                         </BarChart>
@@ -295,15 +295,15 @@ export default function ProcurementPortal({ user, onLogout }) {
                                                 </div>
                                             </div>
                                         </div>
-
+                                        
                                         <div className="flex gap-4">
-                                            <button
+                                            <button 
                                                 onClick={() => handleReject(req)}
                                                 className="px-6 py-4 bg-slate-800 hover:bg-rose-500 text-slate-400 hover:text-white font-black rounded-2xl transition-all flex items-center gap-2 group/btn"
                                             >
                                                 <X className="w-5 h-5 transition-transform group-hover/btn:rotate-90" /> Reject
                                             </button>
-                                            <button
+                                            <button 
                                                 onClick={() => handleApprove(req)}
                                                 className="px-8 py-4 bg-indigo-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-2"
                                             >
@@ -348,10 +348,11 @@ export default function ProcurementPortal({ user, onLogout }) {
                                                 <td className="px-10 py-6 font-black text-white">{formatCurrency(req.amount)}</td>
                                                 <td className="px-10 py-6 text-sm font-medium text-slate-400">{req.requester}</td>
                                                 <td className="px-10 py-6">
-                                                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${req.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                                                        req.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
                                                         req.status === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
-                                                            'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                                                        }`}>
+                                                        'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                                    }`}>
                                                         {req.status}
                                                     </span>
                                                 </td>
