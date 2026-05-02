@@ -5,6 +5,7 @@ import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import axios from 'axios';
+import { supabase } from '../utils/supabaseClient';
 import { 
     Calendar as CalendarIcon, 
     Clock, 
@@ -54,15 +55,48 @@ const CustomToolbar = (toolbar) => {
         return total;
     }, [toolbar.events]);
 
+    const currentMonth = moment(toolbar.date).month();
+    const currentYear = moment(toolbar.date).year();
+
+    const handleMonthChange = (e) => {
+        if (toolbar.setCurrentDate) {
+            const newDate = moment(toolbar.date).month(e.target.value).toDate();
+            toolbar.setCurrentDate(newDate);
+        }
+    };
+
+    const handleYearChange = (e) => {
+        if (toolbar.setCurrentDate) {
+            const newDate = moment(toolbar.date).year(e.target.value).toDate();
+            toolbar.setCurrentDate(newDate);
+        }
+    };
+
     return (
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 px-6 py-5 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800/50">
-            <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-600/20 rounded-xl border border-indigo-500/30">
-                    <CalendarIcon className="w-6 h-6 text-indigo-400" />
+        <div className="flex flex-col xl:flex-row items-center justify-between gap-4 px-6 py-5 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800/50">
+            <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-indigo-600/20 rounded-xl border border-indigo-500/30">
+                        <CalendarIcon className="w-6 h-6 text-indigo-400" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-black text-white tracking-tight">{toolbar.label}</h2>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Treasury & Liquidity Hub</p>
+                    </div>
                 </div>
-                <div>
-                    <h2 className="text-xl font-black text-white tracking-tight">{toolbar.label}</h2>
-                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Treasury & Liquidity Hub</p>
+                
+                {/* Month/Year Selectors */}
+                <div className="flex items-center gap-2 ml-4">
+                    <select value={currentMonth} onChange={handleMonthChange} className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-sm font-bold text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                        {moment.months().map((m, i) => (
+                            <option key={i} value={i}>{m}</option>
+                        ))}
+                    </select>
+                    <select value={currentYear} onChange={handleYearChange} className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-sm font-bold text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                        {Array.from({ length: 10 }, (_, i) => currentYear - 5 + i).map(y => (
+                            <option key={y} value={y}>{y}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
@@ -81,23 +115,25 @@ const CustomToolbar = (toolbar) => {
                 </div>
             </div>
 
-            <div className="flex items-center gap-1 bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
-                {['month', 'week', 'day', 'agenda'].map((v) => (
-                    <button
-                        key={v}
-                        onClick={() => toolbar.onView(v)}
-                        className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${toolbar.view === v ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                    >
-                        {v.charAt(0).toUpperCase() + v.slice(1)}
-                    </button>
-                ))}
-            </div>
+            <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-1 bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
+                    {['month', 'week', 'day', 'agenda'].map((v) => (
+                        <button
+                            key={v}
+                            onClick={() => toolbar.onView(v)}
+                            className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${toolbar.view === v ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+                        >
+                            {v.charAt(0).toUpperCase() + v.slice(1)}
+                        </button>
+                    ))}
+                </div>
 
-            <div className="flex items-center gap-2">
-                <button onClick={goToToday} className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all">Today</button>
-                <div className="flex items-center gap-1">
-                    <button onClick={goToBack} className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all"><ChevronLeft className="w-5 h-5" /></button>
-                    <button onClick={goToNext} className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all"><ChevronRight className="w-5 h-5" /></button>
+                <div className="flex items-center gap-2">
+                    <button onClick={goToToday} className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all shadow-sm">Today</button>
+                    <div className="flex items-center gap-1">
+                        <button onClick={goToBack} className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all shadow-sm"><ChevronLeft className="w-5 h-5" /></button>
+                        <button onClick={goToNext} className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all shadow-sm"><ChevronRight className="w-5 h-5" /></button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -170,7 +206,24 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         }
     }, [isFinance, userEmail]);
 
-    useEffect(() => { fetchEvents(); }, [fetchEvents]);
+    useEffect(() => { 
+        fetchEvents(); 
+
+        const channel = supabase
+            .channel('digital_calendar_sync')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'payout_schedules' },
+                () => {
+                    fetchEvents();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [fetchEvents]);
 
     const updateEventDate = async (id, start, end) => {
         setEvents(prev => prev.map(ev => ev.id === id ? { ...ev, start, end } : ev));
@@ -407,7 +460,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                         onSelectEvent={handleSelectEvent}
                         eventPropGetter={eventStyleGetter}
                         components={{
-                            toolbar: CustomToolbar
+                            toolbar: (props) => <CustomToolbar {...props} setCurrentDate={setCurrentDate} />
                         }}
                         startAccessor="start"
                         endAccessor="end"
