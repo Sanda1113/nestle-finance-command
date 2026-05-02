@@ -295,7 +295,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         if (!selectedEvent) return;
         setIsUpdating(true);
         try {
-            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/payouts/${selectedEvent.id}/discount`, {
+            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${selectedEvent.id}/discount`, {
                 requestedDate: new Date().toISOString(),
                 discountRate: discountRate / 100,
                 finalAmount: selectedEvent.amount - discountAmount

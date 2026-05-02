@@ -1677,6 +1677,25 @@ export default function WarehousePortal({ user, onLogout }) {
                             <div className="flex flex-wrap items-center gap-2 mb-6">
                                 <p className="text-sm sm:text-xs text-slate-500 font-medium truncate">{selectedPO.supplier_email}</p>
                             </div>
+                            
+                            {selectedPO.po_data?.delivery_timestamp && (
+                                <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-center gap-3">
+                                    <Clock className="w-5 h-5 text-blue-500 shrink-0" />
+                                    <div>
+                                        <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Delivered On</p>
+                                        <p className="text-sm font-black text-slate-800 dark:text-slate-200">
+                                            {new Date(selectedPO.po_data.delivery_timestamp).toLocaleString(undefined, { 
+                                                weekday: 'long', 
+                                                year: 'numeric', 
+                                                month: 'long', 
+                                                day: 'numeric', 
+                                                hour: '2-digit', 
+                                                minute: '2-digit' 
+                                            })}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
                             {!blindMode && (
                                 <div className="mb-6 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all">
@@ -1700,20 +1719,22 @@ export default function WarehousePortal({ user, onLogout }) {
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
-                                <button
-                                    onClick={() => setScanning(true)}
-                                    className="min-h-12 sm:min-h-11 px-3 text-sm sm:text-sm bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
-                                >
-                                    <ScanBarcode className="w-4 h-4 sm:w-5 sm:h-5" /> Scan
-                                </button>
-                                <button
-                                    onClick={() => fileInputRef.current.click()}
-                                    className="min-h-12 sm:min-h-11 px-3 text-sm sm:text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
-                                >
-                                    <Camera className="w-4 h-4 sm:w-5 sm:h-5" /> Photo
-                                </button>
-                            </div>
+                            {(!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled'))) && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
+                                    <button
+                                        onClick={() => setScanning(true)}
+                                        className="min-h-12 sm:min-h-11 px-3 text-sm sm:text-sm bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
+                                    >
+                                        <ScanBarcode className="w-4 h-4 sm:w-5 sm:h-5" /> Scan
+                                    </button>
+                                    <button
+                                        onClick={() => fileInputRef.current.click()}
+                                        className="min-h-12 sm:min-h-11 px-3 text-sm sm:text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
+                                    >
+                                        <Camera className="w-4 h-4 sm:w-5 sm:h-5" /> Photo
+                                    </button>
+                                </div>
+                            )}
 
                             <div className="hidden lg:block mt-auto space-y-3 pt-4">
                                 {(!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled'))) && (
@@ -1779,27 +1800,33 @@ export default function WarehousePortal({ user, onLogout }) {
                                                 </div>
 
                                                 <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto mt-3 sm:mt-0">
-                                                    <div className="flex items-center justify-between sm:justify-start gap-1.5 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto">
-                                                        <button
-                                                            onClick={() => handleQtyChange(idx, -1)}
-                                                            className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
-                                                        >
-                                                            -
-                                                        </button>
-                                                        <input
-                                                            type="number"
-                                                            value={item.actualQtyReceived || ''}
-                                                            placeholder="0"
-                                                            onChange={(e) => handleQtyChange(idx, 0, e.target.value)}
-                                                            className={`w-full sm:w-16 min-w-12 text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`}
-                                                        />
-                                                        <button
-                                                            onClick={() => handleQtyChange(idx, 1)}
-                                                            className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
-                                                        >
-                                                            +
-                                                        </button>
-                                                    </div>
+                                                    {(!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled'))) ? (
+                                                        <div className="flex items-center justify-between sm:justify-start gap-1.5 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto">
+                                                            <button
+                                                                onClick={() => handleQtyChange(idx, -1)}
+                                                                className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
+                                                            >
+                                                                -
+                                                            </button>
+                                                            <input
+                                                                type="number"
+                                                                value={item.actualQtyReceived || ''}
+                                                                placeholder="0"
+                                                                onChange={(e) => handleQtyChange(idx, 0, e.target.value)}
+                                                                className={`w-full sm:w-16 min-w-12 text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`}
+                                                            />
+                                                            <button
+                                                                onClick={() => handleQtyChange(idx, 1)}
+                                                                className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
+                                                            >
+                                                                +
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl font-black text-xl text-slate-800 dark:text-slate-200">
+                                                            {item.actualQtyReceived || 0}
+                                                        </div>
+                                                    )}
                                                     {!blindMode && (item.actualQtyReceived > 0 || isShort || isOver) && (
                                                         <div className={`w-full text-center sm:text-right text-[10px] font-black uppercase px-2 py-1 rounded-md ${isShort ? 'text-red-600 bg-red-100 dark:bg-red-900/30' : isOver ? 'text-amber-600 bg-amber-100 dark:bg-amber-900/30' : 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30'}`}>
                                                             {isShort ? `Shortage: ${(item.actualQtyReceived || 0) - item.qty}` : isOver ? `Overage: +${(item.actualQtyReceived || 0) - item.qty}` : 'Exact Match'}
@@ -1817,16 +1844,18 @@ export default function WarehousePortal({ user, onLogout }) {
                                                             placeholder="Batch Number"
                                                             value={item.batchNumber}
                                                             onChange={(e) => handleInputChange(idx, 'batchNumber', e.target.value)}
-                                                            className="w-full bg-transparent text-base sm:text-sm outline-none dark:text-white font-medium"
+                                                            readOnly={selectedPO.status && (selectedPO.status.includes('Received') || selectedPO.status.includes('Cancelled'))}
+                                                            className="w-full bg-transparent text-base sm:text-sm outline-none dark:text-white font-medium disabled:opacity-70"
                                                         />
                                                     </div>
                                                     <div className="flex-1 flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-3 sm:p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
                                                         <CalendarDays className="w-5 h-5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
                                                         <input
                                                             type="date"
-                                                            value={item.expiryDate}
+                                                            value={item.expiryDate || ''}
                                                             onChange={(e) => handleInputChange(idx, 'expiryDate', e.target.value)}
-                                                            className="w-full bg-transparent text-base sm:text-sm outline-none dark:text-white font-medium text-slate-500"
+                                                            readOnly={selectedPO.status && (selectedPO.status.includes('Received') || selectedPO.status.includes('Cancelled'))}
+                                                            className="w-full bg-transparent text-base sm:text-sm outline-none dark:text-white font-medium text-slate-500 disabled:opacity-70"
                                                         />
                                                     </div>
                                                 </div>
@@ -1835,9 +1864,10 @@ export default function WarehousePortal({ user, onLogout }) {
                                             {isShort && (
                                                 <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row flex-wrap gap-2 sm:items-center">
                                                     <select
-                                                        value={item.reasonCode}
+                                                        value={item.reasonCode || ''}
                                                         onChange={(e) => handleInputChange(idx, 'reasonCode', e.target.value)}
-                                                        className={`w-full sm:w-auto min-h-11 border text-sm font-bold rounded-lg px-3 py-2 outline-none ${isHighRisk ? 'bg-red-500 text-white border-red-600' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-400'}`}
+                                                        disabled={selectedPO.status && (selectedPO.status.includes('Received') || selectedPO.status.includes('Cancelled'))}
+                                                        className={`w-full sm:w-auto min-h-11 border text-sm font-bold rounded-lg px-3 py-2 outline-none disabled:opacity-70 ${isHighRisk ? 'bg-red-500 text-white border-red-600' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-400'}`}
                                                     >
                                                         <option value="">⚠️ Select Shortage Reason...</option>
                                                         <option value="Missing from Truck">Missing from Truck</option>
@@ -1852,7 +1882,8 @@ export default function WarehousePortal({ user, onLogout }) {
                                                     <div className="flex items-center justify-between w-full sm:w-auto sm:ml-auto">
                                                         <button
                                                             onClick={() => openShortagePhotoPicker(idx)}
-                                                            className={`min-h-11 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition-colors ${item.hasPhoto ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                                            disabled={selectedPO.status && (selectedPO.status.includes('Received') || selectedPO.status.includes('Cancelled'))}
+                                                            className={`min-h-11 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition-colors disabled:opacity-70 disabled:cursor-not-allowed ${item.hasPhoto ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                                         >
                                                             <Camera className="w-5 h-5 sm:w-4 sm:h-4 shrink-0" /> {item.hasPhoto ? 'Photo Attached' : 'Add Photo'}
                                                         </button>
