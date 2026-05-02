@@ -559,7 +559,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                                     </div>
                                 )}
 
-                                {!isFinance && selectedEvent.status !== 'Paid' && (
+                                {!isFinance && selectedEvent.status === 'Scheduled' && (
                                     <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-[2.5rem] p-6 space-y-6">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
@@ -588,6 +588,30 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                                             <Download className="w-5 h-5" />
                                             {isUpdating ? 'Accelerating...' : 'Accept Offer'}
                                         </button>
+                                    </div>
+                                )}
+
+                                {!isFinance && selectedEvent.status === 'Hold' && (
+                                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-3xl p-6 text-center">
+                                        <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <AlertCircle className="w-8 h-8 text-amber-400" />
+                                        </div>
+                                        <p className="text-xl font-black text-white">Payment On Hold</p>
+                                        <p className="text-xs font-bold text-amber-500 mt-2">
+                                            Nestlé Finance has placed a temporary hold on this payment until {moment(selectedEvent.hold_until_date || selectedEvent.start).format('MMM D, YYYY')}.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {!isFinance && selectedEvent.status === 'Renegotiated' && (
+                                    <div className="bg-purple-500/10 border border-purple-500/20 rounded-3xl p-6 text-center">
+                                        <div className="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Zap className="w-8 h-8 text-purple-400" />
+                                        </div>
+                                        <p className="text-xl font-black text-white">Early Payout Accepted</p>
+                                        <p className="text-xs font-bold text-purple-400 mt-2">
+                                            You accepted an early payout offer. Funds will arrive on {moment(selectedEvent.start).format('MMM D, YYYY')}.
+                                        </p>
                                     </div>
                                 )}
 
