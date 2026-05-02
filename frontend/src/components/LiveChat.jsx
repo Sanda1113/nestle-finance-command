@@ -197,11 +197,13 @@ export default function LiveChat({ userEmail, userRole }) {
                     >
                         <User className="w-4 h-4" /> Live Support
                     </button>
-                    <button
-                        className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold transition-colors text-purple-400 border-b-2 border-purple-500 bg-slate-800"
-                    >
-                        <Bot className="w-4 h-4" /> AI Chat
-                    </button>
+                    {userRole !== 'Finance' && (
+                        <button
+                            className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold transition-colors text-purple-400 border-b-2 border-purple-500 bg-slate-800"
+                        >
+                            <Bot className="w-4 h-4" /> AI Chat
+                        </button>
+                    )}
                 </div>
 
                 {/* Messages */}
@@ -292,12 +294,14 @@ export default function LiveChat({ userEmail, userRole }) {
                     >
                         <User className="w-4 h-4" /> Live Support
                     </button>
-                    <button
-                        onClick={() => setChatTab('ai')}
-                        className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold transition-colors text-slate-400 hover:bg-slate-700/50"
-                    >
-                        <Bot className="w-4 h-4" /> AI Chat
-                    </button>
+                    {userRole !== 'Finance' && (
+                        <button
+                            onClick={() => setChatTab('ai')}
+                            className="flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold transition-colors text-slate-400 hover:bg-slate-700/50"
+                        >
+                            <Bot className="w-4 h-4" /> AI Chat
+                        </button>
+                    )}
                 </div>
                 <div className="px-4 py-3 border-b border-slate-700 bg-slate-800">
                     <p className="text-sm text-slate-300">Select who you want to message:</p>
@@ -356,14 +360,16 @@ export default function LiveChat({ userEmail, userRole }) {
                     <p className="font-bold text-white text-sm truncate">{ROLE_LABELS[selectedRecipient] || selectedRecipient}</p>
                     <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Live Chat</p>
                 </div>
-                <button
-                    onClick={() => setChatTab('ai')}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 text-xs font-semibold transition-colors"
-                    title="Switch to AI Chat"
-                >
-                    <Bot className="w-3.5 h-3.5" />
-                    AI Chat
-                </button>
+                {userRole !== 'Finance' && (
+                    <button
+                        onClick={() => setChatTab('ai')}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 text-xs font-semibold transition-colors"
+                        title="Switch to AI Chat"
+                    >
+                        <Bot className="w-3.5 h-3.5" />
+                        AI Chat
+                    </button>
+                )}
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" title="Connected"></span>
             </div>
 
