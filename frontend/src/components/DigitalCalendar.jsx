@@ -167,7 +167,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         const cfg = getStatusCfg(event.status);
         const isOverdue = moment(event.start).isBefore(moment(), 'day') && event.status !== 'Paid';
         return {
-            className: `bg-gradient-to-br ${cfg.bg} border-0 rounded-lg shadow-lg ${cfg.glow} transition-transform hover:scale-[1.02] active:scale-95 ${isOverdue ? 'ring-2 ring-rose-500 animate-pulse' : ''}`,
+            className: `bg-gradient-to-br ${cfg.bg} border-0 rounded-lg shadow-lg ${cfg.glow} ${isOverdue ? 'ring-2 ring-rose-500 animate-pulse' : ''}`,
             style: {
                 fontSize: '11px',
                 fontWeight: '800',
@@ -176,7 +176,8 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                 minHeight: '24px',
                 display: 'flex',
                 alignItems: 'center',
-                border: isOverdue ? '2px solid #f43f5e' : 'none'
+                border: isOverdue ? '2px solid #f43f5e' : 'none',
+                cursor: isFinance ? 'grab' : 'pointer'
             }
         };
     };
@@ -185,12 +186,13 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         setLoading(true);
         try {
             const url = 'https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts';
-            const res = await axios.get(url);
+            const res = await axios.get(url, { params: { email: userEmail } });
             if (res.data.success) {
                 const mapped = (res.data.data || []).map(p => ({
                     ...p,
                     start: new Date(p.start_date),
                     end:   new Date(p.end_date || p.start_date),
+                    allDay: false,
                     title: `${getStatusCfg(p.status).icon} ${p.title || 'Payout'}`,
                     status: p.status,
                     amount: p.final_amount || p.base_amount || 0,
@@ -202,7 +204,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         } finally {
             setLoading(false);
         }
-    }, [isFinance, userEmail]);
+    }, [userEmail]);
 
     useEffect(() => { 
         fetchEvents(); 
@@ -223,8 +225,10 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         };
     }, [fetchEvents]);
 
-    const updateEventDate = async (id, start, end) => {
-        setEvents(prev => prev.map(ev => ev.id === id ? { ...ev, start, end } : ev));
+    const updateEventDate = useCallback(async (id, start, end) => {
+        // Optimistic UI update
+        setEvents(prev => prev.map(ev => String(ev.id) === String(id) ? { ...ev, start, end } : ev));
+        
         try {
             await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${id}`, {
                 start_date: start.toISOString(),
@@ -233,21 +237,22 @@ export default function DigitalCalendar({ userRole, userEmail }) {
             });
         } catch (err) {
             console.error('Failed to update event date', err);
+            // Revert on error
             fetchEvents();
         }
-    };
+    }, [userRole, fetchEvents]);
 
     const onEventDrop = useCallback(({ event, start, end }) => {
         if (!isFinance) return;
         updateEventDate(event.id, start, end);
-    }, [isFinance]);
+    }, [isFinance, updateEventDate]);
 
     const onEventResize = useCallback(({ event, start, end }) => {
         if (!isFinance) return;
         updateEventDate(event.id, start, end);
-    }, [isFinance]);
+    }, [isFinance, updateEventDate]);
 
-    const handleSelectEvent = (event) => setSelectedEvent(event);
+    const handleSelectEvent = useCallback((event) => setSelectedEvent(event), []);
 
     const daysUntilPayout = useMemo(() => {
         if (!selectedEvent) return 0;
@@ -467,6 +472,10 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                         onEventDrop={isFinance ? onEventDrop : undefined}
                         onEventResize={isFinance ? onEventResize : undefined}
                         resizable={isFinance}
+                        selectable={isFinance}
+                        draggableAccessor={() => isFinance}
+                        resizableAccessor={() => isFinance}
+                        allDayAccessor={() => false}
                         onSelectEvent={handleSelectEvent}
                         eventPropGetter={eventStyleGetter}
                         components={{
