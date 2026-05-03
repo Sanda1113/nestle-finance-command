@@ -847,7 +847,7 @@ export default function SupplierDashboard({ user, onLogout }) {
             // Steps 1-3: BOQ & PO
             if (relatedBoq) {
                 events.push({ label: 'BOQ Submitted', date: relatedBoq.created_at, status: 'completed', icon: '📑' });
-                if (relatedBoq.status === 'Approved') {
+                if (relatedBoq.status === 'Approved' || relatedBoq.status.includes('PO Generated')) {
                     events.push({ label: '✅ BOQ Approved', date: relatedBoq.updated_at, status: 'completed', icon: '👍' });
                 } else if (relatedBoq.status === 'Rejected') {
                     events.push({ label: '❌ BOQ Rejected', date: relatedBoq.updated_at, status: 'warning', icon: '❌', resubmitObj: relatedBoq, resubmitType: 'boq' });
@@ -876,21 +876,19 @@ export default function SupplierDashboard({ user, onLogout }) {
                 }
 
                 // Steps 6-8: Warehouse Logistics
-                if (matchStatus.includes('approve')) {
-                    const status = po.status || '';
-                    const isDelivered = status === 'Delivered to Dock' || status.includes('Bay') || status.includes('GRN') || status.includes('Cleared') || po.po_data?.delivery_timestamp;
-                    const isAck = status.includes('Bay') || status.includes('GRN') || status.includes('Cleared');
-                    const isCleared = status === 'Goods Cleared - Ready for Payout';
+                const status = po.status || '';
+                const isDelivered = status === 'Delivered to Dock' || status.includes('Bay') || status.includes('GRN') || status.includes('Cleared') || po.po_data?.delivery_timestamp;
+                const isAck = status.includes('Bay') || status.includes('GRN') || status.includes('Cleared');
+                const isCleared = status === 'Goods Cleared - Ready for Payout' || status.includes('GRN Logged');
 
-                    if (isDelivered) {
-                        events.push({ label: '🚚 Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
-                    }
-                    if (isAck) {
-                        events.push({ label: '🏭 Warehouse Acknowledged', date: po.updated_at, status: 'completed', icon: '🏭' });
-                    }
-                    if (isCleared) {
-                        events.push({ label: '✅ Goods Cleared (Ready for Payout)', date: po.updated_at, status: 'completed', icon: '🛡️' });
-                    }
+                if (isDelivered) {
+                    events.push({ label: '🚚 Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
+                }
+                if (isAck) {
+                    events.push({ label: '🏭 Warehouse Acknowledged', date: po.updated_at, status: 'completed', icon: '🏭' });
+                }
+                if (isCleared) {
+                    events.push({ label: '✅ Goods Cleared (Ready for Payout)', date: po.updated_at, status: 'completed', icon: '🛡️' });
                 }
 
                 // Steps 9-11: Treasury & Payouts
@@ -901,9 +899,10 @@ export default function SupplierDashboard({ user, onLogout }) {
                     } else {
                         const isPaid = payout.status === 'Paid';
                         const isHold = payout.status === 'Hold';
+                        const isStaged = payout.status === 'Staged' || payout.status === 'Scheduled';
                         
                         events.push({ 
-                            label: isPaid ? '💰 Paid (Funds Disbursed)' : isHold ? '⏸️ Payment Hold' : '📅 Payout Scheduled', 
+                            label: isPaid ? '💰 Paid (Funds Disbursed)' : isHold ? '⏸️ Payment Hold' : isStaged ? '📅 Payout Scheduled' : `Payout: ${payout.status}`, 
                             date: payout.updated_at || payout.created_at, 
                             status: isHold ? 'warning' : 'completed', 
                             icon: isPaid ? '💰' : isHold ? '⏸️' : '🗓️',
