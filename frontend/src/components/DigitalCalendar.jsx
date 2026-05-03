@@ -41,61 +41,12 @@ const getStatusCfg = (status) => {
     }
 };
 
-// Custom Toolbar for a premium look
 const CustomToolbar = (toolbar) => {
     const goToBack = () => toolbar.onNavigate('PREV');
     const goToNext = () => toolbar.onNavigate('NEXT');
     const goToToday = () => toolbar.onNavigate('TODAY');
-
-    // MVP 6: Calculate Daily "Cash Burn" for current view
-    const dailyBurn = useMemo(() => {
-        const events = toolbar.events || [];
-        const todayStr = moment().format('YYYY-MM-DD');
-        const total = events.filter(e => moment(e.start).format('YYYY-MM-DD') === todayStr && e.status !== 'Paid')
-                          .reduce((s, e) => s + (e.amount || 0), 0);
-        return total;
-    }, [toolbar.events]);
-
-    const currentMonth = moment(toolbar.date).month();
-    const currentYear = moment(toolbar.date).year();
-
-    const handleMonthChange = (e) => {
-        if (toolbar.setCurrentDate) {
-            const newDate = moment(toolbar.date).month(e.target.value).toDate();
-            toolbar.setCurrentDate(newDate);
-        }
-    };
-
-    const handleYearChange = (e) => {
-        if (toolbar.setCurrentDate) {
-            const newDate = moment(toolbar.date).year(e.target.value).toDate();
-            toolbar.setCurrentDate(newDate);
-        }
-    };
-
-    return (
-        <div className="flex flex-col xl:flex-row items-center justify-between gap-4 px-6 py-5 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800/50">
-            <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-indigo-600/20 rounded-xl border border-indigo-500/30">
-                        <CalendarIcon className="w-6 h-6 text-indigo-400" />
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-black text-white tracking-tight">{toolbar.label}</h2>
-                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Treasury & Liquidity Hub</p>
-                    </div>
-                </div>
-                
-                {/* Month/Year Selectors */}
-                <div className="flex items-center gap-2 ml-4">
-                    <select value={currentMonth} onChange={handleMonthChange} className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-sm font-bold text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
-                        {moment.months().map((m, i) => (
-                            <option key={i} value={i}>{m}</option>
-    const goToBack = () => { toolbar.onNavigate('PREV'); };
-    const goToNext = () => { toolbar.onNavigate('NEXT'); };
-    const goToToday = () => { toolbar.onNavigate('TODAY'); };
-
     const dailyBurn = 2450.75;
+    const currentDate = toolbar.date;
 
     return (
         <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8 bg-white/5 p-6 rounded-3xl border border-white/5 backdrop-blur-md">
@@ -118,7 +69,6 @@ const CustomToolbar = (toolbar) => {
                                 const newDate = new Date(currentDate);
                                 newDate.setMonth(parseInt(e.target.value));
                                 toolbar.onNavigate('DATE', newDate);
-                                setCurrentDate(newDate);
                             }}
                             className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1 outline-none hover:bg-white/10 transition-colors"
                         >
@@ -130,7 +80,6 @@ const CustomToolbar = (toolbar) => {
                                 const newDate = new Date(currentDate);
                                 newDate.setFullYear(parseInt(e.target.value));
                                 toolbar.onNavigate('DATE', newDate);
-                                setCurrentDate(newDate);
                             }}
                             className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1 outline-none hover:bg-white/10 transition-colors"
                         >
