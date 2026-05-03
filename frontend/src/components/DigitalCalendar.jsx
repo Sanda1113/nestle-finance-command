@@ -186,7 +186,8 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         setLoading(true);
         try {
             const url = 'https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts';
-            const res = await axios.get(url, { params: { email: userEmail } });
+            const params = isFinance ? {} : { email: userEmail };
+            const res = await axios.get(url, { params });
             if (res.data.success) {
                 const mapped = (res.data.data || []).map(p => ({
                     ...p,
@@ -204,7 +205,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         } finally {
             setLoading(false);
         }
-    }, [userEmail]);
+    }, [isFinance, userEmail]);
 
     useEffect(() => { 
         fetchEvents(); 

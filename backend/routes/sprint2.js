@@ -1002,7 +1002,7 @@ router.get('/payouts', async (req, res) => {
     try {
         let query = supabase.from('payout_schedules').select('*');
         if (email) {
-            query = query.eq('supplier_email', email);
+            query = query.ilike('supplier_email', email);
         }
         const { data, error } = await query.order('start_date', { ascending: true });
 
