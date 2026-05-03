@@ -489,13 +489,17 @@ export default function SupplierDashboard({ user, onLogout }) {
                 const tolerancePercent = dbFreightRule.threshold_value * trustMultiplier;
                 
                 const tolerance = Math.max(baseAbsoluteTolerance, poTotal * tolerancePercent);
+                const delta = Math.abs(convertedInvTotal - poTotal);
                 let status = 'Matched - Pending Finance Review';
 
                 if (poTotal < 1) {
                     status = 'Matched - Pending Finance Review';
                     setDbStatus('⚠️ PO amount unverified — submitted for Finance manual review.');
-                } else if (Math.abs(convertedInvTotal - poTotal) > tolerance) {
+                } else if (delta > tolerance) {
                     status = 'Discrepancy Detected';
+                } else if (delta > 0) {
+                    status = 'Auto-Approved (Tolerance Applied)';
+                    setDbStatus(`✅ Tolerance Applied: $${delta.toFixed(2)} variance auto-approved per Finance rules.`);
                 }
 
                 setMatchStatus(status);
@@ -1447,8 +1451,30 @@ export default function SupplierDashboard({ user, onLogout }) {
 
                                     {matchStatus !== 'Pending' && matchStatus !== 'Submitted' && (
                                         <div className="mt-6">
-                                            <div className={`p-3 mb-4 rounded-lg text-sm text-center font-medium border ${matchStatus === 'Matched - Pending Finance Review' ? 'bg-blue-900/30 border-blue-800 text-blue-300' : 'bg-amber-900/30 border-amber-800 text-amber-300'}`}>
-                                                <JargonText text={matchStatus === 'Matched - Pending Finance Review' ? '✅ Perfect Match. Awaiting Finance Approval' : '⚠️ Variance Flagged: Discrepancy Routed for Review'} />
+                                            <div className={`p-4 mb-4 rounded-xl text-sm font-bold border transition-all ${
+                                                matchStatus === 'Matched - Pending Finance Review' 
+                                                    ? 'bg-emerald-900/40 border-emerald-500/50 text-emerald-300' 
+                                                    : matchStatus === 'Auto-Approved (Tolerance Applied)' 
+                                                    ? 'bg-blue-900/40 border-blue-500/50 text-blue-300' 
+                                                    : 'bg-amber-900/40 border-amber-500/50 text-amber-300'
+                                            }`}>
+                                                <div className="flex flex-col items-center gap-1">
+                                                    {matchStatus === 'Matched - Pending Finance Review' ? (
+                                                        <JargonText text="✅ Perfect Match. Awaiting Finance Approval" />
+                                                    ) : matchStatus === 'Auto-Approved (Tolerance Applied)' ? (
+                                                        <>
+                                                            <div className="flex items-center gap-2">
+                                                                <ShieldCheck className="w-4 h-4 text-blue-400" />
+                                                                <span>Approved: Variance within Tolerance Limits</span>
+                                                            </div>
+                                                            <p className="text-[10px] font-medium text-blue-400/80 uppercase tracking-widest mt-1">
+                                                                {dbStatus}
+                                                            </p>
+                                                        </>
+                                                    ) : (
+                                                        <JargonText text="⚠️ Variance Flagged: Discrepancy Routed for Review" />
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <DocumentCard title="Invoice Data" data={invoiceResult} borderColor="border-blue-500" themeColor="text-blue-400" />
