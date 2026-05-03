@@ -999,10 +999,11 @@ router.post('/livechat/send', async (req, res) => {
 // ==========================================
 router.get('/payouts', async (req, res) => {
     const { email } = req.query;
+    const cleanEmail = email ? String(email).trim() : null;
     try {
         let query = supabase.from('payout_schedules').select('*');
-        if (email) {
-            query = query.ilike('supplier_email', email);
+        if (cleanEmail) {
+            query = query.ilike('supplier_email', cleanEmail);
         }
         const { data, error } = await query.order('start_date', { ascending: true });
 

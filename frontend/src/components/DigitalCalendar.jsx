@@ -163,14 +163,22 @@ export default function DigitalCalendar({ userRole, userEmail }) {
     };
 
     const fetchEvents = useCallback(async () => {
+        const cleanEmail = userEmail?.trim();
+        if (!isFinance && !cleanEmail) {
+            console.warn('[DigitalCalendar] Skipping fetch: cleanEmail is missing for Supplier');
+            return;
+        }
+        
         setLoading(true);
         try {
             const url = 'https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts';
-            const params = isFinance ? {} : { email: userEmail };
+            const params = isFinance ? {} : { email: cleanEmail };
+            
             const res = await axios.get(url, { params });
             if (res.data.success) {
                 const mapped = (res.data.data || []).map(p => ({
                     ...p,
+                    id: p.id,
                     start: new Date(p.start_date),
                     end:   new Date(p.end_date || p.start_date),
                     allDay: false,
@@ -181,7 +189,7 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                 setEvents(mapped);
             }
         } catch (err) {
-            console.error('Failed to fetch calendar events', err);
+            console.error('[DigitalCalendar] Fetch Error:', err.message);
         } finally {
             setLoading(false);
         }
