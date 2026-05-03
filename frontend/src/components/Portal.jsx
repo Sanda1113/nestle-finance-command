@@ -733,9 +733,9 @@ function FinancePortal({ user }) {
         let autoApprovedViaTolerance = false;
         let glPayload = null;
         if (!isMathMatch && variance > 0 && variance <= 5.00 && trustTier !== 'Tier 3 (High Risk)') {
-            autoApprovedViaTolerance = true;
+            autoApprovedViaTolerance = false; // Changed from true!
             if (displayStatus === 'Pending' || displayStatus.includes('Discrepancy') || displayStatus === 'Discrepancy Detected') {
-                displayStatus = 'Auto-Approved';
+                displayStatus = 'Matched - Pending Finance Review'; // Changed from Auto-Approved!
             }
             glPayload = {
                 journal_entry: "JRNL-VAR-AUTO",

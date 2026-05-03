@@ -506,11 +506,12 @@ export default function SupplierDashboard({ user, onLogout }) {
                 } else if (delta > (tolerance + EPSILON)) {
                     status = 'Discrepancy Detected';
                 } else if (delta > EPSILON) {
-                    status = 'Auto-Approved (Tolerance Applied)';
-                    setDbStatus(`✅ Tolerance Applied: $${delta.toFixed(2)} variance auto-approved per Finance rules.`);
+                    // Changed from Auto-Approved!
+                    status = 'Matched - Pending Finance Review';
+                    setDbStatus(`✅ Tolerance Match: $${delta.toFixed(2)} variance within limits. Pending Finance Review.`);
                 } else {
                     status = 'Matched - Pending Finance Review';
-                    setDbStatus('✅ Perfect Match: All line items synchronized with ERP data.');
+                    setDbStatus('✅ Perfect Match: All line items synchronized. Pending Finance Review.');
                 }
 
                 setMatchStatus(status);
@@ -1484,20 +1485,16 @@ export default function SupplierDashboard({ user, onLogout }) {
                                             <div className={`p-4 mb-4 rounded-xl text-sm font-bold border transition-all ${
                                                 matchStatus === 'Matched - Pending Finance Review' 
                                                     ? 'bg-emerald-900/40 border-emerald-500/50 text-emerald-300' 
-                                                    : matchStatus === 'Auto-Approved (Tolerance Applied)' 
-                                                    ? 'bg-blue-900/40 border-blue-500/50 text-blue-300' 
                                                     : 'bg-amber-900/40 border-amber-500/50 text-amber-300'
                                             }`}>
                                                 <div className="flex flex-col items-center gap-1">
                                                     {matchStatus === 'Matched - Pending Finance Review' ? (
-                                                        <JargonText text={dbStatus?.includes('Perfect') ? "✅ Perfect Match. Awaiting Finance Approval" : "✅ Approved. Awaiting Finance Approval"} />
-                                                    ) : matchStatus === 'Auto-Approved (Tolerance Applied)' ? (
                                                         <>
                                                             <div className="flex items-center gap-2">
-                                                                <ShieldCheck className="w-4 h-4 text-blue-400" />
-                                                                <span>Approved: Variance within Tolerance Limits</span>
+                                                                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                                                                <span>{dbStatus?.includes('Perfect') ? "✅ Perfect Match. Awaiting Finance Approval" : "✅ Approved. Awaiting Finance Approval"}</span>
                                                             </div>
-                                                            <p className="text-[10px] font-medium text-blue-400/80 uppercase tracking-widest mt-1">
+                                                            <p className="text-[10px] font-medium text-emerald-400/80 uppercase tracking-widest mt-1">
                                                                 {dbStatus}
                                                             </p>
                                                         </>

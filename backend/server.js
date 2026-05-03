@@ -487,27 +487,27 @@ app.post('/api/save-reconciliation', async (req, res) => {
             }
 
             if (willAutoApprove) {
-                finalStatus = 'Auto-Approved (Tolerance Applied)';
-                finalTimeline = 'Approved - Awaiting Payout';
-                autoApproved = true;
-                autoApprovalReason = `Auto-approved: Invoice total ${invTotal.toFixed(2)} vs PO ${poTotal.toFixed(2)}. Delta of ${delta.toFixed(2)} classified as ${classification} (Rule: ${ruleName}). No manual review required.`;
+                finalStatus = 'Matched - Pending Finance Review';
+                finalTimeline = 'Matched - Pending Finance Review';
+                autoApproved = false; // Changed from true!
+                autoApprovalReason = `Matched within tolerance: Invoice total ${invTotal.toFixed(2)} vs PO ${poTotal.toFixed(2)}. Delta of ${delta.toFixed(2)} classified as ${classification} (Rule: ${ruleName}). Pending Finance Review.`;
                 console.log(`🤖 MVP5: ${autoApprovalReason}`);
                 
                 // Database Injection: Generate JSON payload for external ERP
                 const erpPayload = {
-                    journal_entry: "JRNL-VAR-AUTO",
-                    account: "61000-Rounding Difference Write-Off",
+                    journal_entry: "JRNL-VAR-PENDING",
+                    account: "61000-Rounding Difference Review",
                     debit: delta.toFixed(2),
                     currency: invoiceData.currency || "USD",
-                    reason: "Automated tolerance write-off"
+                    reason: "Variance detected - pending manual review"
                 };
                 console.log(`🏦 MVP5 ERP Payload: ${JSON.stringify(erpPayload)}`);
 
                 // Insert Comms Notification to Finance
                 await supabase.from('notifications').insert([{
                     user_role: 'Finance',
-                    title: '✅ Auto-Approved',
-                    message: `Invoice ${invoiceData.invoiceNumber} auto-approved. $${delta.toFixed(2)} variance written off.`,
+                    title: '✅ Match Found - Pending Review',
+                    message: `Invoice ${invoiceData.invoiceNumber} matched within tolerance. Pending Finance approval.`,
                     link: `/logs?po=${poData.poNumber}`,
                     is_read: false
                 }]);
@@ -565,9 +565,9 @@ app.post('/api/save-reconciliation', async (req, res) => {
                 // 📧 Email supplier about payout scheduled
                 const scheduleEmailBody = `
                     <p>Hello,</p>
-                    <p>Good news! Your invoice <strong>${safeInvoiceNumber}</strong> has been auto-approved and <strong>scheduled for payment</strong>.</p>
-                    <p><strong>Estimated Payment Date:</strong> ${dueDate.toLocaleDateString()}</p>
-                    <p><strong>Payment Terms:</strong> ${poData.paymentTerms || 'Net 30'}</p>
+                    <p>Good news! Your invoice <strong>${safeInvoiceNumber}</strong> has been matched against the Purchase Order.</p>
+                    <p><strong>Status:</strong> Matched - Pending Finance Review</p>
+                    <p>Once Finance completes the final review, your payment will be scheduled according to our <strong>Net-30</strong> terms.</p>
                     <p>You can track the real-time status of this payment in your Lifecycle Timeline on the Supplier Dashboard.</p>
                 `;
                 sendSupplierEmail(

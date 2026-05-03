@@ -756,32 +756,14 @@ router.post('/grn/clear', async (req, res) => {
         const supplierEmail = po?.supplier_email || recon?.supplier_email;
         const shipmentId = getShipmentId(poNumber);
 
-        // Auto-Generation: calculate scheduled_date (Net-30) and base_amount
-        const baseAmount = recon?.invoice_total || 0;
-        const scheduledDate = new Date();
-        scheduledDate.setDate(scheduledDate.getDate() + 30); // Net-30 terms
-
-        const { error: payoutErr } = await supabase.from('payout_schedules').insert([{
-            invoice_ref: recon?.id || null,
-            po_ref: po?.id || null,
-            supplier_email: supplierEmail,
-            title: `Payout for ${shipmentId}`,
-            start_date: scheduledDate.toISOString(),
-            end_date: scheduledDate.toISOString(),
-            base_amount: baseAmount,
-            final_amount: baseAmount,
-            status: 'Pending Finance'
-        }]);
-
-        if (payoutErr) {
-            console.error('Failed to insert payout schedule:', payoutErr);
-        }
+        // *** DELETED THE payout_schedules AUTO-INSERT HERE ***
+        // Finance will now manually stage it from the Review Queue!
 
         // 🔔 Notify Finance
         await supabase.from('notifications').insert([{
             user_role: 'Finance',
             title: '✅ Goods Cleared',
-            message: `Shipment ${shipmentId} cleared. Payout ready for scheduling.`,
+            message: `Shipment ${shipmentId} cleared. Payout ready for Finance staging.`,
             link: `/finance?recon=${poNumber}`,
             is_read: false
         }]);
@@ -807,7 +789,7 @@ router.post('/grn/clear', async (req, res) => {
             );
         }
 
-        res.json({ success: true, message: 'Goods marked as cleared. Payout scheduled.' });
+        res.json({ success: true, message: 'Goods marked as cleared. Payout ready for Finance staging.' });
     } catch (error) {
         console.error('Failed to clear goods:', error);
         res.status(500).json({ error: 'Failed to clear goods' });
@@ -1257,7 +1239,8 @@ router.post('/payouts/stage', async (req, res) => {
             end_date: scheduledDate,
             base_amount: total_amount,
             final_amount: total_amount,
-            status: 'Scheduled'
+            // ❌ DELETE the 'amount: total_amount' line here!
+            status: 'Pending Finance' // Changed so it drops into the Treasury Calendar Queue first!
         };
 
         const { data, error } = await supabase.from('payout_schedules').insert(payload);
