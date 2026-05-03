@@ -308,16 +308,9 @@ export default function SupplierDashboard({ user, onLogout }) {
     useEffect(() => {
         const fetchTrust = async () => {
             try {
-                const { data, error } = await supabase.from('vendor_trust_profiles').select('*').eq('supplier_email', user.email).single();
-                if (error) {
-                    if (error.code === 'PGRST116') {
-                        console.warn(`[SupplierDashboard] No trust profile found for ${user.email}`);
-                    } else {
-                        console.error(`[SupplierDashboard] Error fetching trust profile:`, error.message);
-                    }
-                    setTrustProfile(null);
-                } else {
-                    setTrustProfile(data);
+                const res = await axios.get(`https://nestle-finance-command-production.up.railway.app/api/sprint2/trust-profile?email=${encodeURIComponent(user.email)}`);
+                if (res.data.success) {
+                    setTrustProfile(res.data.data);
                 }
             } catch (err) {
                 console.error(`[SupplierDashboard] Unexpected error fetching trust profile:`, err);

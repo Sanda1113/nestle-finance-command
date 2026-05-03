@@ -131,6 +131,46 @@ const runBackgroundTask = (label, task) => {
 };
 
 // ==========================================
+// 🛡️ TRUST PROFILE ENDPOINT
+// ==========================================
+router.get('/trust-profile', async (req, res) => {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+
+    try {
+        let { data: profile, error } = await supabase
+            .from('vendor_trust_profiles')
+            .select('*')
+            .eq('supplier_email', email)
+            .single();
+
+        if (error && (error.code === 'PGRST116' || error.status === 406)) {
+            console.log(`🐣 Creating default trust profile for ${email}`);
+            const { data: newProfile, error: createErr } = await supabase
+                .from('vendor_trust_profiles')
+                .insert([{ 
+                    supplier_email: email, 
+                    trust_tier: 2, 
+                    accuracy_score: 100,
+                    created_at: new Date().toISOString()
+                }])
+                .select()
+                .single();
+            
+            if (createErr) throw createErr;
+            profile = newProfile;
+        } else if (error) {
+            throw error;
+        }
+
+        res.json({ success: true, data: profile });
+    } catch (error) {
+        logRouteError('Fetch Trust Profile', error, { email });
+        res.status(500).json({ error: 'Failed to fetch trust profile' });
+    }
+});
+
+// ==========================================
 // 🔔 NOTIFICATION ENDPOINTS
 // ==========================================
 router.get('/notifications', async (req, res) => {
