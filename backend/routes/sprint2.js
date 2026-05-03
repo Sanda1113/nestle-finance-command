@@ -1224,6 +1224,55 @@ router.get('/lifecycle/transaction/:invoice_ref', async (req, res) => {
 });
 
 
+router.patch('/reconciliations/:id', async (req, res) => {
+    const { id } = req.params;
+    const { newStatus } = req.body; // e.g., 'Approved' or 'Rejected'
+    
+    try {
+        const { data, error } = await supabase
+            .from('reconciliations')
+            .update({ 
+                match_status: newStatus, 
+                processed_at: new Date().toISOString() 
+            })
+            .eq('id', id)
+            .select('po_number, supplier_email, invoice_total')
+            .single();
+
+        if (error) throw error;
+
+        // If Finance Approved, notify the supplier!
+        if (data && newStatus === 'Approved' && data.supplier_email) {
+            const shipmentId = getShipmentId(data.po_number);
+            
+            // In-App Notification
+            await supabase.from('notifications').insert([{
+                user_email: data.supplier_email,
+                user_role: 'Supplier',
+                title: '✅ Invoice Approved',
+                message: `Finance has manually approved your invoice for Shipment ${shipmentId}. Awaiting physical delivery.`,
+                link: `/logs?po=${data.po_number}`,
+                is_read: false
+            }]);
+
+            // Email Notification
+            await sendSupplierEmail(
+                data.supplier_email,
+                `Invoice Approved – ${shipmentId}`,
+                `<p>Great news! The Nestlé Finance team has manually <strong>approved</strong> your invoice for Shipment <strong>${shipmentId}</strong>.</p>
+                 <p><strong>Next Steps:</strong> Please ensure the physical goods are delivered to the warehouse dock. Once the warehouse clears the goods, your payout will be staged for scheduling.</p>`,
+                { poNumber: data.po_number, amount: data.invoice_total }
+            ).catch(err => console.warn('Approval email failed:', err.message));
+        }
+
+        res.json({ success: true, data });
+    } catch (error) {
+        console.error('Failed to update reconciliation status:', error);
+        res.status(500).json({ error: 'Failed to update status' });
+    }
+});
+
+
 router.post('/payouts/stage', async (req, res) => {
     const { invoice_ref, supplier_email, total_amount } = req.body;
     try {

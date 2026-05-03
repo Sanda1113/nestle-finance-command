@@ -844,96 +844,82 @@ export default function SupplierDashboard({ user, onLogout }) {
             const relatedLogs = myLogs.filter(log => String(log.ref || '').includes(poNumeric));
             const events = [];
 
+            // Steps 1-3: BOQ & PO
             if (relatedBoq) {
-                events.push({
-                    label: 'BOQ Submitted',
-                    date: relatedBoq.created_at,
-                    status: 'completed',
-                    icon: '📑'
-                });
+                events.push({ label: 'BOQ Submitted', date: relatedBoq.created_at, status: 'completed', icon: '📑' });
                 if (relatedBoq.status === 'Approved') {
                     events.push({ label: '✅ BOQ Approved', date: relatedBoq.updated_at, status: 'completed', icon: '👍' });
                 } else if (relatedBoq.status === 'Rejected') {
                     events.push({ label: '❌ BOQ Rejected', date: relatedBoq.updated_at, status: 'warning', icon: '❌', resubmitObj: relatedBoq, resubmitType: 'boq' });
                 }
             } else {
-                const boqLog = relatedLogs.find(l => String(l.type || '').toLowerCase().includes('boq') || String(l.action || '').toLowerCase().includes('boq'));
-                if (boqLog) {
-                    events.push({ label: 'BOQ Submitted', date: boqLog.created_at || boqLog.date, status: 'completed', icon: '📑' });
-                }
+                const boqLog = relatedLogs.find(l => String(l.type || '').toLowerCase().includes('boq'));
+                if (boqLog) events.push({ label: 'BOQ Submitted', date: boqLog.created_at || boqLog.date, status: 'completed', icon: '📑' });
             }
 
-            events.push({
-                label: 'PO Generated',
-                date: po.created_at || po.po_data?.poDate,
-                status: 'completed',
-                icon: '📄'
-            });
+            events.push({ label: 'PO Generated', date: po.created_at || po.po_data?.poDate, status: 'completed', icon: '📄' });
 
+            // Steps 4-5: Invoice & Finance Match
             if (relatedRecon) {
                 events.push({ label: 'Invoice Submitted', date: relatedRecon.created_at, status: 'completed', icon: '🧾' });
 
                 const matchStatus = String(relatedRecon.match_status || '').toLowerCase();
-                const isDiscrepancy = matchStatus.includes('discrepancy');
-                const isApproved = matchStatus.includes('approve');
-
-                events.push({
-                    label: isDiscrepancy ? 'Discrepancy Detected' : 'Documents Matched',
-                    date: relatedRecon.updated_at || relatedRecon.created_at,
-                    status: isDiscrepancy ? 'warning' : 'completed',
-                    icon: isDiscrepancy ? '⚠️' : '✅'
-                });
-
-                if (isApproved) {
+                
+                if (matchStatus.includes('discrepancy')) {
+                    events.push({ label: '⚠️ Discrepancy Detected', date: relatedRecon.updated_at || relatedRecon.created_at, status: 'warning', icon: '⚠️' });
+                } else if (matchStatus.includes('pending')) {
+                    events.push({ label: '⏳ Pending Finance Review', date: relatedRecon.updated_at || relatedRecon.created_at, status: 'pending', icon: '🔍' });
+                } else if (matchStatus.includes('approve')) {
                     events.push({ label: '✅ Finance Approved', date: relatedRecon.updated_at, status: 'completed', icon: '👍' });
                 } else if (matchStatus.includes('reject')) {
                     events.push({ label: '❌ Finance Rejected', date: relatedRecon.updated_at, status: 'warning', icon: '❌', resubmitObj: relatedRecon, resubmitType: 'invoice' });
                 }
 
-                const isDelivered = po.status === 'Delivered to Dock' || po.status === 'Goods Cleared - Ready for Payout' || po.po_data?.delivery_timestamp;
-                const isCleared = po.status === 'Goods Cleared - Ready for Payout';
-                const payout = myPayouts.find(p => p.reconciliation_id === relatedRecon.id || p.invoice_ref === relatedRecon.id || p.po_number === po.po_number);
+                // Steps 6-8: Warehouse Logistics
+                if (matchStatus.includes('approve')) {
+                    const status = po.status || '';
+                    const isDelivered = status === 'Delivered to Dock' || status.includes('Bay') || status.includes('GRN') || status.includes('Cleared') || po.po_data?.delivery_timestamp;
+                    const isAck = status.includes('Bay') || status.includes('GRN') || status.includes('Cleared');
+                    const isCleared = status === 'Goods Cleared - Ready for Payout';
 
-                if (isDelivered) {
-                    events.push({ label: '🚚 Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
-                } else if (isApproved) {
-                    events.push({ label: '⏳ Awaiting Delivery', date: new Date().toISOString(), status: 'pending', icon: '🚚' });
+                    if (isDelivered) {
+                        events.push({ label: '🚚 Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
+                    }
+                    if (isAck) {
+                        events.push({ label: '🏭 Warehouse Acknowledged', date: po.updated_at, status: 'completed', icon: '🏭' });
+                    }
+                    if (isCleared) {
+                        events.push({ label: '✅ Goods Cleared (Ready for Payout)', date: po.updated_at, status: 'completed', icon: '🛡️' });
+                    }
                 }
 
-                if (isCleared) {
-                    events.push({ label: '✅ Goods Cleared', date: po.updated_at, status: 'completed', icon: '🛡️' });
-                }
-
-                if (isApproved) {
-                    if (!payout) {
-                        events.push({ label: '⏳ Awaiting Scheduling', date: new Date().toISOString(), status: 'pending', icon: '🗓️' });
+                // Steps 9-11: Treasury & Payouts
+                const payout = myPayouts.find(p => p.invoice_ref === relatedRecon.id || p.po_number === po.po_number);
+                if (payout) {
+                    if (payout.status === 'Pending Finance') {
+                        events.push({ label: '⏳ Payout Staged (Pending Scheduling)', date: payout.created_at, status: 'pending', icon: '⏱️' });
                     } else {
                         const isPaid = payout.status === 'Paid';
                         const isHold = payout.status === 'Hold';
-                        const isScheduled = payout.status === 'Scheduled' || payout.status === 'Early Payment Requested' || payout.status === 'Renegotiated';
-
+                        
                         events.push({ 
-                            label: isPaid ? '💰 Paid (Funds Disbursed)' : isHold ? '⏸️ Payment Hold' : '📅 Scheduled', 
-                            date: payout.created_at, 
+                            label: isPaid ? '💰 Paid (Funds Disbursed)' : isHold ? '⏸️ Payment Hold' : '📅 Payout Scheduled', 
+                            date: payout.updated_at || payout.created_at, 
                             status: isHold ? 'warning' : 'completed', 
                             icon: isPaid ? '💰' : isHold ? '⏸️' : '🗓️',
                             isPaid: isPaid,
                             bankRef: payout.bank_transaction_ref,
-                            note: isPaid ? `Paid on ${new Date(payout.paid_at || payout.updated_at).toLocaleDateString()}` : `Est. Payout: ${new Date(payout.start_date || payout.due_date).toLocaleDateString()}`
+                            note: isPaid ? `Paid on ${new Date(payout.start_date).toLocaleDateString()}` : `Est. Payout: ${new Date(payout.start_date).toLocaleDateString()}`
                         });
-
-                        if (isHold && payout.hold_until_date) {
-                            events.push({ label: '⏳ Hold Until', date: payout.hold_until_date, status: 'pending', icon: '⏱️' });
-                        }
                     }
                 }
             } else {
-                const isDelivered = po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp;
-                if (isDelivered) {
-                    events.push({ label: 'Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
+                if (po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp) {
+                    events.push({ label: '🚚 Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
                 }
             }
 
+            // Guarantee chronological sorting so the timeline is never visually out of order
             events.sort((a, b) => new Date(a.date) - new Date(b.date));
 
             timelines.push({
