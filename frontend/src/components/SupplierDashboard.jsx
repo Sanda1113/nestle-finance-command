@@ -294,7 +294,7 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [myRecons, setMyRecons] = useState([]);
     const [myPayouts, setMyPayouts] = useState([]);
     const [matchStatus, setMatchStatus] = useState('Pending');
-    const [, setDbStatus] = useState('');
+    const [dbStatus, setDbStatus] = useState('');
     const [, setError] = useState(null);
 
     const [expandedLog, setExpandedLog] = useState(null);

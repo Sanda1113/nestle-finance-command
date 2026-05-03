@@ -84,8 +84,8 @@ const sendSupplierEmail = async (toEmail, subject, htmlBody, refs = {}) => {
 
     try {
         const fullHtml = buildEmailHtml(subject, htmlBody, refs);
-        // Standard Resend practice: use onboarding@resend.dev if domain is not yet verified
-        const emailFromAddress = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+        // Standard Resend practice: use verified domain if configured, otherwise fallback to confirmed domain
+        const emailFromAddress = process.env.EMAIL_FROM || 'notifications@nestlefinancecommand.com';
         
         const { data, error } = await resend.emails.send({
             from: `Nestle Finance <${emailFromAddress}>`,
