@@ -31,14 +31,15 @@ const formatCurrency = (amount, currencyCode = 'USD') => {
     catch { return `${currencyCode} ${Number(amount).toFixed(2)}`; }
 };
 
-const STATUS_CONFIG = {
-    'Paid':          { bg: 'from-emerald-600 to-teal-700', light: 'bg-emerald-900/40 text-emerald-400 border-emerald-700/50', label: 'Paid', icon: '💰', glow: 'shadow-emerald-500/20' },
-    'Hold':          { bg: 'from-amber-500 to-orange-600', light: 'bg-amber-900/40 text-amber-400 border-amber-700/50',   label: 'On Hold', icon: '⏸️', glow: 'shadow-amber-500/20' },
-    'Renegotiated':  { bg: 'from-purple-600 to-indigo-700', light: 'bg-purple-900/40 text-purple-400 border-purple-700/50', label: 'Early Payout', icon: '⚡', glow: 'shadow-purple-500/20' },
-    'Scheduled':     { bg: 'from-blue-600 to-cyan-700', light: 'bg-blue-900/40 text-blue-400 border-blue-700/50',       label: 'Scheduled', icon: '📅', glow: 'shadow-blue-500/20' },
-    'Pending':       { bg: 'from-slate-600 to-slate-800', light: 'bg-slate-700/40 text-slate-300 border-slate-600/50', label: 'Pending', icon: '⏳', glow: 'shadow-slate-500/20' },
+const getStatusCfg = (status) => {
+    switch (status) {
+        case 'Paid': return { bg: 'from-emerald-400/90 to-teal-600/90', icon: '✅', glow: 'shadow-[0_0_20px_rgba(52,211,153,0.3)]' };
+        case 'Scheduled': return { bg: 'from-blue-400/90 to-indigo-600/90', icon: '📅', glow: 'shadow-[0_0_20px_rgba(96,165,250,0.3)]' };
+        case 'Hold': return { bg: 'from-amber-400/90 to-orange-600/90', icon: '⏸️', glow: 'shadow-[0_0_20px_rgba(251,191,36,0.3)]' };
+        case 'Early Payment Requested': return { bg: 'from-purple-400/90 to-pink-600/90', icon: '⚡', glow: 'shadow-[0_0_20px_rgba(192,132,252,0.3)]' };
+        default: return { bg: 'from-slate-400/90 to-slate-600/90', icon: '❓', glow: 'shadow-[0_0_20px_rgba(148,163,184,0.3)]' };
+    }
 };
-const getStatusCfg = (status) => STATUS_CONFIG[status] || STATUS_CONFIG['Scheduled'];
 
 // Custom Toolbar for a premium look
 const CustomToolbar = (toolbar) => {
@@ -90,51 +91,80 @@ const CustomToolbar = (toolbar) => {
                     <select value={currentMonth} onChange={handleMonthChange} className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-sm font-bold text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
                         {moment.months().map((m, i) => (
                             <option key={i} value={i}>{m}</option>
-                        ))}
-                    </select>
-                    <select value={currentYear} onChange={handleYearChange} className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-sm font-bold text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
-                        {Array.from({ length: 10 }, (_, i) => currentYear - 5 + i).map(y => (
-                            <option key={y} value={y}>{y}</option>
-                        ))}
-                    </select>
-                </div>
-            </div>
+    const goToBack = () => { toolbar.onNavigate('PREV'); };
+    const goToNext = () => { toolbar.onNavigate('NEXT'); };
+    const goToToday = () => { toolbar.onNavigate('TODAY'); };
 
-            <div className="hidden lg:flex items-center gap-4 px-6 border-x border-slate-800/50">
-                <div>
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Today's Cash Burn</p>
-                    <p className="text-lg font-black text-rose-500">{formatCurrency(dailyBurn)}</p>
-                </div>
-                <div className="w-px h-8 bg-slate-800"></div>
-                <div>
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">SLA Health</p>
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                        <span className="text-xs font-black text-emerald-400">98.2%</span>
-                    </div>
-                </div>
-            </div>
+    const dailyBurn = 2450.75;
 
-            <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-1 bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
-                    {['month', 'week', 'day', 'agenda'].map((v) => (
-                        <button
-                            key={v}
-                            onClick={() => toolbar.onView(v)}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${toolbar.view === v ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                        >
-                            {v.charAt(0).toUpperCase() + v.slice(1)}
-                        </button>
-                    ))}
-                </div>
-
+    return (
+        <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8 bg-white/5 p-6 rounded-3xl border border-white/5 backdrop-blur-md">
+            <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2">
-                    <button onClick={goToToday} className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all shadow-sm">Today</button>
-                    <div className="flex items-center gap-1">
-                        <button onClick={goToBack} className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all shadow-sm"><ChevronLeft className="w-5 h-5" /></button>
-                        <button onClick={goToNext} className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700/50 transition-all shadow-sm"><ChevronRight className="w-5 h-5" /></button>
+                    <button onClick={goToBack} className="p-3 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all group shadow-inner">
+                        <ChevronLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
+                    </button>
+                    <button onClick={goToToday} className="px-6 py-3 text-sm font-black text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all shadow-inner uppercase tracking-widest">Today</button>
+                    <button onClick={goToNext} className="p-3 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all group shadow-inner">
+                        <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                </div>
+                <div className="text-left">
+                    <h2 className="text-2xl font-black text-white capitalize tracking-tighter mb-1">{toolbar.label}</h2>
+                    <div className="flex gap-2">
+                        <select 
+                            value={currentDate.getMonth()} 
+                            onChange={(e) => {
+                                const newDate = new Date(currentDate);
+                                newDate.setMonth(parseInt(e.target.value));
+                                toolbar.onNavigate('DATE', newDate);
+                                setCurrentDate(newDate);
+                            }}
+                            className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1 outline-none hover:bg-white/10 transition-colors"
+                        >
+                            {moment.months().map((m, i) => <option key={i} value={i} className="bg-slate-900">{m}</option>)}
+                        </select>
+                        <select 
+                            value={currentDate.getFullYear()} 
+                            onChange={(e) => {
+                                const newDate = new Date(currentDate);
+                                newDate.setFullYear(parseInt(e.target.value));
+                                toolbar.onNavigate('DATE', newDate);
+                                setCurrentDate(newDate);
+                            }}
+                            className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1 outline-none hover:bg-white/10 transition-colors"
+                        >
+                            {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => <option key={y} value={y} className="bg-slate-900">{y}</option>)}
+                        </select>
                     </div>
                 </div>
+            </div>
+
+            <div className="hidden xl:flex items-center gap-8 px-8 border-x border-white/10">
+                <div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Treasury Outflow</p>
+                    <p className="text-xl font-black text-rose-500">{formatCurrency(dailyBurn)}</p>
+                </div>
+                <div className="w-px h-10 bg-white/10"></div>
+                <div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Disbursement SLA</p>
+                    <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                        <span className="text-sm font-black text-emerald-400">99.8%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-3 bg-slate-900/50 p-2 rounded-2xl border border-white/5">
+                {['month', 'week', 'day', 'agenda'].map((v) => (
+                    <button
+                        key={v}
+                        onClick={() => toolbar.onView(v)}
+                        className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${toolbar.view === v ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                    >
+                        {v}
+                    </button>
+                ))}
             </div>
         </div>
     );
@@ -167,16 +197,17 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         const cfg = getStatusCfg(event.status);
         const isOverdue = moment(event.start).isBefore(moment(), 'day') && event.status !== 'Paid';
         return {
-            className: `bg-gradient-to-br ${cfg.bg} border-0 rounded-lg shadow-lg ${cfg.glow} ${isOverdue ? 'ring-2 ring-rose-500 animate-pulse' : ''}`,
+            className: `bg-gradient-to-br ${cfg.bg} backdrop-blur-md border border-white/10 rounded-xl shadow-lg ${cfg.glow} hover:scale-[1.02] active:scale-95 transition-all duration-300 ${isOverdue ? 'ring-2 ring-rose-500 animate-pulse' : ''}`,
             style: {
-                fontSize: '11px',
-                fontWeight: '800',
-                padding: '4px 8px',
+                fontSize: '10px',
+                fontWeight: '900',
+                padding: '6px 10px',
                 color: 'white',
-                minHeight: '24px',
+                minHeight: '28px',
                 display: 'flex',
                 alignItems: 'center',
-                border: isOverdue ? '2px solid #f43f5e' : 'none',
+                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                letterSpacing: '0.025em',
                 cursor: isFinance ? 'grab' : 'pointer'
             }
         };
