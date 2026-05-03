@@ -16,9 +16,7 @@ import {
     Briefcase,
     Zap,
     Download,
-    RefreshCw,
-    MessageSquare,
-    Send
+    RefreshCw
 } from 'lucide-react';
 import {
     PieChart, Pie, Cell,
@@ -27,6 +25,7 @@ import {
     ResponsiveContainer
 } from 'recharts';
 import { supabase } from '../utils/supabaseClient';
+import FloatingChat from './FloatingChat';
 
 const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
 
@@ -40,25 +39,6 @@ export default function ProcurementPortal({ user, onLogout }) {
     });
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('overview');
-    const [isChatOpen, setIsChatOpen] = useState(false);
-    const [chatMessages, setChatMessages] = useState([
-        { sender: 'Finance Support', text: 'Hello! How can we assist you with treasury top-ups today?', time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }
-    ]);
-    const [currentMessage, setCurrentMessage] = useState('');
-
-    const handleSendMessage = (e) => {
-        e.preventDefault();
-        if (!currentMessage.trim()) return;
-        
-        const newMessage = { sender: 'You', text: currentMessage, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
-        setChatMessages([...chatMessages, newMessage]);
-        setCurrentMessage('');
-        
-        // Simulate response
-        setTimeout(() => {
-            setChatMessages(prev => [...prev, { sender: 'Finance Support', text: 'We have received your message and will review it shortly.', time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }]);
-        }, 1500);
-    };
 
     useEffect(() => {
         fetchRequests();
@@ -398,52 +378,7 @@ export default function ProcurementPortal({ user, onLogout }) {
                 )}
             </main>
 
-            {/* Floating Chat */}
-            <div className="fixed bottom-6 right-6 z-50">
-                {isChatOpen ? (
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-80 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
-                        <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
-                            <div className="flex items-center gap-2">
-                                <MessageSquare className="w-5 h-5" />
-                                <span className="font-bold text-sm">Finance Support</span>
-                            </div>
-                            <button onClick={() => setIsChatOpen(false)} className="hover:bg-indigo-700 p-1 rounded-lg transition-colors">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="h-80 overflow-y-auto p-4 space-y-4 bg-slate-800/50">
-                            {chatMessages.map((msg, i) => (
-                                <div key={i} className={`flex flex-col ${msg.sender === 'You' ? 'items-end' : 'items-start'}`}>
-                                    <div className={`px-4 py-2 rounded-2xl max-w-[85%] text-sm ${msg.sender === 'You' ? 'bg-indigo-500 text-white rounded-br-sm' : 'bg-slate-700 text-slate-200 rounded-bl-sm'}`}>
-                                        {msg.text}
-                                    </div>
-                                    <span className="text-[10px] text-slate-500 mt-1 font-medium">{msg.time}</span>
-                                </div>
-                            ))}
-                        </div>
-                        <form onSubmit={handleSendMessage} className="p-3 bg-slate-900 border-t border-slate-700 flex gap-2">
-                            <input
-                                type="text"
-                                value={currentMessage}
-                                onChange={(e) => setCurrentMessage(e.target.value)}
-                                placeholder="Message Finance..."
-                                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-                            />
-                            <button type="submit" disabled={!currentMessage.trim()} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white p-2 rounded-xl transition-colors">
-                                <Send className="w-4 h-4" />
-                            </button>
-                        </form>
-                    </div>
-                ) : (
-                    <button
-                        onClick={() => setIsChatOpen(true)}
-                        className="bg-indigo-600 hover:bg-indigo-500 text-white p-4 rounded-full shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 transition-all duration-300 hover:-translate-y-1 flex items-center justify-center relative group"
-                    >
-                        <MessageSquare className="w-6 h-6" />
-                        <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#020617] scale-0 group-hover:scale-100 transition-transform origin-bottom-left">1</span>
-                    </button>
-                )}
-            </div>
+            <FloatingChat userEmail={user?.email} userRole="Procurement" />
         </div>
     );
 }
