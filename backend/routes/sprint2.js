@@ -151,8 +151,7 @@ router.get('/trust-profile', async (req, res) => {
                 .insert([{ 
                     supplier_email: email, 
                     trust_tier: 2, 
-                    accuracy_score: 100,
-                    created_at: new Date().toISOString()
+                    accuracy_score: 100
                 }])
                 .select()
                 .single();
