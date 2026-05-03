@@ -1472,13 +1472,19 @@ function PayoutCalendar({ user }) {
         };
     }, []);
 
-    const markPaid = async (id) => {
-        if (!window.confirm("Are you sure you want to mark this payout as Paid?")) return;
+    const markPaid = async (payout) => {
+        if (!window.confirm("Are you sure you want to disburse funds to the supplier's bank account?")) return;
         try {
-            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/payouts/${id}/paid`, { paidBy: 'Finance User' });
+            await axios.post(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${payout.id}/disburse`, { 
+                supplier_email: payout.supplier_email,
+                final_amount: payout.final_amount || payout.base_amount,
+                mock_supplier_account: 'NESTLE-VND-8829' // Mock bank account
+            });
+            alert('Funds disbursed successfully. Transaction Receipt generated.');
             fetchPayouts();
-        } catch {
-            alert('Failed to mark as paid');
+        } catch (error) {
+            console.error(error);
+            alert('Failed to disburse funds. Check server logs.');
         }
     };
 
@@ -1486,9 +1492,13 @@ function PayoutCalendar({ user }) {
         if (!window.confirm(`Are you sure you want to batch and pay ${batch.count} invoices for ${batch.supplier} totaling ${formatCurrency(batch.total)}?`)) return;
         try {
             await Promise.all(batch.invoices.map(p =>
-                axios.patch(`https://nestle-finance-command-production.up.railway.app/api/payouts/${p.id}/paid`, { paidBy: 'Finance User (Batched)' })
+                axios.post(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${p.id}/disburse`, {
+                    supplier_email: p.supplier_email,
+                    final_amount: p.final_amount || p.base_amount,
+                    mock_supplier_account: 'NESTLE-VND-8829'
+                })
             ));
-            alert('Batch payment successful.');
+            alert('Batch payment successful. Funds disbursed.');
             fetchPayouts();
         } catch (error) {
             alert('Failed to process batch payment.');
@@ -1669,7 +1679,7 @@ function PayoutCalendar({ user }) {
                                                                 Schedule Payout
                                                             </button>
                                                         ) : (
-                                                            <button onClick={() => markPaid(p.id)} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 active:scale-95">
+                                                            <button onClick={() => markPaid(p)} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 active:scale-95">
                                                                 Disburse Funds
                                                             </button>
                                                         )}

@@ -542,15 +542,18 @@ export default function SupplierDashboard({ user, onLogout }) {
         const discountRate = 0.02;
         const discountAmount = payoutAmount * discountRate;
         const earlyPaymentAmount = payoutAmount - discountAmount;
+        
         if (!window.confirm(`Accept Early Payment?\n\nOriginal Amount: ${formatCurrency(payoutAmount)}\nEarly Payment Discount: ${formatCurrency(discountAmount)} (2%)\nAmount you will receive now: ${formatCurrency(earlyPaymentAmount)}`)) return;
 
         try {
-            await axios.post(`https://nestle-finance-command-production.up.railway.app/api/payouts/${payoutId}/accept-early-payment`, {
-                discountAmount, earlyPaymentAmount, discountRate
+            await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${payoutId}/discount`, {
+                early_date: new Date().toISOString(),
+                new_amount: earlyPaymentAmount
             });
             alert('Early payment offer accepted! Finance has been notified to accelerate your payout.');
             fetchData();
         } catch (err) {
+            console.error(err);
             alert('Failed to accept early payment offer.');
         }
     };
