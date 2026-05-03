@@ -1142,14 +1142,17 @@ router.patch('/payouts/:id/discount', async (req, res) => {
 
         if (error) throw error;
 
-        // Notify Finance
-        await supabase.from('notifications').insert([{
-            user_role: 'Finance',
-            title: '⚡ Early Payout Accepted',
-            message: `Supplier ${data.supplier_email} accepted early payout for ${data.title}. Calendar updated to ${new Date(early_date).toLocaleDateString()} for ${new_amount}.`,
-            link: `/payouts`,
-            is_read: false
-        }]);
+        // Notify Supplier (Confirmation Email)
+        if (data && data.supplier_email) {
+            await sendSupplierEmail(
+                data.supplier_email,
+                `⚡ Early Payout Confirmed – ${data.title}`,
+                `<p>Your request for an early payout has been <strong>successfully processed</strong>.</p>
+                 <p><strong>New Payout Date:</strong> ${new Date(early_date).toLocaleDateString()}</p>
+                 <p><strong>Net Amount to be Disbursed:</strong> ${new_amount}</p>
+                 <p>The funds will be transferred to your account on the rescheduled date. Thank you for using our Liquidity Accelerator.</p>`
+            ).catch(err => console.warn('[Discount Route] Email failed:', err.message));
+        }
 
         res.json({ success: true, data });
     } catch (error) {
@@ -1235,7 +1238,7 @@ router.post('/payouts/stage', async (req, res) => {
             <p>You can monitor the status of this payout in real-time through your Supplier Dashboard under the <strong>Payout Calendar</strong> section.</p>
             <p>Thank you for your continued partnership with Nestlé.</p>
         `;
-        sendSupplierEmail(
+        await sendSupplierEmail(
             supplier_email,
             `Payout Scheduled – ${total_amount}`,
             payoutEmailBody,
@@ -1282,7 +1285,7 @@ router.post('/payouts/:id/disburse', async (req, res) => {
             supplier_email,
             'Payment Remittance Advice',
             `<p>Nestlé has successfully transferred ${final_amount} to account ending in ${mock_supplier_account.slice(-4)}.</p><p>Transaction Ref: ${bankResult.transactionId}.</p>`
-        );
+        ).catch(err => console.warn('[Disburse Route] Email failed:', err.message));
 
         res.status(200).json(bankResult);
     } catch (error) {
@@ -1349,7 +1352,7 @@ router.patch('/payouts/:id', async (req, res) => {
             .select()
             .single();
 
-        if (error && id.includes('-')) {
+        if (error && id && String(id).includes('-')) {
             // Fallback: try matching by invoice_ref if id looks like a UUID
             console.log(`Retrying update with invoice_ref=${id}`);
             const { data: retryData, error: retryError } = await supabase
@@ -1368,9 +1371,9 @@ router.patch('/payouts/:id', async (req, res) => {
             }
         }
 
-        if (error) {
-            console.error('Final Payout Update Error:', error);
-            throw error;
+        if (error || !data) {
+            console.error('Final Payout Update Error:', error || 'No data found');
+            return res.status(404).json({ error: 'Payout record not found' });
         }
 
         // 🔔 Notification & 📧 Email for Date Update
