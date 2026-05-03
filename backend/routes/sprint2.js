@@ -1093,6 +1093,7 @@ router.patch('/payouts/:id/confirm', async (req, res) => {
 
         // Notify Supplier
         if (data && data.supplier_email) {
+            console.log(`Sending confirmation notification to ${data.supplier_email}`);
             await supabase.from('notifications').insert([{
                 user_email: data.supplier_email,
                 user_role: 'Supplier',
@@ -1107,11 +1108,13 @@ router.patch('/payouts/:id/confirm', async (req, res) => {
                 <p>We confirm receipt of your Invoice and GRN. Payment of ${data.final_amount} will be disbursed on <strong>${new Date(start_date).toLocaleDateString()}</strong>.</p>
                 <p>You can view your formal Promise to Pay letter and updated calendar in the Supplier Portal.</p>
             `;
-            await sendSupplierEmail(
+            console.log(`Triggering confirmation email via Resend to ${data.supplier_email}...`);
+            const emailSent = await sendSupplierEmail(
                 data.supplier_email,
                 `Payout Scheduled - ${data.title}`,
                 emailHtml
             );
+            console.log(`Email result for ${data.supplier_email}: ${emailSent}`);
         }
 
         res.json({ success: true, data });
@@ -1303,6 +1306,7 @@ router.patch('/payouts/:id/hold', async (req, res) => {
 
         // 🔔 Notification & 📧 Email for HOLD
         if (data && data.supplier_email) {
+            console.log(`Sending hold notification to ${data.supplier_email}`);
             const formattedDate = new Date(hold_until_date).toLocaleDateString();
             await supabase.from('notifications').insert([{
                 user_email: data.supplier_email,
@@ -1313,13 +1317,15 @@ router.patch('/payouts/:id/hold', async (req, res) => {
                 is_read: false
             }]);
 
-            await sendSupplierEmail(
+            console.log(`Triggering hold email via Resend to ${data.supplier_email}...`);
+            const emailSent = await sendSupplierEmail(
                 data.supplier_email,
                 `Payment Update: Put on Hold – ${data.title || data.id}`,
                 `<p>Nestlé Finance has placed a <strong>temporary hold</strong> on your scheduled payment.</p>
                  <p><strong>Hold Until:</strong> ${formattedDate}</p>
                  <p>The hold is due to final internal audit requirements. You will be notified automatically when the hold is released.</p>`
             );
+            console.log(`Email result for ${data.supplier_email}: ${emailSent}`);
         }
 
         res.status(200).json({ success: true, data });
@@ -1369,6 +1375,7 @@ router.patch('/payouts/:id', async (req, res) => {
 
         // 🔔 Notification & 📧 Email for Date Update
         if (data && data.supplier_email) {
+            console.log(`Sending date update notification to ${data.supplier_email}`);
             const formattedDate = new Date(start_date).toLocaleDateString();
             await supabase.from('notifications').insert([{
                 user_email: data.supplier_email,
@@ -1379,13 +1386,15 @@ router.patch('/payouts/:id', async (req, res) => {
                 is_read: false
             }]);
 
-            await sendSupplierEmail(
+            console.log(`Triggering email via Resend to ${data.supplier_email}...`);
+            const emailSent = await sendSupplierEmail(
                 data.supplier_email,
                 `Payment Update: Date Rescheduled – ${data.title || data.id}`,
                 `<p>Your scheduled payment date has been <strong>updated</strong> by the Finance team.</p>
                  <p><strong>New Payout Date:</strong> ${formattedDate}</p>
                  <p>You can view the updated schedule in your Treasury Calendar.</p>`
             );
+            console.log(`Email result for ${data.supplier_email}: ${emailSent}`);
         }
 
         res.json({ success: true, data });
