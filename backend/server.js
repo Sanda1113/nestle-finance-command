@@ -541,6 +541,26 @@ app.post('/api/save-reconciliation', async (req, res) => {
                     status: 'Scheduled'
                 }]);
                 console.log(`📆 MVP6: Payout scheduled automatically for ${invoiceData.invoiceNumber}`);
+
+                // 📧 Email supplier about payout scheduled
+                const scheduleEmailBody = `
+                    <p>Hello,</p>
+                    <p>Good news! Your invoice <strong>${invoiceData.invoiceNumber}</strong> has been auto-approved and <strong>scheduled for payment</strong>.</p>
+                    <p><strong>Estimated Payment Date:</strong> ${dueDate.toLocaleDateString()}</p>
+                    <p><strong>Payment Terms:</strong> ${poData.paymentTerms || 'Net 30'}</p>
+                    <p>You can track the real-time status of this payment in your Lifecycle Timeline on the Supplier Dashboard.</p>
+                `;
+                sendSupplierEmail(
+                    supplierEmail,
+                    `Payment Scheduled – ${invoiceData.invoiceNumber}`,
+                    scheduleEmailBody,
+                    {
+                        invoiceNumber: invoiceData.invoiceNumber,
+                        poNumber: poData.poNumber,
+                        amount: invoiceData.totalAmount,
+                        dueDate: dueDate.toISOString()
+                    }
+                ).catch(err => console.warn('[Auto Payout Email] Failed:', err.message));
             } catch (err) {
                 logError('Schedule Payout MVP6', err);
             }
@@ -740,6 +760,26 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
                         status: 'Scheduled'
                     }]);
                     console.log(`📆 MVP6: Payout scheduled for ${recon?.invoice_number}`);
+
+                    // 📧 Email supplier about payout scheduled
+                    const scheduleEmailBody = `
+                        <p>Hello,</p>
+                        <p>Your invoice <strong>${recon?.invoice_number}</strong> has been approved by Finance and <strong>scheduled for payment</strong>.</p>
+                        <p><strong>Estimated Payment Date:</strong> ${dueDate.toLocaleDateString()}</p>
+                        <p><strong>Payment Terms:</strong> ${pdata?.paymentTerms || 'Net-30'}</p>
+                        <p>You can track the real-time status of this payment in your Lifecycle Timeline on the Supplier Dashboard.</p>
+                    `;
+                    sendSupplierEmail(
+                        recon?.supplier_email,
+                        `Payment Scheduled – ${recon?.invoice_number}`,
+                        scheduleEmailBody,
+                        {
+                            invoiceNumber: recon?.invoice_number,
+                            poNumber: recon?.po_number,
+                            amount: recon?.invoice_total,
+                            dueDate: dueDate.toISOString()
+                        }
+                    ).catch(err => console.warn('[Manual Payout Email] Failed:', err.message));
                 }
             } catch (err) {
                 logError('Schedule Payout MVP6 Manual', err);

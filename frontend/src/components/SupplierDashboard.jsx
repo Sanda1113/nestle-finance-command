@@ -871,16 +871,19 @@ export default function SupplierDashboard({ user, onLogout }) {
                 }
 
                 const isDelivered = po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp;
-                if (isDelivered) {
-                    events.push({ label: 'Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
-                }
+                const payout = myPayouts.find(p => p.reconciliation_id === relatedRecon.id || p.invoice_ref === relatedRecon.id || p.po_number === po.po_number);
 
-                if (isApproved && isDelivered) {
-                    const payout = myPayouts.find(p => p.invoice_ref === relatedRecon.id);
+                if (isApproved) {
                     if (!payout) {
                         events.push({ label: 'Awaiting Scheduling', date: new Date().toISOString(), status: 'pending', icon: '⏳' });
                     } else {
-                        events.push({ label: 'Scheduled (Calendar)', date: payout.created_at, status: payout.status === 'Scheduled' || payout.status === 'Renegotiated' ? 'completed' : 'completed', icon: '🗓️' });
+                        events.push({ 
+                            label: `Scheduled (Net-${payout.payment_terms || '30'})`, 
+                            date: payout.created_at, 
+                            status: 'completed', 
+                            icon: '🗓️',
+                            note: `Estimated Payout: ${new Date(payout.due_date).toLocaleDateString()}`
+                        });
 
                         if (payout.status === 'Hold') {
                             events.push({ label: 'Payment Hold', date: payout.hold_until_date || new Date().toISOString(), status: 'warning', icon: '⏸️' });
@@ -890,11 +893,17 @@ export default function SupplierDashboard({ user, onLogout }) {
                             if (payout.hold_until_date) {
                                 events.push({ label: 'Payment Hold', date: payout.hold_until_date, status: 'completed', icon: '⏸️' });
                             }
-                            events.push({ label: 'Paid (Funds Disbursed)', date: payout.updated_at, status: 'completed', icon: '💰', isPaid: true, bankRef: payout.bank_transaction_ref });
+                            events.push({ label: 'Paid (Funds Disbursed)', date: payout.updated_at || payout.paid_at, status: 'completed', icon: '💰', isPaid: true, bankRef: payout.bank_transaction_ref });
                         } else if (payout.status !== 'Hold') {
-                            events.push({ label: 'Processing Payment', date: new Date().toISOString(), status: 'pending', icon: '💸' });
+                            events.push({ label: 'Processing Payment', date: payout.due_date, status: 'pending', icon: '💸' });
                         }
                     }
+                }
+
+                if (isDelivered) {
+                    events.push({ label: 'Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
+                } else if (isApproved) {
+                    events.push({ label: 'Awaiting Delivery', date: new Date().toISOString(), status: 'pending', icon: '🚚' });
                 }
             } else {
                 const isDelivered = po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp;
