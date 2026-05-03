@@ -1337,8 +1337,7 @@ router.patch('/payouts/:id', async (req, res) => {
             .from('payout_schedules')
             .update({ 
                 start_date, 
-                end_date: end_date || start_date,
-                updated_at: new Date().toISOString()
+                end_date: end_date || start_date
             })
             .eq('id', id)
             .select()
@@ -1351,8 +1350,7 @@ router.patch('/payouts/:id', async (req, res) => {
                 .from('payout_schedules')
                 .update({ 
                     start_date, 
-                    end_date: end_date || start_date,
-                    updated_at: new Date().toISOString()
+                    end_date: end_date || start_date
                 })
                 .eq('invoice_ref', id)
                 .select()
