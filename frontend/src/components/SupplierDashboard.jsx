@@ -307,8 +307,22 @@ export default function SupplierDashboard({ user, onLogout }) {
 
     useEffect(() => {
         const fetchTrust = async () => {
-            const { data } = await supabase.from('vendor_trust_profiles').select('*').eq('supplier_email', user.email).single();
-            setTrustProfile(data);
+            try {
+                const { data, error } = await supabase.from('vendor_trust_profiles').select('*').eq('supplier_email', user.email).single();
+                if (error) {
+                    if (error.code === 'PGRST116') {
+                        console.warn(`[SupplierDashboard] No trust profile found for ${user.email}`);
+                    } else {
+                        console.error(`[SupplierDashboard] Error fetching trust profile:`, error.message);
+                    }
+                    setTrustProfile(null);
+                } else {
+                    setTrustProfile(data);
+                }
+            } catch (err) {
+                console.error(`[SupplierDashboard] Unexpected error fetching trust profile:`, err);
+                setTrustProfile(null);
+            }
         };
         if (user?.email) fetchTrust();
     }, [user?.email]);

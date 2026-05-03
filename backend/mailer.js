@@ -96,6 +96,9 @@ const sendSupplierEmail = async (toEmail, subject, htmlBody, refs = {}) => {
 
         if (error) {
             console.error(`❌ Resend error for ${toEmail}:`, error);
+            if (error.statusCode === 403 || error.name === 'validation_error') {
+                console.warn(`💡 TIP: 403/Validation Error usually means the sender domain ('${emailFromAddress}') or the recipient ('${toEmail}') is not verified in your Resend Dashboard. If using 'onboarding@resend.dev', you can only send to your own account email.`);
+            }
             return false;
         }
 

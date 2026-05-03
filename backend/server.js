@@ -528,15 +528,17 @@ app.post('/api/save-reconciliation', async (req, res) => {
                 let dueDateStr = invoiceData.dueDate !== 'Not Found' && invoiceData.dueDate ? invoiceData.dueDate : null;
                 let dueDate = dueDateStr ? new Date(dueDateStr) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
                 
-                await supabase.from('payout_schedule').insert([{
-                    reconciliation_id: reconId,
+                await supabase.from('payout_schedules').insert([{
+                    invoice_ref: reconId,
+                    po_ref: null, // Optional
                     po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
                     invoice_number: invoiceData.invoiceNumber,
                     supplier_email: supplierEmail,
-                    vendor_name: invoiceData.vendorName,
-                    payout_amount: invoiceData.totalAmount,
-                    invoice_date: invoiceData.invoiceDate !== 'Not Found' ? invoiceData.invoiceDate : new Date().toISOString(),
-                    due_date: dueDate.toISOString(),
+                    title: `Payout for ${invoiceData.invoiceNumber}`,
+                    base_amount: invoiceData.totalAmount,
+                    final_amount: invoiceData.totalAmount,
+                    start_date: dueDate.toISOString(),
+                    end_date: dueDate.toISOString(),
                     payment_terms: poData.paymentTerms || 'Net 30',
                     status: 'Scheduled'
                 }]);
@@ -736,7 +738,7 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
         // MVP 6: Payout Tracker - Auto schedule payout upon manual approval
         if (newStatus === 'Approved') {
             try {
-                const { data: existing } = await supabase.from('payout_schedule').select('id').eq('reconciliation_id', id);
+                const { data: existing } = await supabase.from('payout_schedules').select('id').eq('invoice_ref', id);
                 if (!existing || existing.length === 0) {
                     let idata = recon?.invoice_data || {};
                     if (typeof idata === 'string') idata = JSON.parse(idata);
@@ -747,15 +749,16 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
                     let dueDateStr = idata?.dueDate !== 'Not Found' && idata?.dueDate ? idata.dueDate : null;
                     let dueDate = dueDateStr ? new Date(dueDateStr) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
                     
-                    await supabase.from('payout_schedule').insert([{
-                        reconciliation_id: id,
+                    await supabase.from('payout_schedules').insert([{
+                        invoice_ref: id,
                         po_number: recon?.po_number || idata?.invoiceNumber,
                         invoice_number: recon?.invoice_number,
                         supplier_email: recon?.supplier_email,
-                        vendor_name: recon?.vendor_name,
-                        payout_amount: recon?.invoice_total,
-                        invoice_date: idata?.invoiceDate !== 'Not Found' ? idata?.invoiceDate : new Date().toISOString(),
-                        due_date: dueDate.toISOString(),
+                        title: `Payout for ${recon?.invoice_number}`,
+                        base_amount: recon?.invoice_total,
+                        final_amount: recon?.invoice_total,
+                        start_date: dueDate.toISOString(),
+                        end_date: dueDate.toISOString(),
                         payment_terms: pdata?.paymentTerms || 'Net-30',
                         status: 'Scheduled'
                     }]);

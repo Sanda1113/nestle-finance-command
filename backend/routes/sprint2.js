@@ -1008,6 +1008,11 @@ router.get('/payouts', async (req, res) => {
         const { data, error } = await query.order('start_date', { ascending: true });
 
         if (error) throw error;
+        
+        console.log(`[GET /payouts] Email: ${cleanEmail}, Found: ${data?.length || 0} records`);
+        if (cleanEmail && data?.length === 0) {
+            console.warn(`⚠️ [GET /payouts] No payouts found for ${cleanEmail}. Check if records are assigned to this exact email.`);
+        }
 
         res.json({ success: true, data });
     } catch (error) {
