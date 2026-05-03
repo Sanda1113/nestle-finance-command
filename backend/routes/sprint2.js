@@ -1300,10 +1300,77 @@ router.patch('/payouts/:id/hold', async (req, res) => {
             .single();
 
         if (error) throw error;
+
+        // 🔔 Notification & 📧 Email for HOLD
+        if (data && data.supplier_email) {
+            const formattedDate = new Date(hold_until_date).toLocaleDateString();
+            await supabase.from('notifications').insert([{
+                user_email: data.supplier_email,
+                user_role: 'Supplier',
+                title: '⏸️ Payment Put on Hold',
+                message: `Finance has placed a hold on your payment for ${data.title} until ${formattedDate}.`,
+                link: `/logs?po=${data.po_number || data.id}`,
+                is_read: false
+            }]);
+
+            await sendSupplierEmail(
+                data.supplier_email,
+                `Payment Update: Put on Hold – ${data.title || data.id}`,
+                `<p>Nestlé Finance has placed a <strong>temporary hold</strong> on your scheduled payment.</p>
+                 <p><strong>Hold Until:</strong> ${formattedDate}</p>
+                 <p>The hold is due to final internal audit requirements. You will be notified automatically when the hold is released.</p>`
+            );
+        }
+
         res.status(200).json({ success: true, data });
     } catch (error) {
         console.error('Hold Error:', error);
         res.status(500).json({ error: 'Failed to put on hold' });
+    }
+});
+
+router.patch('/payouts/:id', async (req, res) => {
+    const { id } = req.params;
+    const { start_date, end_date, updatedBy } = req.body;
+    try {
+        const { data, error } = await supabase
+            .from('payout_schedules')
+            .update({ 
+                start_date, 
+                end_date: end_date || start_date,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // 🔔 Notification & 📧 Email for Date Update
+        if (data && data.supplier_email) {
+            const formattedDate = new Date(start_date).toLocaleDateString();
+            await supabase.from('notifications').insert([{
+                user_email: data.supplier_email,
+                user_role: 'Supplier',
+                title: '📅 Payment Date Rescheduled',
+                message: `The payment date for ${data.title} has been updated to ${formattedDate}.`,
+                link: `/logs?po=${data.po_number || data.id}`,
+                is_read: false
+            }]);
+
+            await sendSupplierEmail(
+                data.supplier_email,
+                `Payment Update: Date Rescheduled – ${data.title || data.id}`,
+                `<p>Your scheduled payment date has been <strong>updated</strong> by the Finance team.</p>
+                 <p><strong>New Payout Date:</strong> ${formattedDate}</p>
+                 <p>You can view the updated schedule in your Treasury Calendar.</p>`
+            );
+        }
+
+        res.json({ success: true, data });
+    } catch (error) {
+        console.error('Update Payout Date Error:', error);
+        res.status(500).json({ error: 'Failed to update payout date' });
     }
 });
 

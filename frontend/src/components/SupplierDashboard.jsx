@@ -492,14 +492,18 @@ export default function SupplierDashboard({ user, onLogout }) {
                 const delta = Math.abs(convertedInvTotal - poTotal);
                 let status = 'Matched - Pending Finance Review';
 
+                const EPSILON = 0.001;
                 if (poTotal < 1) {
                     status = 'Matched - Pending Finance Review';
                     setDbStatus('⚠️ PO amount unverified — submitted for Finance manual review.');
-                } else if (delta > tolerance) {
+                } else if (delta > (tolerance + EPSILON)) {
                     status = 'Discrepancy Detected';
-                } else if (delta > 0) {
+                } else if (delta > EPSILON) {
                     status = 'Auto-Approved (Tolerance Applied)';
                     setDbStatus(`✅ Tolerance Applied: $${delta.toFixed(2)} variance auto-approved per Finance rules.`);
+                } else {
+                    status = 'Matched - Pending Finance Review';
+                    setDbStatus('✅ Perfect Match: All line items synchronized with ERP data.');
                 }
 
                 setMatchStatus(status);
@@ -870,40 +874,42 @@ export default function SupplierDashboard({ user, onLogout }) {
                     events.push({ label: '❌ Finance Rejected', date: relatedRecon.updated_at, status: 'warning', icon: '❌', resubmitObj: relatedRecon, resubmitType: 'invoice' });
                 }
 
-                const isDelivered = po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp;
+                const isDelivered = po.status === 'Delivered to Dock' || po.status === 'Goods Cleared - Ready for Payout' || po.po_data?.delivery_timestamp;
+                const isCleared = po.status === 'Goods Cleared - Ready for Payout';
                 const payout = myPayouts.find(p => p.reconciliation_id === relatedRecon.id || p.invoice_ref === relatedRecon.id || p.po_number === po.po_number);
+
+                if (isDelivered) {
+                    events.push({ label: '🚚 Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
+                } else if (isApproved) {
+                    events.push({ label: '⏳ Awaiting Delivery', date: new Date().toISOString(), status: 'pending', icon: '🚚' });
+                }
+
+                if (isCleared) {
+                    events.push({ label: '✅ Goods Cleared', date: po.updated_at, status: 'completed', icon: '🛡️' });
+                }
 
                 if (isApproved) {
                     if (!payout) {
-                        events.push({ label: 'Awaiting Scheduling', date: new Date().toISOString(), status: 'pending', icon: '⏳' });
+                        events.push({ label: '⏳ Awaiting Scheduling', date: new Date().toISOString(), status: 'pending', icon: '🗓️' });
                     } else {
+                        const isPaid = payout.status === 'Paid';
+                        const isHold = payout.status === 'Hold';
+                        const isScheduled = payout.status === 'Scheduled' || payout.status === 'Early Payment Requested' || payout.status === 'Renegotiated';
+
                         events.push({ 
-                            label: `Scheduled (Net-${payout.payment_terms || '30'})`, 
+                            label: isPaid ? '💰 Paid (Funds Disbursed)' : isHold ? '⏸️ Payment Hold' : '📅 Scheduled', 
                             date: payout.created_at, 
-                            status: 'completed', 
-                            icon: '🗓️',
-                            note: `Estimated Payout: ${new Date(payout.due_date).toLocaleDateString()}`
+                            status: isHold ? 'warning' : 'completed', 
+                            icon: isPaid ? '💰' : isHold ? '⏸️' : '🗓️',
+                            isPaid: isPaid,
+                            bankRef: payout.bank_transaction_ref,
+                            note: isPaid ? `Paid on ${new Date(payout.paid_at || payout.updated_at).toLocaleDateString()}` : `Est. Payout: ${new Date(payout.start_date || payout.due_date).toLocaleDateString()}`
                         });
 
-                        if (payout.status === 'Hold') {
-                            events.push({ label: 'Payment Hold', date: payout.hold_until_date || new Date().toISOString(), status: 'warning', icon: '⏸️' });
-                        }
-
-                        if (payout.status === 'Paid') {
-                            if (payout.hold_until_date) {
-                                events.push({ label: 'Payment Hold', date: payout.hold_until_date, status: 'completed', icon: '⏸️' });
-                            }
-                            events.push({ label: 'Paid (Funds Disbursed)', date: payout.updated_at || payout.paid_at, status: 'completed', icon: '💰', isPaid: true, bankRef: payout.bank_transaction_ref });
-                        } else if (payout.status !== 'Hold') {
-                            events.push({ label: 'Processing Payment', date: payout.due_date, status: 'pending', icon: '💸' });
+                        if (isHold && payout.hold_until_date) {
+                            events.push({ label: '⏳ Hold Until', date: payout.hold_until_date, status: 'pending', icon: '⏱️' });
                         }
                     }
-                }
-
-                if (isDelivered) {
-                    events.push({ label: 'Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
-                } else if (isApproved) {
-                    events.push({ label: 'Awaiting Delivery', date: new Date().toISOString(), status: 'pending', icon: '🚚' });
                 }
             } else {
                 const isDelivered = po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp;
@@ -1469,7 +1475,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                             }`}>
                                                 <div className="flex flex-col items-center gap-1">
                                                     {matchStatus === 'Matched - Pending Finance Review' ? (
-                                                        <JargonText text="✅ Perfect Match. Awaiting Finance Approval" />
+                                                        <JargonText text={dbStatus?.includes('Perfect') ? "✅ Perfect Match. Awaiting Finance Approval" : "✅ Approved. Awaiting Finance Approval"} />
                                                     ) : matchStatus === 'Auto-Approved (Tolerance Applied)' ? (
                                                         <>
                                                             <div className="flex items-center gap-2">
@@ -1529,11 +1535,11 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex-1 text-center"><div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center text-xs ${tx.events.some(e => e.label.includes('Invoice')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>1</div><p className="text-[10px] mt-1 font-bold text-slate-400">Invoice Received</p></div>
                                                             <div className="flex-1 h-1 bg-slate-700"><div className={`h-full bg-emerald-500 ${tx.events.some(e => e.label.includes('Delivered')) ? 'w-full' : 'w-0'}`}></div></div>
-                                                            <div className="flex-1 text-center"><div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center text-xs ${tx.events.some(e => e.label.includes('Delivered')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>2</div><p className="text-[10px] mt-1 font-bold text-slate-400">Goods Cleared</p></div>
+                                                            <div className="flex-1 text-center"><div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center text-xs ${tx.events.some(e => e.label.includes('Delivered')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>2</div><p className="text-[10px] mt-1 font-bold text-slate-400">Goods Received</p></div>
                                                             <div className="flex-1 h-1 bg-slate-700"><div className={`h-full bg-emerald-500 ${tx.events.some(e => e.label.includes('Scheduled')) ? 'w-full' : 'w-0'}`}></div></div>
                                                             <div className="flex-1 text-center"><div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center text-xs ${tx.events.some(e => e.label.includes('Scheduled')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>3</div><p className="text-[10px] mt-1 font-bold text-slate-400">Scheduled</p></div>
-                                                            <div className="flex-1 h-1 bg-slate-700"><div className={`h-full bg-emerald-500 ${tx.events.some(e => e.isPaid) ? 'w-full' : 'w-0'}`}></div></div>
-                                                            <div className="flex-1 text-center"><div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center text-xs ${tx.events.some(e => e.isPaid) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>4</div><p className="text-[10px] mt-1 font-bold text-slate-400">Paid</p></div>
+                                                            <div className="flex-1 h-1 bg-slate-700"><div className={`h-full bg-emerald-500 ${tx.events.some(e => e.label.includes('Paid')) ? 'w-full' : 'w-0'}`}></div></div>
+                                                            <div className="flex-1 text-center"><div className={`w-6 h-6 mx-auto rounded-full flex items-center justify-center text-xs ${tx.events.some(e => e.label.includes('Paid')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>4</div><p className="text-[10px] mt-1 font-bold text-slate-400">Paid</p></div>
                                                         </div>
                                                         {tx.events.some(e => e.isPaid) && (
                                                             <div className="mt-4 flex justify-center">
@@ -1736,30 +1742,32 @@ export default function SupplierDashboard({ user, onLogout }) {
                     ? {
                         position: 'fixed', bottom: 0, left: 0, right: 0, width: '100%', zIndex: 230,
                         borderRadius: '1rem 1rem 0 0', filter: 'none',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                        maxHeight: '90vh', display: 'flex', flexDirection: 'column'
+                        boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
+                        maxHeight: '60vh', display: 'flex', flexDirection: 'column'
                     }
                     : isCentered
                         ? {
                             position: 'fixed',
-                            top: Math.round(vh / 2 - 150),
-                            left: Math.round(vw / 2 - ttW / 2),
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
                             width: ttW,
                             zIndex: 230,
                             filter: 'none',
                             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                            maxHeight: '85vh', display: 'flex', flexDirection: 'column'
+                            maxHeight: '80vh', display: 'flex', flexDirection: 'column'
                         }
                         : {
                             position: 'fixed',
-                            bottom: tooltipPos.bottom,
+                            bottom: tooltipPos.bottom || 24,
                             left: tooltipPos.left,
                             right: tooltipPos.right,
+                            top: tooltipPos.top,
                             width: ttW,
                             zIndex: 230,
                             filter: 'none',
                             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                            maxHeight: '85vh', display: 'flex', flexDirection: 'column'
+                            maxHeight: '70vh', display: 'flex', flexDirection: 'column'
                         };
 
                 return (

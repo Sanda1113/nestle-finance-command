@@ -1615,55 +1615,69 @@ function PayoutCalendar({ user }) {
                         </div>
 
                         {/* Upcoming Table Column */}
-                        <div className="xl:col-span-2">
-                            <div className="bg-slate-900/60 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden border border-slate-800">
-                                <div className="p-6 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
-                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">Upcoming Actionable Payouts</h3>
-                                    <span className="text-[10px] font-black text-slate-400 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 uppercase tracking-widest">{upcoming.length} Items</span>
+                        <div className="xl:col-span-2 pb-24">
+                            <div className="bg-slate-900/60 backdrop-blur-xl shadow-2xl rounded-[2.5rem] overflow-hidden border border-slate-800/50">
+                                <div className="p-8 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
+                                    <div>
+                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Queue Management</h3>
+                                        <h4 className="text-xl font-black text-white">Upcoming Actionable Payouts</h4>
+                                    </div>
+                                    <span className="text-xs font-black text-blue-400 bg-blue-500/10 px-4 py-2 rounded-full border border-blue-500/20 uppercase tracking-widest">{upcoming.length} Outstanding</span>
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left">
                                         <thead className="bg-slate-950/50">
                                             <tr>
-                                                <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Due Date</th>
-                                                <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Supplier</th>
-                                                <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount</th>
-                                                <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
-                                                <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Action</th>
+                                                <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Due Date</th>
+                                                <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Supplier Entity</th>
+                                                <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Net Payable</th>
+                                                <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Internal Status</th>
+                                                <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Operations</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800/50">
                                             {upcoming.map(p => (
-                                                <tr key={p.id} className="hover:bg-slate-800/30 transition-colors group">
-                                                    <td className="p-5 font-bold text-slate-300">{p.start_date ? new Date(p.start_date).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year:'numeric'}) : 'Pending'}</td>
-                                                    <td className="p-5">
-                                                        <span className="text-sm font-black text-white">{p.supplier_email}</span>
-                                                        <span className="block text-[10px] font-bold text-slate-500 font-mono mt-0.5">{p.title || p.id.substring(0,8)}</span>
+                                                <tr key={p.id} className="hover:bg-slate-800/30 transition-all group">
+                                                    <td className="p-6">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors"><Calendar className="w-4 h-4" /></div>
+                                                            <span className="font-bold text-slate-300">{p.start_date ? new Date(p.start_date).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year:'numeric'}) : 'Unscheduled'}</span>
+                                                        </div>
                                                     </td>
-                                                    <td className="p-5">
-                                                        <span className="font-black text-emerald-400 text-lg">{formatCurrency(p.final_amount || p.base_amount)}</span>
-                                                        {p.status === 'Renegotiated' && <span className="block text-[10px] font-bold text-purple-400 uppercase tracking-wider mt-0.5"><Zap className="inline w-3 h-3 mr-0.5" />Early Payout!</span>}
+                                                    <td className="p-6">
+                                                        <span className="text-sm font-black text-white block">{p.supplier_email}</span>
+                                                        <span className="text-[10px] font-bold text-slate-500 font-mono mt-0.5 uppercase opacity-60">REF: {p.id.substring(0,12)}</span>
                                                     </td>
-                                                    <td className="p-5">
-                                                        <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border ${p.status === 'Renegotiated' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : p.status === 'Pending Finance' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+                                                    <td className="p-6">
+                                                        <div className="flex flex-col">
+                                                            <span className="font-black text-emerald-400 text-lg tracking-tight">{formatCurrency(p.final_amount || p.base_amount)}</span>
+                                                            {p.status === 'Renegotiated' && <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest mt-1 flex items-center gap-1"><Zap className="w-3 h-3" /> Early Payout</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-6">
+                                                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm ${
+                                                            p.status === 'Renegotiated' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 
+                                                            p.status === 'Pending Finance' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 
+                                                            'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                        }`}>
                                                             {p.status}
                                                         </span>
                                                     </td>
-                                                    <td className="p-5 text-right">
+                                                    <td className="p-6 text-right">
                                                         {p.status === 'Pending Finance' ? (
-                                                            <button onClick={() => { setSchedulingPayout(p); setConfirmDate(p.start_date ? new Date(p.start_date).toISOString().split('T')[0] : ''); }} className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-600/30 hover:border-blue-600 rounded-xl text-xs font-black transition-all shadow-lg hover:shadow-blue-600/20">
-                                                                Schedule
+                                                            <button onClick={() => { setSchedulingPayout(p); setConfirmDate(p.start_date ? new Date(p.start_date).toISOString().split('T')[0] : ''); }} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-blue-600/20 hover:-translate-y-0.5 active:scale-95">
+                                                                Schedule Payout
                                                             </button>
                                                         ) : (
-                                                            <button onClick={() => markPaid(p.id)} className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/30 hover:border-emerald-600 rounded-xl text-xs font-black transition-all shadow-lg hover:shadow-emerald-600/20">
-                                                                Mark Paid
+                                                            <button onClick={() => markPaid(p.id)} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 active:scale-95">
+                                                                Disburse Funds
                                                             </button>
                                                         )}
                                                     </td>
                                                 </tr>
                                             ))}
                                             {upcoming.length === 0 && (
-                                                <tr><td colSpan="5" className="p-12 text-center text-slate-500 font-bold">No scheduled payouts requiring action.</td></tr>
+                                                <tr><td colSpan="5" className="p-20 text-center text-slate-500 font-bold italic">No scheduled payouts requiring treasury action.</td></tr>
                                             )}
                                         </tbody>
                                     </table>
