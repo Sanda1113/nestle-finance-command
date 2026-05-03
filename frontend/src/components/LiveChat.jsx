@@ -14,20 +14,23 @@ function getChannel(roleA, roleB) {
 // Map each role to the recipients it can message
 const RECIPIENTS = {
     Supplier: ['Finance', 'Warehouse'],
-    Finance: ['Supplier', 'Warehouse'],
+    Finance: ['Supplier', 'Warehouse', 'Procurement'],
     Warehouse: ['Supplier', 'Finance'],
+    Procurement: ['Finance'],
 };
 
 const ROLE_COLORS = {
     Supplier: 'bg-blue-600',
     Finance: 'bg-emerald-600',
     Warehouse: 'bg-amber-600',
+    Procurement: 'bg-indigo-600',
 };
 
 const ROLE_LABELS = {
     Supplier: '🏭 Supplier',
     Finance: '💼 Finance',
     Warehouse: '📦 Warehouse',
+    Procurement: '🛒 Procurement',
 };
 
 export default function LiveChat({ userEmail, userRole }) {
