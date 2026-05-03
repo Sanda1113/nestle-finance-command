@@ -428,8 +428,7 @@ app.post('/api/save-reconciliation', async (req, res) => {
                 .single();
             
             const trustMultiplier = trustProfile?.trust_tier === 1 ? 2.0 : (trustProfile?.trust_tier === 3 ? 0.0 : 1.0);
-            const vendorTierLabel = trustProfile?.trust_tier === 1 ? 'Strategic Partner (Tier 1)' : (trustProfile?.trust_tier === 3 ? 'High Risk (Tier 3)' : 'Standard (Tier 2)');
-
+            
             // 2. Fetch tolerance rules from DB
             const { data: rules } = await supabase.from('tolerance_rules').select('*').eq('is_active', true);
             

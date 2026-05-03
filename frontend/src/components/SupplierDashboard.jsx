@@ -479,8 +479,16 @@ export default function SupplierDashboard({ user, onLogout }) {
                     }
                 }
 
-                const tolerancePercent = trustScore > 90 ? 0.02 : trustScore > 75 ? 0.01 : 0.00;
-                const tolerance = Math.max(1.00, poTotal * tolerancePercent);
+                // Fetch dynamic tolerance rules from the database (set by Finance)
+                const { data: dbRules } = await supabase.from('tolerance_rules').select('*').eq('is_active', true);
+                const dbTaxRule = dbRules?.find(r => r.category === 'Tax') || { threshold_value: 1.00 };
+                const dbFreightRule = dbRules?.find(r => r.category === 'Freight') || { threshold_value: 0.02 };
+
+                const trustMultiplier = trustScore > 90 ? 2.0 : trustScore > 75 ? 1.0 : 0.5;
+                const baseAbsoluteTolerance = dbTaxRule.threshold_value * trustMultiplier;
+                const tolerancePercent = dbFreightRule.threshold_value * trustMultiplier;
+                
+                const tolerance = Math.max(baseAbsoluteTolerance, poTotal * tolerancePercent);
                 let status = 'Matched - Pending Finance Review';
 
                 if (poTotal < 1) {

@@ -1980,23 +1980,100 @@ function TreasuryDashboard({ user, bankBalance, setBankBalance, topUpRequests, s
 }
 
 function SettingsPortal() {
+    const [rules, setRules] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const fetchRules = async () => {
+            setLoading(true);
+            const { data, error } = await supabase.from('tolerance_rules').select('*').eq('is_active', true);
+            if (!error && data) setRules(data);
+            setLoading(false);
+        };
+        fetchRules();
+    }, []);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const updates = rules.map(rule => 
+                supabase.from('tolerance_rules').update({ threshold_value: rule.threshold_value }).eq('id', rule.id)
+            );
+            await Promise.all(updates);
+            alert('Tolerance rules updated successfully! The 3-way match engine will now apply these thresholds.');
+        } catch (err) {
+            console.error('Save failed:', err);
+            alert('Failed to save rules.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const updateRuleValue = (id, val) => {
+        setRules(prev => prev.map(r => r.id === id ? { ...r, threshold_value: parseFloat(val) || 0 } : r));
+    };
+
+    const taxRule = rules.find(r => r.category === 'Tax') || { threshold_value: 1.00, id: 'tax' };
+    const freightRule = rules.find(r => r.category === 'Freight') || { threshold_value: 0.02, id: 'freight' };
+
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <h2 className="text-3xl font-black text-slate-800 dark:text-white">Tolerance Rules Configurator</h2>
-            <p className="text-slate-500 dark:text-slate-400">Set the math rules for the Smart Tolerance Engine.</p>
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 space-y-4 max-w-xl">
-                <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Allowable Tax Variance</label>
-                    <input type="text" defaultValue="$1.00" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-sm outline-none font-black text-slate-800 dark:text-white" />
+            <p className="text-slate-500 dark:text-slate-400">Set the mathematical thresholds for automated invoice approval.</p>
+            
+            {loading ? (
+                <div className="h-40 flex items-center justify-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 </div>
-                <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Allowable Freight Variance</label>
-                    <input type="text" defaultValue="2%" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-sm outline-none font-black text-slate-800 dark:text-white" />
+            ) : (
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 space-y-6 max-w-xl">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase block mb-2 flex justify-between">
+                                Allowable Tax Variance (Absolute)
+                                <span className="text-blue-500 lowercase font-medium italic">Applied to rounding/tax deltas</span>
+                            </label>
+                            <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    value={taxRule.threshold_value} 
+                                    onChange={(e) => updateRuleValue(taxRule.id, e.target.value)}
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 pl-8 pr-4 py-3 rounded-xl text-sm outline-none font-black text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20" 
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase block mb-2 flex justify-between">
+                                Allowable Freight Variance (%)
+                                <span className="text-purple-500 lowercase font-medium italic">Percentage of total PO amount</span>
+                            </label>
+                            <div className="relative">
+                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">%</span>
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    value={freightRule.threshold_value * 100} 
+                                    onChange={(e) => updateRuleValue(freightRule.id, parseFloat(e.target.value) / 100)}
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-sm outline-none font-black text-slate-800 dark:text-white focus:ring-2 focus:ring-purple-500/20" 
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <button 
+                            onClick={handleSave} 
+                            disabled={saving}
+                            className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-xl transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
+                        >
+                            {saving ? 'Synchronizing Engine...' : 'Apply & Save Rules'}
+                        </button>
+                    </div>
                 </div>
-                <button onClick={() => alert('Rules saved! The 3-way match engine will use these numbers to silently approve minor errors.')} className="w-full py-3 mt-2 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl transition-colors">
-                    Save Rules
-                </button>
-            </div>
+            )}
         </div>
     );
 }
