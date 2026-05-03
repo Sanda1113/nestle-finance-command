@@ -1333,7 +1333,7 @@ router.patch('/payouts/:id', async (req, res) => {
     const { id } = req.params;
     const { start_date, end_date, updatedBy } = req.body;
     try {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
             .from('payout_schedules')
             .update({ 
                 start_date, 
@@ -1344,7 +1344,30 @@ router.patch('/payouts/:id', async (req, res) => {
             .select()
             .single();
 
-        if (error) throw error;
+        if (error && id.includes('-')) {
+            // Fallback: try matching by invoice_ref if id looks like a UUID
+            console.log(`Retrying update with invoice_ref=${id}`);
+            const { data: retryData, error: retryError } = await supabase
+                .from('payout_schedules')
+                .update({ 
+                    start_date, 
+                    end_date: end_date || start_date,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('invoice_ref', id)
+                .select()
+                .single();
+            
+            if (!retryError) {
+                data = retryData;
+                error = null;
+            }
+        }
+
+        if (error) {
+            console.error('Final Payout Update Error:', error);
+            throw error;
+        }
 
         // 🔔 Notification & 📧 Email for Date Update
         if (data && data.supplier_email) {
