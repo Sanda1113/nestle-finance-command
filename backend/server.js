@@ -385,19 +385,26 @@ app.post('/api/save-reconciliation', async (req, res) => {
     try {
         console.log(`💾 Saving reconciliation: ${invoiceData?.invoiceNumber} / ${poData?.poNumber}`);
 
+        // 🛡️ Ensure unique invoice number even if OCR fails
+        let safeInvoiceNumber = invoiceData.invoiceNumber;
+        if (!safeInvoiceNumber || safeInvoiceNumber === 'Not Found' || safeInvoiceNumber === 'unknown invoice') {
+            safeInvoiceNumber = `REQ-TEMP-${Date.now().toString().slice(-6)}`;
+            console.log(`🏷️ Generated temporary invoice number: ${safeInvoiceNumber}`);
+        }
+
         const invoiceFileUrl = invoiceData?.fileUrl || invoiceData?.file_url;
         if (invoiceFileUrl) {
             const { error: invErr } = await supabase.from('invoices').insert([{
-                invoice_number: invoiceData.invoiceNumber,
+                invoice_number: safeInvoiceNumber,
                 file_url: invoiceFileUrl,
                 extracted_amount: invoiceData.totalAmount,
                 status: matchStatus
             }]);
             if (invErr) {
-                logError('Insert Invoice', invErr, { invoiceNumber: invoiceData.invoiceNumber });
+                logError('Insert Invoice', invErr, { invoiceNumber: safeInvoiceNumber });
             }
         } else {
-            console.warn(`⚠️ Skipping invoices table insert for ${invoiceData?.invoiceNumber || 'unknown invoice'}: missing file URL. Proceeding with reconciliation save.`);
+            console.warn(`⚠️ Skipping invoices table insert for ${safeInvoiceNumber}: missing file URL. Proceeding with reconciliation save.`);
         }
 
         let finalStatus = matchStatus;
@@ -511,14 +518,14 @@ app.post('/api/save-reconciliation', async (req, res) => {
 
         const { data: reconData, error: reconErr } = await supabase.from('reconciliations').insert([{
             vendor_name: invoiceData.vendorName,
-            invoice_number: invoiceData.invoiceNumber,
-            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
+            invoice_number: safeInvoiceNumber,
+            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : (invoiceData.poNumber !== 'Not Found' ? invoiceData.poNumber : safeInvoiceNumber),
             invoice_total: invoiceData.totalAmount,
             po_total: poData.totalAmount,
             match_status: finalStatus,
             timeline_status: finalTimeline,
             supplier_email: supplierEmail,
-            invoice_data: invoiceData,
+            invoice_data: { ...invoiceData, invoiceNumber: safeInvoiceNumber },
             po_data: poData,
             processed_at: new Date().toISOString(),
             auto_approval_reason: autoApprovalReason,
@@ -526,11 +533,11 @@ app.post('/api/save-reconciliation', async (req, res) => {
         }]).select();
 
         if (reconErr) {
-            logError('Insert Reconciliation', reconErr, { invoiceNumber: invoiceData.invoiceNumber });
+            logError('Insert Reconciliation', reconErr, { invoiceNumber: safeInvoiceNumber });
             throw reconErr;
         }
 
-        console.log(`✅ Reconciliation saved`);
+        console.log(`✅ Reconciliation saved: ${safeInvoiceNumber}`);
         const reconId = reconData[0].id;
 
         // MVP 6: Payout Tracker - Auto schedule payout if approved
@@ -542,10 +549,10 @@ app.post('/api/save-reconciliation', async (req, res) => {
                 await supabase.from('payout_schedules').insert([{
                     invoice_ref: reconId,
                     po_ref: null, // Optional
-                    po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
-                    invoice_number: invoiceData.invoiceNumber,
+                    po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : safeInvoiceNumber,
+                    invoice_number: safeInvoiceNumber,
                     supplier_email: supplierEmail,
-                    title: `Payout for ${invoiceData.invoiceNumber}`,
+                    title: `Payout for ${safeInvoiceNumber}`,
                     base_amount: invoiceData.totalAmount,
                     final_amount: invoiceData.totalAmount,
                     start_date: dueDate.toISOString(),
@@ -553,22 +560,22 @@ app.post('/api/save-reconciliation', async (req, res) => {
                     payment_terms: poData.paymentTerms || 'Net 30',
                     status: 'Scheduled'
                 }]);
-                console.log(`📆 MVP6: Payout scheduled automatically for ${invoiceData.invoiceNumber}`);
+                console.log(`📆 MVP6: Payout scheduled automatically for ${safeInvoiceNumber}`);
 
                 // 📧 Email supplier about payout scheduled
                 const scheduleEmailBody = `
                     <p>Hello,</p>
-                    <p>Good news! Your invoice <strong>${invoiceData.invoiceNumber}</strong> has been auto-approved and <strong>scheduled for payment</strong>.</p>
+                    <p>Good news! Your invoice <strong>${safeInvoiceNumber}</strong> has been auto-approved and <strong>scheduled for payment</strong>.</p>
                     <p><strong>Estimated Payment Date:</strong> ${dueDate.toLocaleDateString()}</p>
                     <p><strong>Payment Terms:</strong> ${poData.paymentTerms || 'Net 30'}</p>
                     <p>You can track the real-time status of this payment in your Lifecycle Timeline on the Supplier Dashboard.</p>
                 `;
                 sendSupplierEmail(
                     supplierEmail,
-                    `Payment Scheduled – ${invoiceData.invoiceNumber}`,
+                    `Payment Scheduled – ${safeInvoiceNumber}`,
                     scheduleEmailBody,
                     {
-                        invoiceNumber: invoiceData.invoiceNumber,
+                        invoiceNumber: safeInvoiceNumber,
                         poNumber: poData.poNumber,
                         amount: invoiceData.totalAmount,
                         dueDate: dueDate.toISOString()

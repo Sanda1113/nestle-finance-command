@@ -531,8 +531,13 @@ export default function SupplierDashboard({ user, onLogout }) {
                 await axios.post('https://nestle-finance-command-production.up.railway.app/api/save-reconciliation', {
                     invoiceData: invData, poData: poData, matchStatus: status, supplierEmail: user.email
                 });
-                if (status !== 'Discrepancy Detected') {
-                    setDbStatus('✅ Saved to Ledger — submitted to Finance Review Queue.');
+                
+                if (status === 'Discrepancy Detected') {
+                    setDbStatus('⚠️ Discrepancy Found — Saved to Ledger & Flagged for Finance Review.');
+                } else if (invData.invoiceNumber === 'Not Found') {
+                    setDbStatus('✅ Saved to Ledger — Note: Invoice # not detected, assigned temporary ID.');
+                } else {
+                    setDbStatus('✅ Saved to Ledger — successfully submitted to Finance Review Queue.');
                 }
             }
         } catch { setError("Processing failed. Please try again."); setMatchStatus('Error'); }
