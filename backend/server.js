@@ -453,7 +453,9 @@ app.post('/api/save-reconciliation', async (req, res) => {
                 willAutoApprove = true;
             } else {
                 classification = 'Price/Quantity Discrepancy';
-                willAutoApprove = delta <= 0.05 * trustMultiplier; // Minimal catch-all for pennies
+                // Allow up to $1.00 base absolute variance as a catch-all for small discrepancies
+                const baseAbsoluteThreshold = taxRule.threshold_value || 1.00;
+                willAutoApprove = delta <= baseAbsoluteThreshold * trustMultiplier;
                 ruleName = 'Minor Variance Catch-all';
             }
 
