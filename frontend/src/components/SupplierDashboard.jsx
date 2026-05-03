@@ -480,7 +480,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                 }
 
                 const tolerancePercent = trustScore > 90 ? 0.02 : trustScore > 75 ? 0.01 : 0.00;
-                const tolerance = Math.max(0.01, poTotal * tolerancePercent);
+                const tolerance = Math.max(1.00, poTotal * tolerancePercent);
                 let status = 'Matched - Pending Finance Review';
 
                 if (poTotal < 1) {
