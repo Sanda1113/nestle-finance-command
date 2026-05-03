@@ -1549,106 +1549,140 @@ function PayoutCalendar({ user }) {
     });
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6">
-            <div className="mb-6">
-                <h2 className="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3"><Calendar className="w-8 h-8 text-blue-600" /> The Treasury Calendar</h2>
-                <p className="text-slate-500 dark:text-slate-400">Track and manage scheduled payouts across all suppliers.</p>
+        <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {/* Header Area */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <h2 className="text-4xl font-black text-slate-800 dark:text-white tracking-tight flex items-center gap-4">
+                        <div className="p-3 bg-blue-600/10 rounded-2xl border border-blue-600/20"><Calendar className="w-8 h-8 text-blue-500" /></div>
+                        The Treasury Calendar
+                    </h2>
+                    <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Track, manage, and accelerate scheduled liquidity across the supply chain.</p>
+                </div>
             </div>
 
             {loading ? (
-                <div className="p-12 text-center text-slate-500 font-bold animate-pulse">Loading Payouts...</div>
+                <div className="h-64 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                </div>
             ) : (
-                <div className="space-y-8">
-                    <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r shadow-sm">
-                        <div className="flex items-start gap-3">
-                            <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+                <div className="space-y-10">
+                    {/* SLA Alert */}
+                    <div className="bg-gradient-to-r from-red-500/10 to-rose-500/5 border-l-4 border-red-500 p-5 rounded-2xl shadow-sm relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-red-500/5 group-hover:bg-red-500/10 transition-colors"></div>
+                        <div className="relative flex items-start gap-4">
+                            <div className="p-2 bg-red-500/20 rounded-xl"><AlertTriangle className="w-6 h-6 text-red-500 animate-pulse" /></div>
                             <div>
-                                <h4 className="text-sm font-black text-red-800 dark:text-red-300">SLA Default Risk Alerts</h4>
-                                <p className="text-xs text-red-700 dark:text-red-400 mt-1">Action Required: <strong className="font-bold">$120,000</strong> Payment to <strong>Supplier X</strong> is at risk of missing the Net-45 SLA. Resolution required today.</p>
+                                <h4 className="text-sm font-black text-red-800 dark:text-red-400 tracking-wide uppercase">SLA Default Risk Alerts</h4>
+                                <p className="text-sm text-red-700 dark:text-red-300 mt-1 font-medium">Action Required: <strong className="font-bold bg-red-500/20 px-2 py-0.5 rounded mx-1">$120,000</strong> Payment to <strong>Supplier X</strong> is at risk of missing the Net-45 SLA. Resolution required today.</p>
                             </div>
                         </div>
                     </div>
 
-                    <DigitalCalendar userRole="Finance" userEmail={user.email} />
+                    {/* Premium Digital Calendar wrapper */}
+                    <div className="relative z-10 animate-in fade-in duration-1000">
+                        <DigitalCalendar userRole="Finance" userEmail={user.email} />
+                    </div>
 
-                    {/* Intelligent Batching Suggestion */}
-                    {batchedPayments.length > 0 && (
-                        <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-5 border border-purple-200 dark:border-purple-800/50">
-                            <h3 className="text-sm font-black text-purple-800 dark:text-purple-300 mb-2 flex items-center gap-2"><Briefcase className="w-4 h-4" /> Intelligent Payment Batching Opportunities</h3>
-                            <p className="text-xs text-purple-700 dark:text-purple-400 mb-4">Combine multiple upcoming invoices to the same supplier into single bank wires to optimize transaction fees.</p>
-                            <div className="space-y-3">
-                                {batchedPayments.map((batch, i) => (
-                                    <div key={i} className="flex flex-col sm:flex-row items-center justify-between p-3 bg-white/60 dark:bg-slate-900/60 rounded-lg border border-purple-100 dark:border-purple-800/30">
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{batch.supplier}</p>
-                                            <p className="text-xs text-slate-500">{batch.count} Invoices scheduled within next 7 days</p>
-                                        </div>
-                                        <div className="flex items-center gap-4 mt-2 sm:mt-0">
-                                            <p className="text-lg font-black text-purple-600 dark:text-purple-400">{formatCurrency(batch.total)}</p>
-                                            <button onClick={() => handleBatchAndPay(batch)} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-bold transition-colors">Batch & Pay</button>
-                                        </div>
+                    {/* Split View: Batching & Upcoming Table */}
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                        {/* Batching Column */}
+                        <div className="xl:col-span-1 space-y-6">
+                            {batchedPayments.length > 0 && (
+                                <div className="bg-gradient-to-b from-purple-900/40 to-slate-900/60 backdrop-blur-xl rounded-[2rem] p-6 border border-purple-500/20 shadow-2xl relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl"></div>
+                                    <h3 className="text-sm font-black text-purple-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Briefcase className="w-5 h-5" /> Intelligent Batching</h3>
+                                    <p className="text-xs text-slate-400 mb-6 font-medium leading-relaxed">Combine multiple upcoming invoices to the same supplier into single bank wires to optimize transaction fees.</p>
+                                    <div className="space-y-4 relative z-10">
+                                        {batchedPayments.map((batch, i) => (
+                                            <div key={i} className="flex flex-col p-4 bg-slate-950/50 rounded-2xl border border-purple-500/20 hover:border-purple-500/50 transition-all group">
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div>
+                                                        <p className="text-sm font-black text-white">{batch.supplier}</p>
+                                                        <p className="text-[10px] text-purple-400 font-bold uppercase mt-1 tracking-wider">{batch.count} Invoices (7 Days)</p>
+                                                    </div>
+                                                    <div className="p-1.5 bg-purple-500/20 rounded-lg"><Zap className="w-4 h-4 text-purple-400 group-hover:animate-pulse" /></div>
+                                                </div>
+                                                <div className="flex items-end justify-between mt-2">
+                                                    <p className="text-2xl font-black text-white">{formatCurrency(batch.total)}</p>
+                                                    <button onClick={() => handleBatchAndPay(batch)} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-purple-600/20 hover:-translate-y-0.5">Batch & Pay</button>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Upcoming Table Column */}
+                        <div className="xl:col-span-2">
+                            <div className="bg-slate-900/60 backdrop-blur-xl shadow-2xl rounded-[2rem] overflow-hidden border border-slate-800">
+                                <div className="p-6 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
+                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">Upcoming Actionable Payouts</h3>
+                                    <span className="text-[10px] font-black text-slate-400 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 uppercase tracking-widest">{upcoming.length} Items</span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-slate-950/50">
+                                            <tr>
+                                                <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Due Date</th>
+                                                <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Supplier</th>
+                                                <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount</th>
+                                                <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                                                <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800/50">
+                                            {upcoming.map(p => (
+                                                <tr key={p.id} className="hover:bg-slate-800/30 transition-colors group">
+                                                    <td className="p-5 font-bold text-slate-300">{p.start_date ? new Date(p.start_date).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year:'numeric'}) : 'Pending'}</td>
+                                                    <td className="p-5">
+                                                        <span className="text-sm font-black text-white">{p.supplier_email}</span>
+                                                        <span className="block text-[10px] font-bold text-slate-500 font-mono mt-0.5">{p.title || p.id.substring(0,8)}</span>
+                                                    </td>
+                                                    <td className="p-5">
+                                                        <span className="font-black text-emerald-400 text-lg">{formatCurrency(p.final_amount || p.base_amount)}</span>
+                                                        {p.status === 'Renegotiated' && <span className="block text-[10px] font-bold text-purple-400 uppercase tracking-wider mt-0.5"><Zap className="inline w-3 h-3 mr-0.5" />Early Payout!</span>}
+                                                    </td>
+                                                    <td className="p-5">
+                                                        <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border ${p.status === 'Renegotiated' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : p.status === 'Pending Finance' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+                                                            {p.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-5 text-right">
+                                                        {p.status === 'Pending Finance' ? (
+                                                            <button onClick={() => { setSchedulingPayout(p); setConfirmDate(p.start_date ? new Date(p.start_date).toISOString().split('T')[0] : ''); }} className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-600/30 hover:border-blue-600 rounded-xl text-xs font-black transition-all shadow-lg hover:shadow-blue-600/20">
+                                                                Schedule
+                                                            </button>
+                                                        ) : (
+                                                            <button onClick={() => markPaid(p.id)} className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-600/30 hover:border-emerald-600 rounded-xl text-xs font-black transition-all shadow-lg hover:shadow-emerald-600/20">
+                                                                Mark Paid
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {upcoming.length === 0 && (
+                                                <tr><td colSpan="5" className="p-12 text-center text-slate-500 font-bold">No scheduled payouts requiring action.</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
-                    )}
-
-                    <div className="bg-white dark:bg-slate-900 shadow-sm rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                                <tr>
-                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Due Date</th>
-                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Supplier</th>
-                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Invoice</th>
-                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
-                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                {upcoming.map(p => (
-                                    <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                        <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{p.start_date ? new Date(p.start_date).toLocaleDateString() : 'Pending'}</td>
-                                        <td className="p-4"><span className="text-sm font-semibold">{p.supplier_email}</span></td>
-                                        <td className="p-4"><span className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">{p.title || p.id}</span></td>
-                                        <td className="p-4">
-                                            <span className="font-bold text-blue-600 dark:text-blue-400">{formatCurrency(p.final_amount || p.base_amount)}</span>
-                                            {p.status === 'Renegotiated' && <span className="block text-xs text-purple-500">Early Payout!</span>}
-                                        </td>
-                                        <td className="p-4">
-                                            <span className={`px-2 py-1 rounded-lg text-xs font-bold ${p.status === 'Renegotiated' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400' : p.status === 'Pending Finance' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
-                                                {p.status}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 text-right">
-                                            {p.status === 'Pending Finance' ? (
-                                                <button onClick={() => { setSchedulingPayout(p); setConfirmDate(p.start_date ? new Date(p.start_date).toISOString().split('T')[0] : ''); }} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors">
-                                                    Schedule
-                                                </button>
-                                            ) : (
-                                                <button onClick={() => markPaid(p.id)} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors">
-                                                    Mark Paid
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {upcoming.length === 0 && (
-                                    <tr><td colSpan="6" className="p-8 text-center text-slate-500">No scheduled payouts.</td></tr>
-                                )}
-                            </tbody>
-                        </table>
                     </div>
 
                     {schedulingPayout && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 dark:border-slate-700">
-                                <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
-                                    <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
-                                        <Calendar className="w-5 h-5 text-blue-500" /> Confirm Payout Schedule
+                        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => setSchedulingPayout(null)}></div>
+                            <div className="relative bg-slate-900 rounded-[2.5rem] shadow-[0_0_100px_rgba(0,0,0,0.5)] max-w-md w-full overflow-hidden border border-slate-800 animate-in zoom-in-95 duration-300">
+                                <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800/30">
+                                    <h3 className="text-lg font-black text-white flex items-center gap-3">
+                                        <div className="p-2 bg-blue-500/20 rounded-xl"><Calendar className="w-5 h-5 text-blue-400" /></div> 
+                                        Confirm Payout
                                     </h3>
-                                    <button onClick={() => setSchedulingPayout(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                                        <X className="w-5 h-5" />
+                                    <button onClick={() => setSchedulingPayout(null)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-400 transition-colors">
+                                        <X className="w-4 h-4" />
                                     </button>
                                 </div>
                                 <div className="p-6 space-y-4">
