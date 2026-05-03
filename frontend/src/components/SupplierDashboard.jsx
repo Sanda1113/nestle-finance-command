@@ -740,44 +740,15 @@ export default function SupplierDashboard({ user, onLogout }) {
                 const vw = window.innerWidth, vh = window.innerHeight;
                 // Responsive: tooltip width = min(370, viewport-32), but never less than 280
                 const ttW = Math.max(280, Math.min(370, vw - 32));
-                const ttH = 320; // worst-case height estimate
-                const GAP = 14;
-
-                // Checks if a candidate box [t, l, ttW, ttH] overlaps the spotlight rect
-                const overlaps = (t, l) => {
-                    const r2 = sr;
-                    return !(l + ttW < r2.x || l > r2.x + r2.w || t + ttH < r2.y || t > r2.y + r2.h);
-                };
-
-                // Clamp helpers
-                const clampL = (l) => Math.min(Math.max(l, 8), vw - ttW - 8);
-                const clampT = (t) => Math.min(Math.max(t, 8), vh - ttH - 8);
-
-                // Candidate placements in preference order
-                const candidates = [
-                    { placement: 'below', top: rect.bottom + GAP, left: clampL(rect.left) },
-                    { placement: 'above', top: rect.top - ttH - GAP, left: clampL(rect.left) },
-                    { placement: 'right', top: clampT(rect.top), left: rect.right + GAP },
-                    { placement: 'left', top: clampT(rect.top), left: rect.left - ttW - GAP },
-                ];
-
-                // Filter to candidates that fit in viewport
-                const fits = candidates.filter(c =>
-                    c.top >= 8 && c.top + ttH <= vh - 8 &&
-                    c.left >= 8 && c.left + ttW <= vw - 8
-                );
-
-                // Pick first that doesn't overlap; fallback to first fitting; fallback safe corner
-                const chosen =
-                    fits.find(c => !overlaps(c.top, c.left)) ||
-                    fits[0] ||
-                    { placement: 'corner', top: vh - ttH - 24, left: 16 };
-
-                // Ensure integer pixels to prevent sub-pixel blurring
+                // Place it safely in the bottom-left corner to avoid blocking the center UI
+                // If the target is in the bottom-left, move it to bottom-right
+                const targetInBottomLeft = rect.left < vw / 2 && rect.bottom > vh / 2;
+                
                 setTooltipPos({
-                    top: Math.round(chosen.top),
-                    left: Math.round(chosen.left),
-                    placement: chosen.placement
+                    bottom: 24,
+                    left: targetInBottomLeft ? undefined : 24,
+                    right: targetInBottomLeft ? 24 : undefined,
+                    placement: targetInBottomLeft ? 'bottom-right' : 'bottom-left'
                 });
             }, 380);
         };
@@ -1722,7 +1693,8 @@ export default function SupplierDashboard({ user, onLogout }) {
                     ? {
                         position: 'fixed', bottom: 0, left: 0, right: 0, width: '100%', zIndex: 230,
                         borderRadius: '1rem 1rem 0 0', filter: 'none',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                        maxHeight: '90vh', display: 'flex', flexDirection: 'column'
                     }
                     : isCentered
                         ? {
@@ -1732,16 +1704,19 @@ export default function SupplierDashboard({ user, onLogout }) {
                             width: ttW,
                             zIndex: 230,
                             filter: 'none',
-                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                            maxHeight: '85vh', display: 'flex', flexDirection: 'column'
                         }
                         : {
                             position: 'fixed',
-                            top: tooltipPos.top,
+                            bottom: tooltipPos.bottom,
                             left: tooltipPos.left,
+                            right: tooltipPos.right,
                             width: ttW,
                             zIndex: 230,
                             filter: 'none',
-                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                            maxHeight: '85vh', display: 'flex', flexDirection: 'column'
                         };
 
                 return (
@@ -1854,7 +1829,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                             </div>
 
                             {/* Body */}
-                            <div className="px-5 pt-4 pb-3 space-y-3">
+                            <div className="px-5 pt-4 pb-3 space-y-3 flex-1 overflow-y-auto custom-scrollbar">
                                 <h3 className="text-base font-black text-white leading-snug">{step.title}</h3>
                                 <p className="text-sm text-slate-300 leading-relaxed">{step.body}</p>
                                 <div className="flex items-start gap-2 bg-indigo-950/50 border border-indigo-500/20 rounded-xl p-3">
