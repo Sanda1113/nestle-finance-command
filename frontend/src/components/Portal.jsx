@@ -1018,16 +1018,14 @@ function FinancePortal({ user }) {
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => { e.stopPropagation(); handleManualOverride(r.id, 'Approved'); }}
-                                                                disabled={isActioned}
-                                                                className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-slate-600 dark:text-slate-300"
+                                                                className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-500 hover:text-white transition-colors text-slate-600 dark:text-slate-300"
                                                             >
                                                                 Approve
                                                             </button>
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => { e.stopPropagation(); handleManualOverride(r.id, 'Rejected'); }}
-                                                                disabled={isActioned}
-                                                                className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded bg-slate-100 dark:bg-slate-800 hover:bg-red-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-slate-600 dark:text-slate-300"
+                                                                className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded bg-slate-100 dark:bg-slate-800 hover:bg-red-500 hover:text-white transition-colors text-slate-600 dark:text-slate-300"
                                                             >
                                                                 Reject
                                                             </button>
