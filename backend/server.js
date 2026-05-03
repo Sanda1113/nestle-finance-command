@@ -421,11 +421,22 @@ app.post('/api/save-reconciliation', async (req, res) => {
             let ruleName = null;
 
             // 1. Fetch vendor trust profile
-            const { data: trustProfile } = await supabase
+            let { data: trustProfile, error: trustErr } = await supabase
                 .from('vendor_trust_profiles')
                 .select('*')
                 .eq('supplier_email', supplierEmail)
                 .single();
+            
+            // If missing, create a default one
+            if (trustErr && (trustErr.code === 'PGRST116' || trustErr.status === 406)) {
+                console.log(`🐣 Creating default trust profile for ${supplierEmail}`);
+                const { data: newProfile } = await supabase
+                    .from('vendor_trust_profiles')
+                    .insert([{ supplier_email: supplierEmail, trust_tier: 2, accuracy_score: 1.0 }])
+                    .select()
+                    .single();
+                trustProfile = newProfile;
+            }
             
             const trustMultiplier = trustProfile?.trust_tier === 1 ? 2.0 : (trustProfile?.trust_tier === 3 ? 0.0 : 1.0);
             
