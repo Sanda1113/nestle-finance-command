@@ -33,11 +33,11 @@ const formatCurrency = (amount, currencyCode = 'USD') => {
 
 const getStatusCfg = (status) => {
     switch (status) {
-        case 'Paid': return { bg: 'from-emerald-400/90 to-teal-600/90', icon: '✅', glow: 'shadow-[0_0_20px_rgba(52,211,153,0.3)]' };
-        case 'Scheduled': return { bg: 'from-blue-400/90 to-indigo-600/90', icon: '📅', glow: 'shadow-[0_0_20px_rgba(96,165,250,0.3)]' };
-        case 'Hold': return { bg: 'from-amber-400/90 to-orange-600/90', icon: '⏸️', glow: 'shadow-[0_0_20px_rgba(251,191,36,0.3)]' };
-        case 'Early Payment Requested': return { bg: 'from-purple-400/90 to-pink-600/90', icon: '⚡', glow: 'shadow-[0_0_20px_rgba(192,132,252,0.3)]' };
-        default: return { bg: 'from-slate-400/90 to-slate-600/90', icon: '❓', glow: 'shadow-[0_0_20px_rgba(148,163,184,0.3)]' };
+        case 'Paid': return { bg: 'from-emerald-400/90 to-teal-600/90', icon: '✅', glow: 'shadow-[0_0_20px_rgba(52,211,153,0.3)]', label: 'Paid' };
+        case 'Scheduled': return { bg: 'from-blue-400/90 to-indigo-600/90', icon: '📅', glow: 'shadow-[0_0_20px_rgba(96,165,250,0.3)]', label: 'Scheduled' };
+        case 'Hold': return { bg: 'from-amber-400/90 to-orange-600/90', icon: '⏸️', glow: 'shadow-[0_0_20px_rgba(251,191,36,0.3)]', label: 'On Hold' };
+        case 'Early Payment Requested': return { bg: 'from-purple-400/90 to-pink-600/90', icon: '⚡', glow: 'shadow-[0_0_20px_rgba(192,132,252,0.3)]', label: 'Early Payout' };
+        default: return { bg: 'from-slate-400/90 to-slate-600/90', icon: '❓', glow: 'shadow-[0_0_20px_rgba(148,163,184,0.3)]', label: 'Other' };
     }
 };
 
@@ -382,12 +382,15 @@ export default function DigitalCalendar({ userRole, userEmail }) {
                 <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-5 shadow-2xl">
                     <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Status Legend</h3>
                     <div className="grid grid-cols-2 gap-3">
-                        {Object.entries(STATUS_CONFIG).map(([k, cfg]) => (
-                            <div key={k} className="flex items-center gap-2">
-                                <div className={`w-2.5 h-2.5 rounded-full bg-gradient-to-br ${cfg.bg} shadow-lg ${cfg.glow}`}></div>
-                                <span className="text-[10px] font-bold text-slate-300">{cfg.label}</span>
-                            </div>
-                        ))}
+                        {['Scheduled', 'Paid', 'Hold', 'Early Payment Requested'].map((k) => {
+                            const cfg = getStatusCfg(k);
+                            return (
+                                <div key={k} className="flex items-center gap-2">
+                                    <div className={`w-2.5 h-2.5 rounded-full bg-gradient-to-br ${cfg.bg} shadow-lg ${cfg.glow}`}></div>
+                                    <span className="text-[10px] font-bold text-slate-300">{cfg.label}</span>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
