@@ -540,51 +540,6 @@ app.post('/api/save-reconciliation', async (req, res) => {
         console.log(`✅ Reconciliation saved: ${safeInvoiceNumber}`);
         const reconId = reconData[0].id;
 
-        // MVP 6: Payout Tracker - Auto schedule payout if approved
-        if (finalStatus.includes('Approve')) {
-            try {
-                let dueDateStr = invoiceData.dueDate !== 'Not Found' && invoiceData.dueDate ? invoiceData.dueDate : null;
-                let dueDate = dueDateStr ? new Date(dueDateStr) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-                
-                await supabase.from('payout_schedules').insert([{
-                    invoice_ref: reconId,
-                    po_ref: null, // Optional
-                    po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : safeInvoiceNumber,
-                    invoice_number: safeInvoiceNumber,
-                    supplier_email: supplierEmail,
-                    title: `Payout for ${safeInvoiceNumber}`,
-                    base_amount: invoiceData.totalAmount,
-                    final_amount: invoiceData.totalAmount,
-                    start_date: dueDate.toISOString(),
-                    end_date: dueDate.toISOString(),
-                    payment_terms: poData.paymentTerms || 'Net 30',
-                    status: 'Scheduled'
-                }]);
-                console.log(`📆 MVP6: Payout scheduled automatically for ${safeInvoiceNumber}`);
-
-                // 📧 Email supplier about payout scheduled
-                const scheduleEmailBody = `
-                    <p>Hello,</p>
-                    <p>Good news! Your invoice <strong>${safeInvoiceNumber}</strong> has been matched against the Purchase Order.</p>
-                    <p><strong>Status:</strong> Matched - Pending Finance Review</p>
-                    <p>Once Finance completes the final review, your payment will be scheduled according to our <strong>Net-30</strong> terms.</p>
-                    <p>You can track the real-time status of this payment in your Lifecycle Timeline on the Supplier Dashboard.</p>
-                `;
-                sendSupplierEmail(
-                    supplierEmail,
-                    `Payment Scheduled – ${safeInvoiceNumber}`,
-                    scheduleEmailBody,
-                    {
-                        invoiceNumber: safeInvoiceNumber,
-                        poNumber: poData.poNumber,
-                        amount: invoiceData.totalAmount,
-                        dueDate: dueDate.toISOString()
-                    }
-                ).catch(err => console.warn('[Auto Payout Email] Failed:', err.message));
-            } catch (err) {
-                logError('Schedule Payout MVP6', err);
-            }
-        }
 
         res.json({ success: true });
     } catch (error) {
@@ -753,59 +708,6 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
             }
         }
 
-        // MVP 6: Payout Tracker - Auto schedule payout upon manual approval
-        if (newStatus === 'Approved') {
-            try {
-                const { data: existing } = await supabase.from('payout_schedules').select('id').eq('invoice_ref', id);
-                if (!existing || existing.length === 0) {
-                    let idata = recon?.invoice_data || {};
-                    if (typeof idata === 'string') idata = JSON.parse(idata);
-                    
-                    let pdata = recon?.po_data || {};
-                    if (typeof pdata === 'string') pdata = JSON.parse(pdata);
-                    
-                    let dueDateStr = idata?.dueDate !== 'Not Found' && idata?.dueDate ? idata.dueDate : null;
-                    let dueDate = dueDateStr ? new Date(dueDateStr) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-                    
-                    await supabase.from('payout_schedules').insert([{
-                        invoice_ref: id,
-                        po_number: recon?.po_number || idata?.invoiceNumber,
-                        invoice_number: recon?.invoice_number,
-                        supplier_email: recon?.supplier_email,
-                        title: `Payout for ${recon?.invoice_number}`,
-                        base_amount: recon?.invoice_total,
-                        final_amount: recon?.invoice_total,
-                        start_date: dueDate.toISOString(),
-                        end_date: dueDate.toISOString(),
-                        payment_terms: pdata?.paymentTerms || 'Net-30',
-                        status: 'Scheduled'
-                    }]);
-                    console.log(`📆 MVP6: Payout scheduled for ${recon?.invoice_number}`);
-
-                    // 📧 Email supplier about payout scheduled
-                    const scheduleEmailBody = `
-                        <p>Hello,</p>
-                        <p>Your invoice <strong>${recon?.invoice_number}</strong> has been approved by Finance and <strong>scheduled for payment</strong>.</p>
-                        <p><strong>Estimated Payment Date:</strong> ${dueDate.toLocaleDateString()}</p>
-                        <p><strong>Payment Terms:</strong> ${pdata?.paymentTerms || 'Net-30'}</p>
-                        <p>You can track the real-time status of this payment in your Lifecycle Timeline on the Supplier Dashboard.</p>
-                    `;
-                    sendSupplierEmail(
-                        recon?.supplier_email,
-                        `Payment Scheduled – ${recon?.invoice_number}`,
-                        scheduleEmailBody,
-                        {
-                            invoiceNumber: recon?.invoice_number,
-                            poNumber: recon?.po_number,
-                            amount: recon?.invoice_total,
-                            dueDate: dueDate.toISOString()
-                        }
-                    ).catch(err => console.warn('[Manual Payout Email] Failed:', err.message));
-                }
-            } catch (err) {
-                logError('Schedule Payout MVP6 Manual', err);
-            }
-        }
 
         res.json({ success: true });
     } catch (error) {

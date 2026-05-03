@@ -1288,8 +1288,7 @@ router.post('/payouts/stage', async (req, res) => {
             end_date: scheduledDate,
             base_amount: total_amount,
             final_amount: total_amount,
-            // ❌ DELETE the 'amount: total_amount' line here!
-            status: 'Pending Finance' // Changed so it drops into the Treasury Calendar Queue first!
+            status: 'Pending Finance' // Drops it into the Treasury Calendar queue
         };
 
         const { data, error } = await supabase.from('payout_schedules').insert(payload);
