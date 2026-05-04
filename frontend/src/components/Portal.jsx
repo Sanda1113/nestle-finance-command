@@ -1427,12 +1427,10 @@ function AnalyticsPortal() {
 
     useEffect(() => {
         fetchData(true);
-        const interval = setInterval(() => fetchData(false), DASHBOARD_POLL_INTERVAL_MS);
 
         const handleSync = () => fetchData(false);
         window.addEventListener('force-sync', handleSync);
         return () => {
-            clearInterval(interval);
             window.removeEventListener('force-sync', handleSync);
         };
     }, [fetchData]);

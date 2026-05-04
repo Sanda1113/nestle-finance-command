@@ -933,6 +933,14 @@ export default function WarehousePortal({ user, onLogout }) {
 
     const handleSelectPO = (po) => {
         setSelectedPO(po);
+        
+        // FIX: If the PO already has a completed GRN, load those items instead of resetting to 0!
+        if (po.po_data?.warehouse_grn?.itemsReceived) {
+            setReceivedItems(po.po_data.warehouse_grn.itemsReceived);
+            setBlindMode(false); // Turn off blind mode so they can see what was submitted
+            return;
+        }
+
         const expectedItems = po.po_data.lineItems.map((item, index) => ({
             ...item,
             expectedBarcode: `890123456789${index}`,
@@ -1031,9 +1039,15 @@ export default function WarehousePortal({ user, onLogout }) {
                     isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)',
                     buildWarehouseGRNPatch(user.email, submittedAt, totalAmount, isPartial, gpsLocation)
                 );
+                
+                // FIX: Update selectedPO state so the UI stays open and updates!
+                setSelectedPO(prev => ({
+                    ...prev,
+                    status: isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)'
+                }));
+
                 setDialog({ title: "Offline Save", message: `📡 OFFLINE MODE: GRN saved locally.\n📍 GPS Tag: ${gpsLocation}`, type: "alert" });
-                setSelectedPO(null);
-                setViewMode('completed');
+                // REMOVED: setSelectedPO(null); setViewMode('completed');
                 fetchPOs();
             } else {
                 try {
@@ -1043,9 +1057,15 @@ export default function WarehousePortal({ user, onLogout }) {
                         isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)',
                         buildWarehouseGRNPatch(user.email, submittedAt, totalAmount, isPartial, gpsLocation)
                     );
+                    
+                    // FIX: Update selectedPO state so the UI stays open and updates!
+                    setSelectedPO(prev => ({
+                        ...prev,
+                        status: isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)'
+                    }));
+
                     setDialog({ title: "Success", message: `✅ Secure GRN Logged. GPS Coordinates Captured. Pipeline updated.`, type: "alert" });
-                    setSelectedPO(null);
-                    setViewMode('completed');
+                    // REMOVED: setSelectedPO(null); setViewMode('completed');
                     fetchPOs();
                 } catch {
                     enqueueOfflineAction('submit', payload);
@@ -1054,9 +1074,15 @@ export default function WarehousePortal({ user, onLogout }) {
                         isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)',
                         buildWarehouseGRNPatch(user.email, submittedAt, totalAmount, isPartial, gpsLocation)
                     );
+                    
+                    // FIX: Update selectedPO state so the UI stays open and updates!
+                    setSelectedPO(prev => ({
+                        ...prev,
+                        status: isPartial ? 'Partially Received (Awaiting Backorder)' : 'Goods Received (GRN Logged)'
+                    }));
+
                     setDialog({ title: "Offline Save", message: 'Failed to log GRN. Saved offline and queued for sync.', type: "alert" });
-                    setSelectedPO(null);
-                    setViewMode('completed');
+                    // REMOVED: setSelectedPO(null); setViewMode('completed');
                     fetchPOs();
                 }
             }
