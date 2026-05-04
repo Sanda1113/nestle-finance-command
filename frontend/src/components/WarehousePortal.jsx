@@ -1733,36 +1733,28 @@ export default function WarehousePortal({ user, onLogout }) {
                                 </div>
                             )}
 
-                             <div className="hidden lg:block mt-auto space-y-3 pt-4">
-                                 {(!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled') && !selectedPO.status.includes('Cleared'))) && (
-                                     <button
-                                         onClick={submitGRN}
-                                         className="w-full min-h-12 px-4 text-base bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]"
-                                     >
-                                         <CheckCircle2 className="w-5 h-5" /> Confirm Goods Received (Sign GRN)
-                                     </button>
-                                 )}
-                                 {selectedPO.status?.includes('Received') && (
-                                     <button
-                                         onClick={handleClearGoods}
-                                         disabled={isClearing}
-                                         className="w-full min-h-12 px-4 text-base bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]"
-                                     >
-                                         <CheckCircle2 className="w-5 h-5" />
-                                         {isClearing ? 'Clearing...' : 'Clear Goods for Payout'}
-                                     </button>
-                                 )}
-                                 {canRejectForShortage && (!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled') && !selectedPO.status.includes('Cleared'))) && (
-                                     <button
-                                         onClick={handleRejectShipment}
-                                         disabled={isRejecting}
-                                         className="w-full min-h-12 px-4 text-base bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow-lg shadow-red-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]"
-                                     >
-                                         <AlertCircle className="w-5 h-5" />
-                                         {isRejecting ? 'Rejecting...' : 'Reject Shipment (Cancel Transaction)'}
-                                     </button>
-                                 )}
-                             </div>
+                            <div className="hidden lg:block mt-auto space-y-3 pt-4">
+                                {(!selectedPO.status?.includes('Bay') && !selectedPO.status?.includes('Received') && !selectedPO.status?.includes('Cleared') && !selectedPO.status?.includes('Cancelled') && (selectedPO.status === 'Delivered to Dock' || selectedPO.po_data?.delivery_timestamp)) && (
+                                    <button onClick={(e) => { e.stopPropagation(); handleAcknowledgeArrival(selectedPO); }} className="w-full min-h-12 px-4 text-base bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-[0.99]">
+                                        <CheckCircle2 className="w-5 h-5" /> Acknowledge Arrival
+                                    </button>
+                                )}
+                                {(!selectedPO.status?.includes('Received') && !selectedPO.status?.includes('Cleared') && !selectedPO.status?.includes('Cancelled')) && (
+                                    <button onClick={submitGRN} className="w-full min-h-12 px-4 text-base bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]">
+                                        <CheckCircle2 className="w-5 h-5" /> Confirm Goods Received (Sign GRN)
+                                    </button>
+                                )}
+                                {selectedPO.status?.includes('Received') && (
+                                    <button onClick={handleClearGoods} disabled={isClearing} className="w-full min-h-12 px-4 text-base bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]">
+                                        <CheckCircle2 className="w-5 h-5" /> {isClearing ? 'Clearing...' : 'Clear Goods for Payout'}
+                                    </button>
+                                )}
+                                {canRejectForShortage && !selectedPO.status?.includes('Cleared') && !selectedPO.status?.includes('Cancelled') && (
+                                    <button onClick={handleRejectShipment} disabled={isRejecting} className="w-full min-h-12 px-4 text-base bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow-lg shadow-red-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]">
+                                        <AlertCircle className="w-5 h-5" /> {isRejecting ? 'Rejecting...' : 'Reject Shipment (Cancel Transaction)'}
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         <div className="lg:w-2/3 p-4 sm:p-6 lg:p-8 overflow-y-auto max-h-[65vh] lg:max-h-[800px]">
@@ -1772,6 +1764,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                     const isOver = item.status === 'Overage';
                                     const isPending = item.status === 'Pending Scan';
                                     const isHighRisk = item.riskLevel === 'High';
+                                    const isGRNLocked = selectedPO.status?.includes('Received') || selectedPO.status?.includes('Cleared') || selectedPO.status?.includes('Cancelled');
 
                                     return (
                                         <div
@@ -1797,27 +1790,11 @@ export default function WarehousePortal({ user, onLogout }) {
                                                 </div>
 
                                                 <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto mt-3 sm:mt-0">
-                                                    {(!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled') && !selectedPO.status.includes('Cleared'))) ? (
+                                                    {!isGRNLocked ? (
                                                         <div className="flex items-center justify-between sm:justify-start gap-1.5 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto">
-                                                            <button
-                                                                onClick={() => handleQtyChange(idx, -1)}
-                                                                className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
-                                                            >
-                                                                -
-                                                            </button>
-                                                            <input
-                                                                type="number"
-                                                                value={item.actualQtyReceived || ''}
-                                                                placeholder="0"
-                                                                onChange={(e) => handleQtyChange(idx, 0, e.target.value)}
-                                                                className={`w-full sm:w-16 min-w-12 text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`}
-                                                            />
-                                                            <button
-                                                                onClick={() => handleQtyChange(idx, 1)}
-                                                                className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform"
-                                                            >
-                                                                +
-                                                            </button>
+                                                            <button onClick={() => handleQtyChange(idx, -1)} className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform">-</button>
+                                                            <input type="number" value={item.actualQtyReceived || ''} placeholder="0" onChange={(e) => handleQtyChange(idx, 0, e.target.value)} className={`w-full sm:w-16 min-w-12 text-center font-black text-2xl sm:text-xl bg-transparent outline-none ${isShort ? 'text-red-500' : isOver ? 'text-amber-500' : 'text-emerald-500'}`} />
+                                                            <button onClick={() => handleQtyChange(idx, 1)} className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-lg text-xl font-black text-slate-600 dark:text-slate-300 shadow-sm shrink-0 active:scale-95 transition-transform">+</button>
                                                         </div>
                                                     ) : (
                                                         <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl font-black text-xl text-slate-800 dark:text-slate-200">
@@ -1841,7 +1818,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                                             placeholder="Batch Number"
                                                             value={item.batchNumber}
                                                             onChange={(e) => handleInputChange(idx, 'batchNumber', e.target.value)}
-                                                            readOnly={selectedPO.status && (selectedPO.status.includes('Received') || (selectedPO.status.includes('Cancelled') || selectedPO.status.includes('Cleared')))}
+                                                            disabled={isGRNLocked}
                                                             className="w-full bg-transparent text-base sm:text-sm outline-none dark:text-white font-medium disabled:opacity-70"
                                                         />
                                                     </div>
@@ -1851,7 +1828,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                                             type="date"
                                                             value={item.expiryDate || ''}
                                                             onChange={(e) => handleInputChange(idx, 'expiryDate', e.target.value)}
-                                                            readOnly={selectedPO.status && (selectedPO.status.includes('Received') || (selectedPO.status.includes('Cancelled') || selectedPO.status.includes('Cleared')))}
+                                                            disabled={isGRNLocked}
                                                             className="w-full bg-transparent text-base sm:text-sm outline-none dark:text-white font-medium text-slate-500 disabled:opacity-70"
                                                         />
                                                     </div>
@@ -1863,7 +1840,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                                     <select
                                                         value={item.reasonCode || ''}
                                                         onChange={(e) => handleInputChange(idx, 'reasonCode', e.target.value)}
-                                                        disabled={selectedPO.status && (selectedPO.status.includes('Received') || (selectedPO.status.includes('Cancelled') || selectedPO.status.includes('Cleared')))}
+                                                        disabled={isGRNLocked}
                                                         className={`w-full sm:w-auto min-h-11 border text-sm font-bold rounded-lg px-3 py-2 outline-none disabled:opacity-70 ${isHighRisk ? 'bg-red-500 text-white border-red-600' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-400'}`}
                                                     >
                                                         <option value="">⚠️ Select Shortage Reason...</option>
@@ -1879,7 +1856,7 @@ export default function WarehousePortal({ user, onLogout }) {
                                                     <div className="flex items-center justify-between w-full sm:w-auto sm:ml-auto">
                                                         <button
                                                             onClick={() => openShortagePhotoPicker(idx)}
-                                                            disabled={selectedPO.status && (selectedPO.status.includes('Received') || (selectedPO.status.includes('Cancelled') || selectedPO.status.includes('Cleared')))}
+                                                            disabled={isGRNLocked}
                                                             className={`min-h-11 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition-colors disabled:opacity-70 disabled:cursor-not-allowed ${item.hasPhoto ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                                         >
                                                             <Camera className="w-5 h-5 sm:w-4 sm:h-4 shrink-0" /> {item.hasPhoto ? 'Photo Attached' : 'Add Photo'}
@@ -1909,34 +1886,26 @@ export default function WarehousePortal({ user, onLogout }) {
                                     <RefreshCw className="w-3 h-3 animate-spin" /> Syncing live data...
                                 </div>
                             )}
-                             {(!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled') && !selectedPO.status.includes('Cleared'))) && (
-                                 <button
-                                     onClick={submitGRN}
-                                     className="w-full min-h-12 px-4 text-base sm:text-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-[0.98]"
-                                 >
-                                     <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> Confirm Goods Received (Sign GRN)
-                                 </button>
-                             )}
-                             {selectedPO.status?.includes('Received') && (
-                                 <button
-                                     onClick={handleClearGoods}
-                                     disabled={isClearing}
-                                     className="w-full min-h-12 px-4 text-base sm:text-lg bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2 mt-3"
-                                 >
-                                     <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
-                                     {isClearing ? 'Clearing...' : 'Clear Goods for Payout'}
-                                 </button>
-                             )}
-                             {canRejectForShortage && (!selectedPO.status || (!selectedPO.status.includes('Received') && !selectedPO.status.includes('Cancelled') && !selectedPO.status.includes('Cleared'))) && (
-                                 <button
-                                     onClick={handleRejectShipment}
-                                     disabled={isRejecting}
-                                     className="w-full min-h-12 px-4 text-base sm:text-lg bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow-lg shadow-red-500/30 flex items-center justify-center gap-2 mt-3"
-                                 >
-                                     <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
-                                     {isRejecting ? 'Rejecting...' : 'Reject Shipment (Cancel Transaction)'}
-                                 </button>
-                             )}
+                                {(!selectedPO.status?.includes('Bay') && !selectedPO.status?.includes('Received') && !selectedPO.status?.includes('Cleared') && !selectedPO.status?.includes('Cancelled') && (selectedPO.status === 'Delivered to Dock' || selectedPO.po_data?.delivery_timestamp)) && (
+                                    <button onClick={(e) => { e.stopPropagation(); handleAcknowledgeArrival(selectedPO); }} className="w-full min-h-12 px-4 text-base sm:text-lg bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-[0.98]">
+                                        <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> Acknowledge Arrival
+                                    </button>
+                                )}
+                                {(!selectedPO.status?.includes('Received') && !selectedPO.status?.includes('Cleared') && !selectedPO.status?.includes('Cancelled')) && (
+                                    <button onClick={submitGRN} className="w-full min-h-12 px-4 text-base sm:text-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 active:scale-[0.98] mt-3">
+                                        <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> Confirm Goods Received (Sign GRN)
+                                    </button>
+                                )}
+                                {selectedPO.status?.includes('Received') && (
+                                    <button onClick={handleClearGoods} disabled={isClearing} className="w-full min-h-12 px-4 text-base sm:text-lg bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2 mt-3 transition-transform active:scale-[0.98]">
+                                        <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> {isClearing ? 'Clearing...' : 'Clear Goods for Payout'}
+                                    </button>
+                                )}
+                                {canRejectForShortage && !selectedPO.status?.includes('Cleared') && !selectedPO.status?.includes('Cancelled') && (
+                                    <button onClick={handleRejectShipment} disabled={isRejecting} className="w-full min-h-12 px-4 text-base sm:text-lg bg-red-600 hover:bg-red-700 text-white font-black rounded-xl shadow-lg shadow-red-500/30 flex items-center justify-center gap-2 mt-3 transition-transform active:scale-[0.98]">
+                                        <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> {isRejecting ? 'Rejecting...' : 'Reject Shipment (Cancel Transaction)'}
+                                    </button>
+                                )}
                         </div>
                     </div>
                 )}

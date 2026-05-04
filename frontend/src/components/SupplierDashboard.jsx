@@ -918,30 +918,29 @@ export default function SupplierDashboard({ user, onLogout }) {
                 }
             }
 
-            // Guarantee chronological sorting so the timeline is never visually out of order
-            const orderMap = {
-                'BOQ Submitted': 1,
-                '✅ BOQ Approved': 2,
-                '❌ BOQ Rejected': 2,
-                'PO Generated': 3,
-                'Invoice Submitted': 4,
-                '⚠️ Discrepancy Detected': 5,
-                '⏳ Pending Finance Review': 5,
-                '✅ Finance Approved': 6,
-                '❌ Finance Rejected': 6,
-                '🚚 Delivered to Dock': 7,
-                '🏭 Warehouse Acknowledged': 8,
-                '✅ Goods Cleared (Ready for Payout)': 9,
-                '⏳ Payout Staged (Pending Scheduling)': 10,
-                '📅 Payout Scheduled': 11,
-                '⏸️ Payment Hold': 11,
-                '💰 Paid (Funds Disbursed)': 12
-            };
+            // Guarantee logical chronological sorting
             events.sort((a, b) => {
-                const timeA = new Date(a.date).getTime();
-                const timeB = new Date(b.date).getTime();
-                if (Math.abs(timeA - timeB) > 1000) return timeA - timeB; // If different seconds, use time
-                return (orderMap[a.label] || 99) - (orderMap[b.label] || 99);
+                const getOrder = (label) => {
+                    if (label.includes('BOQ Submitted')) return 1;
+                    if (label.includes('BOQ Approved') || label.includes('BOQ Rejected') || label.includes('Pending Approval')) return 2;
+                    if (label.includes('PO Generated')) return 3;
+                    if (label.includes('Invoice Submitted')) return 4;
+                    if (label.includes('Discrepancy') || label.includes('Pending Finance Review')) return 5;
+                    if (label.includes('Finance Approved') || label.includes('Finance Rejected')) return 6;
+                    if (label.includes('Delivered to Dock')) return 7;
+                    if (label.includes('Warehouse Acknowledged')) return 8;
+                    if (label.includes('Goods Cleared')) return 9;
+                    if (label.includes('Payout Staged')) return 10;
+                    if (label.includes('Payout Scheduled') || label.includes('Payment Hold')) return 11;
+                    if (label.includes('Paid')) return 12;
+                    return 99;
+                };
+                const orderA = getOrder(a.label);
+                const orderB = getOrder(b.label);
+                
+                // Prioritize strict logical steps, use timestamp as a fallback
+                if (orderA !== orderB) return orderA - orderB;
+                return new Date(a.date).getTime() - new Date(b.date).getTime();
             });
 
             timelines.push({
@@ -971,30 +970,29 @@ export default function SupplierDashboard({ user, onLogout }) {
                     events.push({ label: '⏳ Pending Approval', date: boq.created_at, status: 'pending', icon: '⏳' });
                 }
 
-                const orderMap = {
-                    'BOQ Submitted': 1,
-                    '✅ BOQ Approved': 2,
-                    '❌ BOQ Rejected': 2,
-                    '⏳ Pending Approval': 2, // Added for pending BOQs
-                    'PO Generated': 3,
-                    'Invoice Submitted': 4,
-                    '⚠️ Discrepancy Detected': 5,
-                    '⏳ Pending Finance Review': 5,
-                    '✅ Finance Approved': 6,
-                    '❌ Finance Rejected': 6,
-                    '🚚 Delivered to Dock': 7,
-                    '🏭 Warehouse Acknowledged': 8,
-                    '✅ Goods Cleared (Ready for Payout)': 9,
-                    '⏳ Payout Staged (Pending Scheduling)': 10,
-                    '📅 Payout Scheduled': 11,
-                    '⏸️ Payment Hold': 11,
-                    '💰 Paid (Funds Disbursed)': 12
-                };
+                // Guarantee logical chronological sorting
                 events.sort((a, b) => {
-                    const timeA = new Date(a.date).getTime();
-                    const timeB = new Date(b.date).getTime();
-                    if (Math.abs(timeA - timeB) > 1000) return timeA - timeB;
-                    return (orderMap[a.label] || 99) - (orderMap[b.label] || 99);
+                    const getOrder = (label) => {
+                        if (label.includes('BOQ Submitted')) return 1;
+                        if (label.includes('BOQ Approved') || label.includes('BOQ Rejected') || label.includes('Pending Approval')) return 2;
+                        if (label.includes('PO Generated')) return 3;
+                        if (label.includes('Invoice Submitted')) return 4;
+                        if (label.includes('Discrepancy') || label.includes('Pending Finance Review')) return 5;
+                        if (label.includes('Finance Approved') || label.includes('Finance Rejected')) return 6;
+                        if (label.includes('Delivered to Dock')) return 7;
+                        if (label.includes('Warehouse Acknowledged')) return 8;
+                        if (label.includes('Goods Cleared')) return 9;
+                        if (label.includes('Payout Staged')) return 10;
+                        if (label.includes('Payout Scheduled') || label.includes('Payment Hold')) return 11;
+                        if (label.includes('Paid')) return 12;
+                        return 99;
+                    };
+                    const orderA = getOrder(a.label);
+                    const orderB = getOrder(b.label);
+                    
+                    // Prioritize strict logical steps, use timestamp as a fallback
+                    if (orderA !== orderB) return orderA - orderB;
+                    return new Date(a.date).getTime() - new Date(b.date).getTime();
                 });
 
                 timelines.push({

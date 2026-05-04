@@ -1304,14 +1304,12 @@ router.post('/payouts/stage', async (req, res) => {
         });
 
         // 📧 Email supplier about payout scheduled
-        const scheduledDateFormatted = scheduledDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         const payoutEmailBody = `
             <p>Hello,</p>
-            <p>Your payout of <strong>${total_amount}</strong> has been successfully scheduled and added to the payment calendar.</p>
+            <p>Your payout of <strong>${total_amount}</strong> has been successfully staged for scheduling.</p>
             <p><strong>Reference:</strong> Invoice Payout: ${supplier_email}</p>
-            <p><strong>Scheduled Payout Date:</strong> ${scheduledDateFormatted} (Net-30 Terms)</p>
-            <p>You can monitor the status of this payout in real-time through your Supplier Dashboard under the <strong>Payout Calendar</strong> section.</p>
-            <p>Thank you for your continued partnership with Nestlé.</p>
+            <p>The Nestlé Treasury team will officially lock the payment date shortly according to your Net-30 Terms.</p>
+            <p>You can monitor the status of this payout in real-time through your Supplier Dashboard.</p>
         `;
         await sendSupplierEmail(
             supplier_email,

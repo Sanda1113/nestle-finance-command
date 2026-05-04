@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User, FileText, Clock, DollarSign, Search, Download, CreditCard, Calendar, Settings, Shield, Sliders, Zap, AlertTriangle, Briefcase, ChevronRight, Activity, Percent, ArrowRight, ShieldCheck, ShieldAlert, Target, TrendingUp, X } from 'lucide-react';
+import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User, FileText, Clock, DollarSign, Search, Download, CreditCard, Calendar, Settings, Shield, Sliders, Zap, AlertTriangle, Briefcase, ChevronRight, Activity, Percent, ArrowRight, ShieldCheck, ShieldAlert, Target, TrendingUp, X, Tag } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import AppNotifier from './AppNotifier';
 import NotificationBell from './NotificationBell';
@@ -565,6 +565,7 @@ function FinancePortal({ user }) {
     const [filter, setFilter] = useState('All');
     const [reviewSearchTerm, setReviewSearchTerm] = useState('');
     const [expandedRow, setExpandedRow] = useState(null);
+    const [logs, setLogs] = useState([]);
     const [actionedRecords, setActionedRecords] = useState({});
     const [showToleranceModal, setShowToleranceModal] = useState(false);
     const [shadowModeResult, setShadowModeResult] = useState(null);
@@ -603,7 +604,14 @@ function FinancePortal({ user }) {
             }).then(res => setPOs(res.data.data || []))
                 .catch(error => { if (import.meta.env.DEV) console.warn('Finance polling request failed (pos):', error); });
 
-            await Promise.all([p1, p2, p3]);
+            const p4 = axios.get('https://nestle-finance-command-production.up.railway.app/api/logs', {
+                params: { _ts: Date.now() },
+                timeout: DASHBOARD_FETCH_TIMEOUT_MS,
+                headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
+            }).then(res => setLogs(res.data.data || []))
+                .catch(error => { if (import.meta.env.DEV) console.warn('Finance polling request failed (logs):', error); });
+
+            await Promise.all([p1, p2, p3, p4]);
         } finally {
             isFetchingDataRef.current = false;
         }
@@ -757,8 +765,171 @@ function FinancePortal({ user }) {
             displayStatus = 'Rejected by Finance';
         }
 
-        return { ...r, displayStatus, relatedPO, trustTier, trustColor, trustIcon, autoApprovedViaTolerance, glPayload, variance };
+        return { ...r, displayStatus, relatedPO, trustTier, trustColor, trustIcon, autoApprovedViaTolerance, glPayload, variance, isGrnCompleted };
     });
+
+    const transactionTimeline = useMemo(() => {
+        const timelines = [];
+        const processedNumericLocators = new Set();
+
+        pos.forEach(po => {
+            const poNumber = po.po_number;
+            const poNumeric = String(poNumber).match(/\d+/)?.[0] || poNumber;
+            processedNumericLocators.add(poNumeric);
+
+            const relatedRecon = records.find(r => {
+                const rPO = String(r.po_number || '').trim();
+                const rInv = String(r.invoice_number || '').trim();
+                const poPO = String(poNumber || '').trim();
+                if (rPO === poPO) return true;
+                const rPONum = rPO.match(/\d+/)?.[0];
+                const rInvNum = rInv.match(/\d+/)?.[0];
+                return (rPONum && rPONum === poNumeric) || (rInvNum && rInvNum === poNumeric);
+            });
+
+            const relatedBoq = boqs.find(b => {
+                const docNum = String(b.document_number || '');
+                return docNum === poNumber || docNum.includes(poNumeric);
+            });
+
+            const relatedLogs = logs.filter(log => {
+                const ref = String(log.ref || log.reference_number || log.po_number || '');
+                return ref.includes(poNumeric) || ref === poNumber;
+            });
+            
+            const events = [];
+
+            if (relatedBoq) {
+                events.push({ label: 'BOQ Submitted', date: relatedBoq.created_at, status: 'completed', icon: '📑' });
+                if (relatedBoq.status === 'Approved' || relatedBoq.status.includes('PO Generated')) {
+                    events.push({ label: 'BOQ Approved', date: relatedBoq.updated_at || relatedBoq.created_at, status: 'completed', icon: '✅' });
+                } else if (relatedBoq.status === 'Rejected') {
+                    events.push({ label: 'BOQ Rejected', date: relatedBoq.updated_at || relatedBoq.created_at, status: 'rejected', icon: '❌' });
+                }
+            }
+
+            if (poNumber) {
+                events.push({ label: 'PO Generated', date: po.created_at, status: 'completed', icon: '🛒' });
+            }
+
+            if (relatedRecon) {
+                events.push({ label: 'Invoice Submitted', date: relatedRecon.processed_at, status: 'completed', icon: '📩' });
+                const reconStatus = relatedRecon.match_status || '';
+                if (reconStatus.includes('Matched') || reconStatus.includes('Approved')) {
+                    events.push({ label: 'Finance Approved', date: relatedRecon.updated_at || relatedRecon.processed_at, status: 'completed', icon: '✅' });
+                } else if (reconStatus.includes('Discrepancy')) {
+                    events.push({ label: 'Discrepancy Detected', date: relatedRecon.processed_at, status: 'warning', icon: '⚠️' });
+                } else if (reconStatus.includes('Rejected')) {
+                    events.push({ label: 'Finance Rejected', date: relatedRecon.updated_at || relatedRecon.processed_at, status: 'rejected', icon: '❌' });
+                }
+            }
+
+            if (po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp) {
+                events.push({ label: 'Delivered to Dock', date: po.po_data?.delivery_timestamp || po.updated_at, status: 'completed', icon: '🚚' });
+            }
+
+            if (po.status && (po.status.includes('Received') || po.status.includes('Cleared'))) {
+                events.push({ label: 'Warehouse Acknowledged', date: po.updated_at, status: 'completed', icon: '🏭' });
+            }
+
+            if (po.status && po.status.includes('Cleared')) {
+                events.push({ label: 'Goods Cleared', date: po.updated_at, status: 'completed', icon: '✅' });
+            }
+
+            relatedLogs.forEach(log => {
+                const action = String(log.action || '').toLowerCase();
+                const date = log.created_at || log.date;
+                if (action.includes('payout staged')) events.push({ label: 'Payout Staged', date, status: 'completed', icon: '⏳' });
+                if (action.includes('payout scheduled')) events.push({ label: 'Payout Scheduled', date, status: 'completed', icon: '📅' });
+                if (action.includes('payment hold')) events.push({ label: 'Payment Hold', date, status: 'warning', icon: '⏸️' });
+                if (action.includes('paid') || action.includes('disbursed')) events.push({ label: 'Paid', date, status: 'completed', icon: '💰', isPaid: true });
+            });
+
+            // Guarantee logical chronological sorting
+            events.sort((a, b) => {
+                const getOrder = (label) => {
+                    if (label.includes('BOQ Submitted')) return 1;
+                    if (label.includes('BOQ Approved') || label.includes('BOQ Rejected') || label.includes('Pending Approval')) return 2;
+                    if (label.includes('PO Generated')) return 3;
+                    if (label.includes('Invoice Submitted')) return 4;
+                    if (label.includes('Discrepancy') || label.includes('Pending Finance Review')) return 5;
+                    if (label.includes('Finance Approved') || label.includes('Finance Rejected')) return 6;
+                    if (label.includes('Delivered to Dock')) return 7;
+                    if (label.includes('Warehouse Acknowledged')) return 8;
+                    if (label.includes('Goods Cleared')) return 9;
+                    if (label.includes('Payout Staged')) return 10;
+                    if (label.includes('Payout Scheduled') || label.includes('Payment Hold')) return 11;
+                    if (label.includes('Paid')) return 12;
+                    return 99;
+                };
+                const orderA = getOrder(a.label);
+                const orderB = getOrder(b.label);
+                
+                if (orderA !== orderB) return orderA - orderB;
+                return new Date(a.date).getTime() - new Date(b.date).getTime();
+            });
+
+            if (events.length > 0) {
+                timelines.push({
+                    poNumber,
+                    totalAmount: po.total_amount,
+                    currency: po.po_data?.currency,
+                    events
+                });
+            }
+        });
+
+        // Handle BOQs that haven't reached PO stage yet
+        boqs.filter(b => {
+            const bNum = String(b.document_number || '');
+            const bNumeric = bNum.match(/\d+/)?.[0];
+            return !processedNumericLocators.has(bNumeric) && !processedNumericLocators.has(bNum);
+        }).forEach(boq => {
+            const events = [];
+            events.push({ label: 'BOQ Submitted', date: boq.created_at, status: 'completed', icon: '📑' });
+            
+            if (boq.status === 'Approved' || boq.status.includes('PO Generated')) {
+                events.push({ label: 'BOQ Approved', date: boq.updated_at || boq.created_at, status: 'completed', icon: '✅' });
+            } else if (boq.status === 'Rejected') {
+                events.push({ label: 'BOQ Rejected', date: boq.updated_at || boq.created_at, status: 'rejected', icon: '❌' });
+            } else {
+                events.push({ label: 'Pending Approval', date: boq.created_at, status: 'pending', icon: '⏳' });
+            }
+
+            // Guarantee logical chronological sorting
+            events.sort((a, b) => {
+                const getOrder = (label) => {
+                    if (label.includes('BOQ Submitted')) return 1;
+                    if (label.includes('BOQ Approved') || label.includes('BOQ Rejected') || label.includes('Pending Approval')) return 2;
+                    if (label.includes('PO Generated')) return 3;
+                    if (label.includes('Invoice Submitted')) return 4;
+                    if (label.includes('Discrepancy') || label.includes('Pending Finance Review')) return 5;
+                    if (label.includes('Finance Approved') || label.includes('Finance Rejected')) return 6;
+                    if (label.includes('Delivered to Dock')) return 7;
+                    if (label.includes('Warehouse Acknowledged')) return 8;
+                    if (label.includes('Goods Cleared')) return 9;
+                    if (label.includes('Payout Staged')) return 10;
+                    if (label.includes('Payout Scheduled') || label.includes('Payment Hold')) return 11;
+                    if (label.includes('Paid')) return 12;
+                    return 99;
+                };
+                const orderA = getOrder(a.label);
+                const orderB = getOrder(b.label);
+                
+                if (orderA !== orderB) return orderA - orderB;
+                return new Date(a.date).getTime() - new Date(b.date).getTime();
+            });
+
+            timelines.push({
+                poNumber: boq.document_number || `BOQ-${boq.id}`,
+                totalAmount: boq.total_amount,
+                currency: boq.currency,
+                events
+            });
+        });
+
+        return timelines;
+    }, [pos, records, boqs, logs]);
 
     const filteredRecords = enrichedRecords.filter(r => {
         if (filter === 'All') return true;
@@ -958,12 +1129,13 @@ function FinancePortal({ user }) {
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {visibleRecords.map((r) => {
                                 const isActioned = actionedRecords[r.id] || r.displayStatus.includes('Approved') || r.displayStatus.includes('Reject');
-                                const poNumeric = String(r.po_number).match(/\d+/)?.[0];
-                                const relatedBoq = boqs.find(b => 
-                                    (b.status || '').includes(r.po_number) || 
-                                    b.document_number === r.po_number || 
-                                    (poNumeric && String(b.document_number).includes(poNumeric))
-                                );
+                                const isGrnCompleted = r.isGrnCompleted;
+                                const poNumeric = String(r.po_number || r.invoice_number || '').match(/\d+/)?.[0];
+                                const relatedBoq = boqs.find(b => {
+                                    const bNum = String(b.document_number || '');
+                                    const bStat = String(b.status || '');
+                                    return bNum === r.po_number || bStat.includes(r.po_number) || (poNumeric && (bNum.includes(poNumeric) || bStat.includes(poNumeric)));
+                                });
                                 const isExpanded = expandedRow === r.id;
                                 const rejectionEvidence = r.relatedPO?.po_data?.warehouse_rejection || null;
                                 const grnEvidence = r.relatedPO?.po_data?.warehouse_grn || null;
@@ -1011,7 +1183,7 @@ function FinancePortal({ user }) {
                                             </td>
                                             <td className="p-4 text-right">
                                                 <div className="flex flex-wrap justify-end gap-1.5">
-                                                    {r.displayStatus === 'Approved - Awaiting Payout' ? (
+                                                    {(r.match_status === 'Approved' && isGrnCompleted) ? (
                                                         <button
                                                             type="button"
                                                             onClick={(e) => { e.stopPropagation(); handleStagePayout(r); }}
@@ -1124,6 +1296,75 @@ function FinancePortal({ user }) {
                                                         </div>
 
                                                         <div>
+                                                            <div className="mb-6">
+                                                                <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                                                    <Activity className="w-4 h-4 text-blue-500" /> Transaction Lifecycle Timeline
+                                                                </h4>
+                                                                {(() => {
+                                                                    const myTimeline = transactionTimeline.find(t => t.poNumber === r.po_number);
+                                                                    if (!myTimeline) return <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-xs text-slate-500 text-center">No timeline data available for this shipment.</div>;
+                                                                    
+                                                                    return (
+                                                                        <div className="space-y-4">
+                                                                            <div className="flex items-center justify-between px-4 py-2 bg-slate-900 rounded-xl mb-4 border border-slate-800">
+                                                                                <div className="flex-1 text-center">
+                                                                                    <div className={`w-5 h-5 mx-auto rounded-full flex items-center justify-center text-[10px] ${myTimeline.events.some(e => e.label.includes('Invoice')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>1</div>
+                                                                                    <p className="text-[9px] mt-1 font-bold text-slate-400 uppercase">Invoice</p>
+                                                                                </div>
+                                                                                <div className="flex-1 h-0.5 bg-slate-700">
+                                                                                    <div className={`h-full bg-emerald-500 ${myTimeline.events.some(e => e.label.includes('Delivered')) ? 'w-full' : 'w-0'}`}></div>
+                                                                                </div>
+                                                                                <div className="flex-1 text-center">
+                                                                                    <div className={`w-5 h-5 mx-auto rounded-full flex items-center justify-center text-[10px] ${myTimeline.events.some(e => e.label.includes('Delivered')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>2</div>
+                                                                                    <p className="text-[9px] mt-1 font-bold text-slate-400 uppercase">Logistics</p>
+                                                                                </div>
+                                                                                <div className="flex-1 h-0.5 bg-slate-700">
+                                                                                    <div className={`h-full bg-emerald-500 ${myTimeline.events.some(e => e.label.includes('Scheduled')) ? 'w-full' : 'w-0'}`}></div>
+                                                                                </div>
+                                                                                <div className="flex-1 text-center">
+                                                                                    <div className={`w-5 h-5 mx-auto rounded-full flex items-center justify-center text-[10px] ${myTimeline.events.some(e => e.label.includes('Scheduled')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>3</div>
+                                                                                    <p className="text-[9px] mt-1 font-bold text-slate-400 uppercase">Scheduled</p>
+                                                                                </div>
+                                                                                <div className="flex-1 h-0.5 bg-slate-700">
+                                                                                    <div className={`h-full bg-emerald-500 ${myTimeline.events.some(e => e.label.includes('Paid')) ? 'w-full' : 'w-0'}`}></div>
+                                                                                </div>
+                                                                                <div className="flex-1 text-center">
+                                                                                    <div className={`w-5 h-5 mx-auto rounded-full flex items-center justify-center text-[10px] ${myTimeline.events.some(e => e.label.includes('Paid')) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500'}`}>4</div>
+                                                                                    <p className="text-[9px] mt-1 font-bold text-slate-400 uppercase">Paid</p>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="relative pl-6 space-y-4 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
+                                                                                {myTimeline.events.map((event, idx) => (
+                                                                                    <div key={idx} className="relative">
+                                                                                        <div className={`absolute -left-[21px] top-1 w-5 h-5 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center text-[10px] z-10 ${
+                                                                                            event.status === 'completed' ? 'bg-emerald-500 text-white' : 
+                                                                                            event.status === 'warning' ? 'bg-amber-500 text-white' : 
+                                                                                            event.status === 'rejected' ? 'bg-red-500 text-white' : 'bg-slate-400 text-white'
+                                                                                        }`}>
+                                                                                            {event.icon}
+                                                                                        </div>
+                                                                                        <div className="flex justify-between items-start">
+                                                                                            <div>
+                                                                                                <p className="text-xs font-black text-slate-800 dark:text-slate-200">{event.label}</p>
+                                                                                                <p className="text-[10px] text-slate-500 font-medium">{new Date(event.date).toLocaleString()}</p>
+                                                                                            </div>
+                                                                                            <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-tighter ${
+                                                                                                event.status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 
+                                                                                                event.status === 'warning' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 
+                                                                                                'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
+                                                                                            }`}>
+                                                                                                {event.status}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                            </div>
+
                                                             <DisputeChat
                                                                 referenceNumber={r.po_number || r.invoice_number}
                                                                 userRole="Finance"
