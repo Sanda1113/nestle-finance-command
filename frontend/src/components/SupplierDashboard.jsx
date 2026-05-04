@@ -919,7 +919,30 @@ export default function SupplierDashboard({ user, onLogout }) {
             }
 
             // Guarantee chronological sorting so the timeline is never visually out of order
-            events.sort((a, b) => new Date(a.date) - new Date(b.date));
+            const orderMap = {
+                'BOQ Submitted': 1,
+                '✅ BOQ Approved': 2,
+                '❌ BOQ Rejected': 2,
+                'PO Generated': 3,
+                'Invoice Submitted': 4,
+                '⚠️ Discrepancy Detected': 5,
+                '⏳ Pending Finance Review': 5,
+                '✅ Finance Approved': 6,
+                '❌ Finance Rejected': 6,
+                '🚚 Delivered to Dock': 7,
+                '🏭 Warehouse Acknowledged': 8,
+                '✅ Goods Cleared (Ready for Payout)': 9,
+                '⏳ Payout Staged (Pending Scheduling)': 10,
+                '📅 Payout Scheduled': 11,
+                '⏸️ Payment Hold': 11,
+                '💰 Paid (Funds Disbursed)': 12
+            };
+            events.sort((a, b) => {
+                const timeA = new Date(a.date).getTime();
+                const timeB = new Date(b.date).getTime();
+                if (Math.abs(timeA - timeB) > 1000) return timeA - timeB; // If different seconds, use time
+                return (orderMap[a.label] || 99) - (orderMap[b.label] || 99);
+            });
 
             timelines.push({
                 transactionId: poNumber,
@@ -948,7 +971,31 @@ export default function SupplierDashboard({ user, onLogout }) {
                     events.push({ label: '⏳ Pending Approval', date: boq.created_at, status: 'pending', icon: '⏳' });
                 }
 
-                events.sort((a, b) => new Date(a.date) - new Date(b.date));
+                const orderMap = {
+                    'BOQ Submitted': 1,
+                    '✅ BOQ Approved': 2,
+                    '❌ BOQ Rejected': 2,
+                    '⏳ Pending Approval': 2, // Added for pending BOQs
+                    'PO Generated': 3,
+                    'Invoice Submitted': 4,
+                    '⚠️ Discrepancy Detected': 5,
+                    '⏳ Pending Finance Review': 5,
+                    '✅ Finance Approved': 6,
+                    '❌ Finance Rejected': 6,
+                    '🚚 Delivered to Dock': 7,
+                    '🏭 Warehouse Acknowledged': 8,
+                    '✅ Goods Cleared (Ready for Payout)': 9,
+                    '⏳ Payout Staged (Pending Scheduling)': 10,
+                    '📅 Payout Scheduled': 11,
+                    '⏸️ Payment Hold': 11,
+                    '💰 Paid (Funds Disbursed)': 12
+                };
+                events.sort((a, b) => {
+                    const timeA = new Date(a.date).getTime();
+                    const timeB = new Date(b.date).getTime();
+                    if (Math.abs(timeA - timeB) > 1000) return timeA - timeB;
+                    return (orderMap[a.label] || 99) - (orderMap[b.label] || 99);
+                });
 
                 timelines.push({
                     transactionId: docNum,

@@ -699,7 +699,8 @@ function FinancePortal({ user }) {
 
     const enrichedRecords = records.map(r => {
         const relatedPO = pos.find(p => p.po_number === r.po_number);
-        const isGrnCompleted = relatedPO && relatedPO.status && relatedPO.status.includes('Received');
+        // FIX: Recognize both 'Received' and 'Cleared' for the Payout Stage button visibility
+        const isGrnCompleted = relatedPO && relatedPO.status && (relatedPO.status.includes('Received') || relatedPO.status.includes('Cleared'));
         const isDelivered = relatedPO && (relatedPO.status === 'Delivered to Dock' || relatedPO.po_data?.delivery_timestamp);
         const isWarehouseCancelled = relatedPO && String(relatedPO.status || '').includes('Cancelled');
 
@@ -957,7 +958,12 @@ function FinancePortal({ user }) {
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {visibleRecords.map((r) => {
                                 const isActioned = actionedRecords[r.id] || r.displayStatus.includes('Approved') || r.displayStatus.includes('Reject');
-                                const relatedBoq = boqs.find(b => (b.status || '').includes(r.po_number));
+                                const poNumeric = String(r.po_number).match(/\d+/)?.[0];
+                                const relatedBoq = boqs.find(b => 
+                                    (b.status || '').includes(r.po_number) || 
+                                    b.document_number === r.po_number || 
+                                    (poNumeric && String(b.document_number).includes(poNumeric))
+                                );
                                 const isExpanded = expandedRow === r.id;
                                 const rejectionEvidence = r.relatedPO?.po_data?.warehouse_rejection || null;
                                 const grnEvidence = r.relatedPO?.po_data?.warehouse_grn || null;
