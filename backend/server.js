@@ -768,11 +768,9 @@ app.post('/api/save-boq', async (req, res) => {
             vendor_name: boqData.vendorName,
             document_number: boqData.invoiceNumber !== 'Not Found' ? boqData.invoiceNumber : `BOQ-${Date.now().toString().slice(-6)}`,
             total_amount: boqData.totalAmount,
-            subtotal_amount: boqData.subtotalAmount || boqData.subtotal || boqData.totalAmount,
-            tax_amount: boqData.taxAmount || boqData.salesTax || 0,
             currency: boqData.currency,
             status: 'Pending Review',
-            line_items: boqData.lineItems,
+            line_items: boqData.lineItems,   // line items already contain unit price etc.
             supplier_email: supplierEmail,
             vendor_id: vendorId
         }]);
