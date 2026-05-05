@@ -51,19 +51,19 @@ const CustomToolbar = (toolbar) => {
     const currentDate = toolbar.date;
 
     return (
-        <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8 bg-white/5 p-6 rounded-3xl border border-white/5 backdrop-blur-md">
-            <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                    <button onClick={goToBack} className="p-3 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all group shadow-inner">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-10 bg-white/5 p-8 rounded-[2rem] border border-white/5 backdrop-blur-md">
+            <div className="flex items-center gap-8">
+                <div className="flex items-center gap-3">
+                    <button onClick={goToBack} className="p-3.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all group shadow-inner">
                         <ChevronLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
                     </button>
-                    <button onClick={goToToday} className="px-6 py-3 text-sm font-black text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all shadow-inner uppercase tracking-widest">Today</button>
-                    <button onClick={goToNext} className="p-3 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all group shadow-inner">
+                    <button onClick={goToToday} className="px-8 py-3.5 text-xs font-black text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all shadow-inner uppercase tracking-[0.2em]">Today</button>
+                    <button onClick={goToNext} className="p-3.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all group shadow-inner">
                         <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                     </button>
                 </div>
                 <div className="text-left">
-                    <h2 className="text-2xl font-black text-white capitalize tracking-tighter mb-1">{toolbar.label}</h2>
+                    <h2 className="text-3xl font-black text-white capitalize tracking-tighter mb-2">{toolbar.label}</h2>
                     <div className="flex gap-2">
                         <select 
                             value={currentDate.getMonth()} 
@@ -72,7 +72,7 @@ const CustomToolbar = (toolbar) => {
                                 newDate.setMonth(parseInt(e.target.value));
                                 toolbar.onNavigate('DATE', newDate);
                             }}
-                            className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1 outline-none hover:bg-white/10 transition-colors"
+                            className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1.5 outline-none hover:bg-white/10 transition-colors"
                         >
                             {moment.months().map((m, i) => <option key={i} value={i} className="bg-slate-900">{m}</option>)}
                         </select>
@@ -83,7 +83,7 @@ const CustomToolbar = (toolbar) => {
                                 newDate.setFullYear(parseInt(e.target.value));
                                 toolbar.onNavigate('DATE', newDate);
                             }}
-                            className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1 outline-none hover:bg-white/10 transition-colors"
+                            className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1.5 outline-none hover:bg-white/10 transition-colors"
                         >
                             {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => <option key={y} value={y} className="bg-slate-900">{y}</option>)}
                         </select>
@@ -91,27 +91,27 @@ const CustomToolbar = (toolbar) => {
                 </div>
             </div>
 
-            <div className="hidden xl:flex items-center gap-8 px-8 border-x border-white/10">
+            <div className="hidden xl:flex items-center gap-10 px-10 border-x border-white/10">
                 <div>
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Treasury Outflow</p>
-                    <p className="text-xl font-black text-rose-500">{formatCurrency(dailyBurn)}</p>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Treasury Outflow</p>
+                    <p className="text-2xl font-black text-rose-500">{formatCurrency(dailyBurn)}</p>
                 </div>
-                <div className="w-px h-10 bg-white/10"></div>
+                <div className="w-px h-12 bg-white/10"></div>
                 <div>
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Disbursement SLA</p>
-                    <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
-                        <span className="text-sm font-black text-emerald-400">99.8%</span>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Disbursement SLA</p>
+                    <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
+                        <span className="text-base font-black text-emerald-400">99.8%</span>
                     </div>
                 </div>
             </div>
 
-            <div className="flex items-center gap-3 bg-slate-900/50 p-2 rounded-2xl border border-white/5">
+            <div className="flex items-center gap-3 bg-slate-900/50 p-2.5 rounded-2xl border border-white/5">
                 {['month', 'week', 'day', 'agenda'].map((v) => (
                     <button
                         key={v}
                         onClick={() => toolbar.onView(v)}
-                        className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${toolbar.view === v ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                        className={`px-7 py-3 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all ${toolbar.view === v ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
                     >
                         {v}
                     </button>
@@ -148,17 +148,17 @@ export default function DigitalCalendar({ userRole, userEmail }) {
         const cfg = getStatusCfg(event.status);
         const isOverdue = moment(event.start).isBefore(moment(), 'day') && event.status !== 'Paid';
         return {
-            className: `bg-gradient-to-br ${cfg.bg} backdrop-blur-md border border-white/10 rounded-xl shadow-lg ${cfg.glow} hover:scale-[1.02] active:scale-95 transition-all duration-300 ${isOverdue ? 'ring-2 ring-rose-500 animate-pulse' : ''}`,
+            className: `bg-gradient-to-br ${cfg.bg} backdrop-blur-md border border-white/10 rounded-xl shadow-xl ${cfg.glow} hover:scale-[1.03] active:scale-95 transition-all duration-300 ${isOverdue ? 'ring-2 ring-rose-500 animate-pulse' : ''}`,
             style: {
                 fontSize: '10px',
                 fontWeight: '900',
-                padding: '6px 10px',
+                padding: '6px 12px',
                 color: 'white',
-                minHeight: '28px',
+                minHeight: '30px',
                 display: 'flex',
                 alignItems: 'center',
-                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
-                letterSpacing: '0.025em',
+                textShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                letterSpacing: '0.03em',
                 cursor: isFinance ? 'grab' : 'pointer'
             }
         };
