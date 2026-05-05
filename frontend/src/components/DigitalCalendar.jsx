@@ -121,7 +121,7 @@ const CustomToolbar = (toolbar) => {
     );
 };
 
-export default function DigitalCalendar({ userRole, userEmail, refreshTrigger }) {
+export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, trustTier = 2, onAcceptEarlyPayout }) {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState(null);
@@ -585,36 +585,54 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
                                 )}
 
                                 {!isFinance && selectedEvent.status === 'Scheduled' && (
-                                    <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-[2.5rem] p-6 space-y-6">
+                                    <div className={`bg-indigo-600/10 border border-indigo-500/20 rounded-[2.5rem] p-6 space-y-6 ${trustTier === 3 ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <Zap className="w-4 h-4 text-indigo-400" />
-                                                <span className="text-xs font-black text-white uppercase tracking-widest">The Liquidity Slider</span>
+                                                <span className="text-xs font-black text-white uppercase tracking-widest">
+                                                    {trustTier === 1 ? 'Strategic Liquidity Slider' : trustTier === 2 ? 'Standard Review Request' : 'Payouts Restricted'}
+                                                </span>
                                             </div>
-                                            <span className="text-xs font-black text-indigo-400 bg-indigo-500/20 px-3 py-1 rounded-full">{discountRate.toFixed(1)}% Rate</span>
+                                            {trustTier === 1 && <span className="text-xs font-black text-indigo-400 bg-indigo-500/20 px-3 py-1 rounded-full">{discountRate.toFixed(1)}% Rate</span>}
                                         </div>
 
-                                        <input type="range" min="1" max="5" step="0.1" value={discountRate}
-                                            onChange={(e) => setDiscountRate(Number(e.target.value))}
-                                            className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-indigo-500" />
+                                        {trustTier === 1 && (
+                                            <input type="range" min="1" max="5" step="0.1" value={discountRate}
+                                                onChange={(e) => setDiscountRate(Number(e.target.value))}
+                                                className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-indigo-500" />
+                                        )}
 
                                         <div className="space-y-2">
                                             <div className="flex justify-between text-xs font-bold text-slate-500"><span>Gross Amount</span><span>{formatCurrency(selectedEvent.amount)}</span></div>
-                                            <div className="flex justify-between text-xs font-bold text-rose-500"><span>Service Fee</span><span>-{formatCurrency(discountAmount)}</span></div>
+                                            {trustTier === 1 && <div className="flex justify-between text-xs font-bold text-rose-500"><span>Service Fee</span><span>-{formatCurrency(discountAmount)}</span></div>}
                                             <div className="h-px bg-slate-700/50 my-4"></div>
                                             <div className="flex justify-between items-end">
                                                 <div>
-                                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">You Receive within 30 min</span>
-                                                    <span className="text-[9px] font-bold text-indigo-400">Est. Arrival: {moment().add(30, 'minutes').format('MMM D, h:mm A')}</span>
+                                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">
+                                                        {trustTier === 1 ? 'Instant Disbursement' : trustTier === 2 ? 'Subject to Review' : 'Contact Risk Support'}
+                                                    </span>
+                                                    <span className="text-[9px] font-bold text-indigo-400">
+                                                        {trustTier === 1 ? `Est. Arrival: ${moment().add(30, 'minutes').format('MMM D, h:mm A')}` : trustTier === 2 ? 'Review: 1–2 Business Days' : 'Action Required'}
+                                                    </span>
                                                 </div>
-                                                <span className="text-3xl font-black text-emerald-400">{formatCurrency(selectedEvent.amount - discountAmount)}</span>
+                                                <span className="text-3xl font-black text-emerald-400">{formatCurrency(trustTier === 1 ? selectedEvent.amount - discountAmount : selectedEvent.amount)}</span>
                                             </div>
                                         </div>
 
-                                        <button onClick={handleAcceptEarlyPayout} disabled={isUpdating}
-                                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl transition-all shadow-[0_10px_20px_rgba(79,70,229,0.3)] flex items-center justify-center gap-2">
-                                            <Download className="w-5 h-5" />
-                                            {isUpdating ? 'Accelerating...' : 'Accept Offer'}
+                                        <button 
+                                            onClick={() => {
+                                                if (onAcceptEarlyPayout) {
+                                                    onAcceptEarlyPayout(selectedEvent.id, selectedEvent.amount);
+                                                    setSelectedEvent(null);
+                                                } else {
+                                                    handleAcceptEarlyPayout();
+                                                }
+                                            }} 
+                                            disabled={isUpdating}
+                                            className={`w-full py-4 ${trustTier === 3 ? 'bg-slate-700' : 'bg-indigo-600 hover:bg-indigo-500'} text-white font-black rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2`}
+                                        >
+                                            {trustTier === 1 ? <Download className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                                            {isUpdating ? 'Processing...' : trustTier === 1 ? 'Accept Instant Offer' : trustTier === 2 ? 'Request Early Payout' : 'Locked'}
                                         </button>
                                     </div>
                                 )}

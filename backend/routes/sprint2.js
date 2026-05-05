@@ -1178,6 +1178,19 @@ router.patch('/payouts/:id/discount', async (req, res) => {
     const { id } = req.params;
     const { early_date, new_amount } = req.body;
     try {
+        const { data: existingPayout } = await supabase.from('payout_schedules').select('id, supplier_email').eq('id', id).single();
+        if (!existingPayout) return res.status(404).json({ error: 'Payout not found' });
+
+        // Fetch trust tier
+        const { data: trust } = await supabase.from('vendor_trust_profiles')
+            .select('trust_tier')
+            .eq('supplier_email', existingPayout.supplier_email)
+            .single();
+        const tier = trust?.trust_tier || 2;
+        if (tier !== 1) {
+            return res.status(403).json({ error: 'Only Strategic Partners (Tier 1) can accept instant early payout with discount.' });
+        }
+
         const { data, error } = await supabase
             .from('payout_schedules')
             .update({
@@ -1210,6 +1223,52 @@ router.patch('/payouts/:id/discount', async (req, res) => {
         res.status(500).json({ error: 'Failed to apply discount' });
     }
 });
+
+// Supplier requests early payout – only for Tier 2 (Standard). Tier 1 uses discount directly.
+router.post('/payouts/:id/request-early', async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Fetch current payout
+        const { data: payout, error: fetchErr } = await supabase
+            .from('payout_schedules')
+            .select('*')
+            .eq('id', id)
+            .single();
+        if (fetchErr || !payout) return res.status(404).json({ error: 'Payout not found' });
+
+        // Restrict to Tier 2 only (backend enforcement)
+        const { data: trust } = await supabase
+            .from('vendor_trust_profiles')
+            .select('trust_tier')
+            .eq('supplier_email', payout.supplier_email)
+            .single();
+        const tier = trust?.trust_tier || 2;
+        if (tier !== 2) {
+            return res.status(403).json({ error: 'Only Standard Tier suppliers can request early payout with review.' });
+        }
+
+        const { error: updateErr } = await supabase
+            .from('payout_schedules')
+            .update({ status: 'Early Payment Requested (Pending Review)' })
+            .eq('id', id);
+        if (updateErr) throw updateErr;
+
+        // Notify Finance
+        await supabase.from('notifications').insert([{
+            user_role: 'Finance',
+            title: '🔄 Early Payout Requested',
+            message: `Supplier ${payout.supplier_email} has requested early payout for ${payout.title}. Please review in Treasury.`,
+            link: `/finance?filter=pending`,
+            is_read: false
+        }]);
+
+        res.json({ success: true, message: 'Request sent to Finance for manual review.' });
+    } catch (error) {
+        console.error('Request Early Payout Error:', error);
+        res.status(500).json({ error: 'Failed to request early payout' });
+    }
+});
+
 
 router.get('/lifecycle/transaction/:invoice_ref', async (req, res) => {
     const { invoice_ref } = req.params;

@@ -436,6 +436,14 @@ export default function SupplierDashboard({ user, onLogout }) {
         return Math.round((accuracyScore * 0.6) + (rejectionScore * 0.4));
     }, [myRecons, myBoqs]);
 
+    const trustTier = trustScore >= 90 ? 1 : trustScore >= 70 ? 2 : 3;
+    const tierLabel = trustTier === 1 ? 'Strategic Partner' : trustTier === 2 ? 'Standard Tier' : 'High Risk';
+    const tierRestrictions = trustTier === 1
+        ? 'Instant early payouts available. No manual review.'
+        : trustTier === 2
+            ? 'Early payouts require manual Finance review (1–2 business days).'
+            : 'Early payouts are currently disabled due to your risk profile. Improve your delivery accuracy to unlock.';
+
     const handleMatchUpload = async () => {
         if (!invoiceFile || !poFile) { setError("Upload both files."); return; }
         setLoading(true); setError(null); setMatchStatus('Pending'); setDbStatus('Processing...');
@@ -546,23 +554,55 @@ export default function SupplierDashboard({ user, onLogout }) {
     };
 
 
-    const handleAcceptEarlyPayment = async (payoutId, payoutAmount) => {
-        const discountRate = 0.02;
+    const handleAcceptEarlyPayout = async (payoutId, payoutAmount) => {
+        if (trustTier === 3) {
+            setDialog({
+                title: 'Action Restricted',
+                message: 'Early payouts are currently disabled for your profile. Please contact risk-support@nestle.com to appeal.',
+                type: 'info'
+            });
+            return;
+        }
+
+        if (trustTier === 2) {
+            if (!window.confirm('Tier 2 (Standard) requires manual Finance review. Submit request?')) return;
+            setLoading(true);
+            try {
+                await axios.post(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${payoutId}/request-early`);
+                setDialog({
+                    title: 'Request Submitted',
+                    message: 'Finance will review your early payout request within 1–2 business days.',
+                    type: 'info'
+                });
+                fetchData();
+            } catch (err) {
+                alert('Failed to submit request.');
+            } finally {
+                setLoading(false);
+            }
+            return;
+        }
+
+        // Tier 1 (Strategic) - Direct Discount Flow
+        const discountRate = 0.015;
         const discountAmount = payoutAmount * discountRate;
-        const earlyPaymentAmount = payoutAmount - discountAmount;
+        const finalAmount = payoutAmount - discountAmount;
 
-        if (!window.confirm(`Accept Early Payment?\n\nOriginal Amount: ${formatCurrency(payoutAmount)}\nEarly Payment Discount: ${formatCurrency(discountAmount)} (2%)\nAmount you will receive now: ${formatCurrency(earlyPaymentAmount)}`)) return;
+        if (!window.confirm(`Accept Early Payment?\n\nOriginal: ${formatCurrency(payoutAmount)}\nDiscount: ${formatCurrency(discountAmount)} (1.5%)\nYou receive: ${formatCurrency(finalAmount)}`)) return;
 
+        setLoading(true);
         try {
             await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${payoutId}/discount`, {
-                early_date: new Date().toISOString(),
-                new_amount: earlyPaymentAmount
+                requestedDate: new Date().toISOString(),
+                discountRate,
+                finalAmount
             });
-            alert('Early payment offer accepted! Finance has been notified to accelerate your payout.');
+            setDialog({ title: 'Success', message: 'Liquidity accelerated! Funds are being disbursed.', type: 'info' });
             fetchData();
         } catch (err) {
-            console.error(err);
-            alert('Failed to accept early payment offer.');
+            alert('Failed to process payout.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -1717,21 +1757,37 @@ export default function SupplierDashboard({ user, onLogout }) {
                                         <p className="text-sm text-slate-400">Manage cash flow and request early payouts.</p>
                                     </div>
 
-                                    <div className="bg-gradient-to-r from-indigo-900/80 to-purple-900/80 border border-indigo-500/50 p-5 rounded-xl shadow-lg flex items-start gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center shrink-0">
-                                            <Zap className="w-5 h-5 text-indigo-400" />
+                                    {myPayouts.filter(p => p.status === 'Renegotiated' || p.status === 'Early Payment Requested (Pending Review)').length > 0 && (
+                                        <div className="bg-gradient-to-r from-indigo-900/80 to-purple-900/80 border border-indigo-500/50 p-5 rounded-xl shadow-lg flex items-start gap-4">
+                                            <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center shrink-0">
+                                                <Zap className="w-5 h-5 text-indigo-400" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-base font-bold text-white">Active Liquidity Request</h3>
+                                                <p className="text-sm text-indigo-100 mt-1">You have pending early payout requests. Finance is currently reviewing your schedule to optimize cash delivery.</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h3 className="text-base font-bold text-white">Smart Cash-Flow Alert</h3>
-                                            <p className="text-sm text-indigo-100 mt-1">We noticed you usually require fast liquidity in September. Secure a discounted 1.5% early-payout rate on all active invoices if you claim it this week.</p>
+                                    )}
+
+                                    {trustTier === 1 && myPayouts.filter(p => p.status === 'Scheduled').length > 0 && (
+                                        <div className="bg-gradient-to-r from-emerald-900/80 to-teal-900/80 border border-emerald-500/50 p-5 rounded-xl shadow-lg flex items-start gap-4">
+                                            <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                                                <TrendingUp className="w-5 h-5 text-emerald-400" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-base font-bold text-white">Strategic Liquidity Offer</h3>
+                                                <p className="text-sm text-emerald-100 mt-1">As a Strategic Partner, you can unlock instant early-payouts at a preferred 1.5% rate. No manual review required.</p>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
 
                                     <DigitalCalendar
-                                      key={myPayouts.length} // still useful as a fallback
+                                      key={myPayouts.length}
                                       refreshTrigger={myPayouts.length * 100 + myPayouts.reduce((acc, p) => acc + (p.status || '').length, 0)}
                                       userRole="Supplier"
                                       userEmail={user?.email}
+                                      trustTier={trustTier}
+                                      onAcceptEarlyPayout={handleAcceptEarlyPayout}
                                     />
                                 </div>
                             )}
@@ -1745,6 +1801,19 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     <button type="button" id="tut-quick-match" onClick={() => { setMode('match'); setInvoiceFile(null); setPoFile(null); setShowWalkthrough(false); localStorage.setItem('hasSeenWalkthrough', 'true'); }} className={`w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${showWalkthrough ? 'relative z-[102] ring-4 ring-purple-500 ring-offset-2 ring-offset-slate-900 animate-pulse' : ''} ${spotlightClass('tut-quick-match')}`} title="Upload your Invoice and the Purchase Order to start the 3-Way Match process">🔗 Match Invoice & PO</button>
                                     <button type="button" id="tut-quick-logs" onClick={() => { setMode('logs'); }} className={`w-full py-2 bg-slate-800 text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-700 transition-all flex items-center justify-center gap-2 ${spotlightClass('tut-quick-logs')}`} title="View the complete lifecycle and history of your transactions">📜 View Timeline</button>
                                     <button type="button" id="tut-quick-payouts" onClick={() => setMode('payouts')} className={`w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${spotlightClass('tut-quick-payouts')}`} title="Manage your cash flow and access early payment options via Dynamic Discounting">💸 Liquidity Engine</button>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-900 rounded-xl border border-slate-800 p-5 shadow-sm border-l-4 border-indigo-500">
+                                <h3 className="font-bold text-slate-100 flex items-center gap-2 text-sm mb-2">
+                                    <ShieldCheck className="w-4 h-4 text-indigo-400" /> Tier Restrictions
+                                </h3>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] text-slate-400 uppercase font-bold">Current Tier</span>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${trustTier === 1 ? 'bg-emerald-900/50 text-emerald-400' : trustTier === 2 ? 'bg-blue-900/50 text-blue-400' : 'bg-red-900/50 text-red-400'}`}>{tierLabel}</span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-300 leading-relaxed font-medium">{tierRestrictions}</p>
                                 </div>
                             </div>
 
