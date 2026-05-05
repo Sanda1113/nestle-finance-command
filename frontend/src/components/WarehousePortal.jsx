@@ -281,13 +281,13 @@ const ShipmentCard = React.memo(({ po, onClick, onAcknowledge }) => {
     
     return (
         <div
-            onClick={() => !isCompleted && onClick(po)}
+            onClick={() => onClick(po)}
             className={`group bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border ${isCompleted ? 'border-emerald-500/50' : 'border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl cursor-pointer'} transition-all relative overflow-hidden`}
         >
             {isCompleted && (
                 <div className={`absolute inset-0 ${isCancelled ? 'bg-red-50/20' : 'bg-emerald-50/10'} dark:bg-slate-900/50 backdrop-blur-[1px] flex flex-col items-center justify-center z-10 p-4`}>
                     <span className={`${isCancelled ? 'bg-red-600' : 'bg-emerald-500'} text-white px-4 py-2 rounded-xl font-black flex items-center gap-2 shadow-lg w-full justify-center text-sm`}>
-                        {isCancelled ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />} {isCancelled ? 'CANCELLED' : 'COMPLETED'}
+                        {isCancelled ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />} {isCancelled ? 'CANCELLED' : (status.includes('Cleared') ? 'CLEARED' : 'COMPLETED')}
                     </span>
                     <p className="text-xs text-slate-500 font-bold mt-3 uppercase tracking-wider bg-white dark:bg-slate-800 px-3 py-1 rounded-full">
                         {getShipmentId(po.po_number)}
@@ -1028,6 +1028,11 @@ export default function WarehousePortal({ user, onLogout }) {
         }));
         setReceivedItems(expectedItems);
         setBlindMode(true);
+
+        // If completed, ensure data is visible and editing is disabled
+        if (po.status.includes('Cleared') || po.status.includes('Cancelled')) {
+            setBlindMode(false);
+        }
     };
 
     const handleInputChange = (index, field, value) => {
