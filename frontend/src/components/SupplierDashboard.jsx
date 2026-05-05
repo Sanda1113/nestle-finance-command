@@ -436,7 +436,16 @@ export default function SupplierDashboard({ user, onLogout }) {
         return Math.round((accuracyScore * 0.6) + (rejectionScore * 0.4));
     }, [myRecons, myBoqs]);
 
-    const trustTier = trustScore >= 90 ? 1 : trustScore >= 70 ? 2 : 3;
+    // Compute rejection counts
+    const boqRejections = myBoqs.filter(b => b.status === 'Rejected').length;
+    const invoiceRejections = myRecons.filter(r => String(r.match_status).toLowerCase().includes('reject')).length;
+    // For shipments: count POs with status containing "Cancelled" (rejected by warehouse)
+    const shipmentRejections = myPOs.filter(p => String(p.status || '').toLowerCase().includes('cancelled')).length;
+
+    // Tier logic: based on worst category
+    const maxRejections = Math.max(boqRejections, invoiceRejections, shipmentRejections);
+    const trustTier = maxRejections <= 8 ? 1 : maxRejections <= 10 ? 2 : 3;
+
     const tierLabel = trustTier === 1 ? 'Strategic Partner' : trustTier === 2 ? 'Standard Tier' : 'High Risk';
     const tierRestrictions = trustTier === 1
         ? 'Instant early payouts available. No manual review.'
