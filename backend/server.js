@@ -1028,12 +1028,108 @@ app.patch('/api/purchase_orders/:id/downloaded', async (req, res) => {
     }
 });
 
-// ==========================================
-// 🚀 THE UNIFIED SUPPLIER TIMELINE ENGINE
-// ==========================================
-// ==========================================
-// 🚀 THE UNIFIED SUPPLIER TIMELINE ENGINE (ENHANCED)
-// ==========================================
+app.get('/api/logs', async (req, res) => {
+    try {
+        console.log(`📜 Fetching ALL global logs for Finance Portal`);
+
+        const [
+            { data: boqs, error: boqErr },
+            { data: pos, error: posErr },
+            { data: recs, error: recErr }
+        ] = await Promise.all([
+            supabase
+                .from('boqs')
+                .select('id, document_number, total_amount, status, created_at, rejection_reason, vendor_name, supplier_email'),
+            supabase
+                .from('purchase_orders')
+                .select('id, po_number, total_amount, status, created_at, is_downloaded, supplier_email'),
+            supabase
+                .from('reconciliations')
+                .select('id, invoice_number, match_status, timeline_status, processed_at, supplier_email, po_number')
+        ]);
+
+        if (boqErr) logError('Fetch BOQs for Global Logs', boqErr);
+        if (posErr) logError('Fetch POs for Global Logs', posErr);
+        if (recErr) logError('Fetch Recons for Global Logs', recErr);
+
+        let logs = [];
+
+        // BOQ Timeline Events
+        if (boqs) {
+            boqs.forEach(b => {
+                const isRejected = b.status === 'Rejected';
+                const timelineStatus = isRejected
+                    ? `❌ Rejected - Resubmission Available`
+                    : b.status.includes('PO Generated')
+                        ? `✅ Approved - PO Generated`
+                        : `⏳ Pending Review`;
+
+                logs.push({
+                    id: `boq-${b.id}`,
+                    date: b.created_at,
+                    type: 'BOQ / Quote',
+                    ref: b.document_number,
+                    status: b.status,
+                    timeline: timelineStatus,
+                    action: 'Supplier Upload',
+                    rejection_reason: b.rejection_reason || null,
+                    supplier_email: b.supplier_email,
+                    vendor_name: b.vendor_name
+                });
+            });
+        }
+
+        // PO Timeline Events
+        if (pos) {
+            pos.forEach(p => logs.push({
+                id: `po-${p.id}`,
+                date: p.created_at || new Date().toISOString(),
+                type: 'Official PO Generated',
+                ref: p.po_number,
+                status: p.is_downloaded ? 'Downloaded' : 'Available',
+                timeline: p.is_downloaded ? '✅ Downloaded by Supplier' : '🌟 Ready for Download',
+                action: 'Procurement Approval',
+                supplier_email: p.supplier_email
+            }));
+        }
+
+        // Invoice & Reconciliation Timeline Events
+        if (recs) {
+            recs.forEach(r => {
+                const isApproved = r.match_status === 'Approved';
+                const isRejected = r.match_status === 'Rejected';
+
+                const timelineStatus = isApproved
+                    ? `✅ ${r.timeline_status}`
+                    : isRejected
+                        ? `❌ ${r.timeline_status} - Resubmission Available`
+                        : `⏳ ${r.timeline_status}`;
+
+                logs.push({
+                    id: `rec-${r.id}`,
+                    date: r.processed_at,
+                    type: 'Invoice Match Process',
+                    ref: r.invoice_number,
+                    po_number: r.po_number,
+                    status: r.match_status,
+                    timeline: timelineStatus,
+                    action: 'Finance Review',
+                    supplier_email: r.supplier_email
+                });
+            });
+        }
+
+        // Sort by date (most recent first)
+        logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        console.log(`✅ Returning ${logs.length} global log entries`);
+        res.json({ success: true, data: logs });
+    } catch (error) {
+        logError('Global Logs', error);
+        res.status(500).json({ error: 'Failed to fetch global logs' });
+    }
+});
+
 app.get('/api/supplier/logs/:email', async (req, res) => {
     const { email } = req.params;
     try {
