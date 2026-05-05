@@ -1224,6 +1224,134 @@ router.patch('/payouts/:id/discount', async (req, res) => {
     }
 });
 
+// a) Instant payout for Tier 1
+router.post('/payouts/:id/instant-pay', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { data: payout, error: fetchErr } = await supabase
+            .from('payout_schedules')
+            .select('*')
+            .eq('id', id)
+            .single();
+        if (fetchErr || !payout) return res.status(404).json({ error: 'Payout not found' });
+
+        if (payout.status !== 'Scheduled') {
+            return res.status(400).json({ error: 'Instant payout can only be used on Scheduled payouts.' });
+        }
+
+        // Only Tier 1 can use instant pay
+        const { data: trust } = await supabase
+            .from('vendor_trust_profiles')
+            .select('trust_tier')
+            .eq('supplier_email', payout.supplier_email)
+            .single();
+        const tier = trust?.trust_tier || 2;
+        if (tier !== 1) {
+            return res.status(403).json({ error: 'Instant payout is only available for Strategic Partners (Tier 1).' });
+        }
+
+        const feeRate = 0.04;
+        const newAmount = Math.round((payout.base_amount || payout.final_amount) * (1 - feeRate) * 100) / 100;
+
+        const { error: updateErr } = await supabase
+            .from('payout_schedules')
+            .update({
+                final_amount: newAmount,
+                status: 'Renegotiated',
+                discount_applied: feeRate,
+                early_payout_requested: true,
+                early_payout_accepted_at: new Date().toISOString()
+            })
+            .eq('id', id);
+        if (updateErr) throw updateErr;
+
+        // Notify supplier
+        await supabase.from('notifications').insert({
+            user_email: payout.supplier_email,
+            user_role: 'supplier',
+            title: '⚡ Instant Payout Accepted',
+            message: `Your payout of ${formatCurrency(newAmount)} (after 4% fee) has been renegotiated. Funds will be disbursed shortly.`,
+            link: '/payouts',
+            is_read: false
+        });
+
+        res.json({ success: true, message: 'Instant payout renegotiated with 4% fee.' });
+    } catch (error) {
+        console.error('Instant Pay Error:', error);
+        res.status(500).json({ error: 'Failed to process instant payout' });
+    }
+});
+
+// b) Finance approves an early payout request (Tier 2)
+router.post('/payouts/:id/approve-instant', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { data: payout, error: fetchErr } = await supabase
+            .from('payout_schedules')
+            .select('*')
+            .eq('id', id)
+            .single();
+        if (fetchErr || !payout) return res.status(404).json({ error: 'Payout not found' });
+
+        if (payout.status !== 'Early Payment Requested (Pending Review)') {
+            return res.status(400).json({ error: 'No pending early payment request.' });
+        }
+
+        const feeRate = 0.04;
+        const newAmount = Math.round((payout.base_amount || payout.final_amount) * (1 - feeRate) * 100) / 100;
+
+        const { error: updateErr } = await supabase
+            .from('payout_schedules')
+            .update({
+                final_amount: newAmount,
+                status: 'Renegotiated',
+                discount_applied: feeRate,
+                early_payout_accepted_at: new Date().toISOString()
+            })
+            .eq('id', id);
+        if (updateErr) throw updateErr;
+
+        // Notify supplier
+        await supabase.from('notifications').insert({
+            user_email: payout.supplier_email,
+            user_role: 'supplier',
+            title: '✅ Early Payout Approved',
+            message: `Finance approved your early payout request for ${payout.title}. New amount after 4% fee: ${formatCurrency(newAmount)}.`,
+            link: '/payouts',
+            is_read: false
+        });
+
+        res.json({ success: true, message: 'Early payout approved with 4% fee.' });
+    } catch (error) {
+        console.error('Approve Early Payout Error:', error);
+        res.status(500).json({ error: 'Failed to approve early payout' });
+    }
+});
+
+// c) Cancel / reject an early payout request
+router.post('/payouts/:id/cancel-early', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { data: payout, error: fetchErr } = await supabase
+            .from('payout_schedules')
+            .select('id')
+            .eq('id', id)
+            .single();
+        if (fetchErr || !payout) return res.status(404).json({ error: 'Payout not found' });
+
+        const { error: updateErr } = await supabase
+            .from('payout_schedules')
+            .update({ status: 'Scheduled' })
+            .eq('id', id);
+        if (updateErr) throw updateErr;
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Cancel Early Error:', error);
+        res.status(500).json({ error: 'Failed to cancel early request' });
+    }
+});
+
 // Supplier requests early payout – only for Tier 2 (Standard). Tier 1 uses discount directly.
 router.post('/payouts/:id/request-early', async (req, res) => {
     const { id } = req.params;
