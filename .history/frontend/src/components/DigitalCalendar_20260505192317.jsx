@@ -6,15 +6,15 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import axios from 'axios';
 import { supabase } from '../utils/supabaseClient';
-import {
-    Calendar as CalendarIcon,
-    Clock,
-    X,
-    CheckCircle2,
-    AlertCircle,
-    DollarSign,
-    Bell,
-    ChevronLeft,
+import { 
+    Calendar as CalendarIcon, 
+    Clock, 
+    X, 
+    CheckCircle2, 
+    AlertCircle, 
+    DollarSign, 
+    Bell, 
+    ChevronLeft, 
     ChevronRight,
     Filter,
     Zap,
@@ -51,39 +51,39 @@ const CustomToolbar = (toolbar) => {
     const currentDate = toolbar.date;
 
     return (
-        <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8 bg-white/5 p-6 rounded-3xl border border-white/5 backdrop-blur-md">
-            <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                    <button onClick={goToBack} className="p-3 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all group shadow-inner">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-10 bg-white/5 p-8 rounded-[2rem] border border-white/5 backdrop-blur-md">
+            <div className="flex items-center gap-8">
+                <div className="flex items-center gap-3">
+                    <button onClick={goToBack} className="p-3.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all group shadow-inner">
                         <ChevronLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
                     </button>
-                    <button onClick={goToToday} className="px-6 py-3 text-sm font-black text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all shadow-inner uppercase tracking-widest">Today</button>
-                    <button onClick={goToNext} className="p-3 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all group shadow-inner">
+                    <button onClick={goToToday} className="px-8 py-3.5 text-xs font-black text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all shadow-inner uppercase tracking-[0.2em]">Today</button>
+                    <button onClick={goToNext} className="p-3.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-white/5 transition-all group shadow-inner">
                         <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                     </button>
                 </div>
                 <div className="text-left">
-                    <h2 className="text-2xl font-black text-white capitalize tracking-tighter mb-1">{toolbar.label}</h2>
+                    <h2 className="text-3xl font-black text-white capitalize tracking-tighter mb-2">{toolbar.label}</h2>
                     <div className="flex gap-2">
-                        <select
-                            value={currentDate.getMonth()}
+                        <select 
+                            value={currentDate.getMonth()} 
                             onChange={(e) => {
                                 const newDate = new Date(currentDate);
                                 newDate.setMonth(parseInt(e.target.value));
                                 toolbar.onNavigate('DATE', newDate);
                             }}
-                            className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1 outline-none hover:bg-white/10 transition-colors"
+                            className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1.5 outline-none hover:bg-white/10 transition-colors"
                         >
                             {moment.months().map((m, i) => <option key={i} value={i} className="bg-slate-900">{m}</option>)}
                         </select>
-                        <select
-                            value={currentDate.getFullYear()}
+                        <select 
+                            value={currentDate.getFullYear()} 
                             onChange={(e) => {
                                 const newDate = new Date(currentDate);
                                 newDate.setFullYear(parseInt(e.target.value));
                                 toolbar.onNavigate('DATE', newDate);
                             }}
-                            className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1 outline-none hover:bg-white/10 transition-colors"
+                            className="bg-white/5 border border-white/10 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1.5 outline-none hover:bg-white/10 transition-colors"
                         >
                             {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => <option key={y} value={y} className="bg-slate-900">{y}</option>)}
                         </select>
@@ -91,27 +91,27 @@ const CustomToolbar = (toolbar) => {
                 </div>
             </div>
 
-            <div className="hidden xl:flex items-center gap-8 px-8 border-x border-white/10">
+            <div className="hidden xl:flex items-center gap-10 px-10 border-x border-white/10">
                 <div>
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Treasury Outflow</p>
-                    <p className="text-xl font-black text-rose-500">{formatCurrency(dailyBurn)}</p>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Treasury Outflow</p>
+                    <p className="text-2xl font-black text-rose-500">{formatCurrency(dailyBurn)}</p>
                 </div>
-                <div className="w-px h-10 bg-white/10"></div>
+                <div className="w-px h-12 bg-white/10"></div>
                 <div>
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Disbursement SLA</p>
-                    <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
-                        <span className="text-sm font-black text-emerald-400">99.8%</span>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Disbursement SLA</p>
+                    <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
+                        <span className="text-base font-black text-emerald-400">99.8%</span>
                     </div>
                 </div>
             </div>
 
-            <div className="flex items-center gap-3 bg-slate-900/50 p-2 rounded-2xl border border-white/5">
+            <div className="flex items-center gap-3 bg-slate-900/50 p-2.5 rounded-2xl border border-white/5">
                 {['month', 'week', 'day', 'agenda'].map((v) => (
                     <button
                         key={v}
                         onClick={() => toolbar.onView(v)}
-                        className={`px-6 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${toolbar.view === v ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                        className={`px-7 py-3 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all ${toolbar.view === v ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
                     >
                         {v}
                     </button>
@@ -148,18 +148,22 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
         const cfg = getStatusCfg(event.status);
         const isOverdue = moment(event.start).isBefore(moment(), 'day') && event.status !== 'Paid';
         return {
-            className: `bg-gradient-to-br ${cfg.bg} backdrop-blur-md border border-white/10 rounded-xl shadow-lg ${cfg.glow} hover:scale-[1.02] active:scale-95 transition-all duration-300 ${isOverdue ? 'ring-2 ring-rose-500 animate-pulse' : ''}`,
+            className: `rbc-event-glass ${cfg.glow} ${isOverdue ? 'ring-2 ring-rose-500 animate-pulse' : ''}`,
             style: {
+                backgroundColor: `var(--tw-gradient-from, ${cfg.bg.split(' ')[0]})`,
+                backgroundImage: `linear-gradient(to bottom right, ${cfg.bg})`,
                 fontSize: '10px',
-                fontWeight: '900',
-                padding: '6px 10px',
+                fontWeight: 900,
+                padding: '4px 8px',
                 color: 'white',
-                minHeight: '28px',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.15)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                letterSpacing: '0.025em',
+                cursor: isFinance ? 'grab' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
-                letterSpacing: '0.025em',
-                cursor: isFinance ? 'grab' : 'pointer'
             }
         };
     };
@@ -170,19 +174,19 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
             console.warn('[DigitalCalendar] Skipping fetch: cleanEmail is missing for Supplier');
             return;
         }
-
+        
         setLoading(true);
         try {
             const url = 'https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts';
             const params = isFinance ? {} : { email: cleanEmail };
-
+            
             const res = await axios.get(url, { params });
             if (res.data.success) {
                 const mapped = (res.data.data || []).map(p => ({
                     ...p,
                     id: p.id,
                     start: new Date(p.start_date),
-                    end: new Date(p.end_date || p.start_date),
+                    end:   new Date(p.end_date || p.start_date),
                     allDay: false,
                     title: `${getStatusCfg(p.status).icon} ${p.title || 'Payout'}`,
                     status: p.status,
@@ -197,8 +201,8 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
         }
     }, [isFinance, userEmail]);
 
-    useEffect(() => {
-        fetchEvents();
+    useEffect(() => { 
+        fetchEvents(); 
 
         const channel = supabase
             .channel('digital_calendar_sync')
@@ -223,7 +227,7 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
     const updateEventDate = useCallback(async (id, start, end) => {
         // Optimistic UI update
         setEvents(prev => prev.map(ev => String(ev.id) === String(id) ? { ...ev, start, end } : ev));
-
+        
         try {
             await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${id}`, {
                 start_date: start.toISOString(),
@@ -313,9 +317,9 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
             await fetchEvents();
             setSelectedEvent(null);
             alert('⚡ Liquidity successfully accelerated! Your funds are being transferred.');
-        } catch (error) {
+        } catch (error) { 
             const msg = error.response?.data?.error || 'Failed to request early payout';
-            alert('❌ ' + msg);
+            alert('❌ ' + msg); 
         }
         finally { setIsUpdating(false); }
     };
@@ -324,10 +328,10 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
 
     return (
         <div className="flex flex-col lg:flex-row gap-6 p-1">
-
+            
             {/* Sidebar with Insights & Reminders */}
             <div className="w-full lg:w-80 shrink-0 space-y-6">
-
+                
                 {/* Liquidity Stats Card */}
                 <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-2xl">
                     <div className="flex items-center justify-between mb-6">
@@ -413,6 +417,18 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
             <div className="flex-1 min-w-0">
                 <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
                     <style>{`
+                        .rbc-event-glass {
+                            backdrop-filter: blur(4px);
+                        }
+                        .rbc-month-view .rbc-month-row {
+                            min-height: 120px;
+                        }
+                        .rbc-day-bg {
+                            transition: background-color 0.2s;
+                        }
+                        .rbc-day-bg:hover {
+                            background-color: rgba(99, 102, 241, 0.05) !important;
+                        }
                         .rbc-calendar { 
                             min-height: 750px; 
                             font-family: inherit; 
@@ -458,15 +474,6 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
                             text-transform: uppercase;
                         }
                         .rbc-month-row { overflow: visible; }
-                        .rbc-month-view .rbc-month-row {
-                            min-height: 100px;
-                        }
-                        .rbc-day-bg {
-                            transition: background-color 0.2s;
-                        }
-                        .rbc-day-bg:hover {
-                            background-color: rgba(99, 102, 241, 0.05) !important;
-                        }
                     `}</style>
 
                     <CalComponent
@@ -501,7 +508,7 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
                 <div className="fixed inset-0 z-[150] flex items-center justify-end p-6 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="absolute inset-0" onClick={() => setSelectedEvent(null)}></div>
                     <div className="relative w-full max-w-md h-full bg-slate-900 border border-slate-800 rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col animate-in slide-in-from-right-10 duration-500">
-
+                        
                         {/* Detail Header */}
                         <div className={`p-8 bg-gradient-to-br ${getStatusCfg(selectedEvent.status).bg} relative overflow-hidden`}>
                             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
@@ -525,7 +532,7 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
 
                         {/* Detail Content */}
                         <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-
+                            
                             {/* Primary Info Cards */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-slate-800/40 border border-slate-700/50 p-5 rounded-3xl">
@@ -549,10 +556,11 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
                                 </div>
 
                                 {selectedEvent.status !== 'Paid' && (
-                                    <div className={`flex items-center gap-4 p-5 rounded-[2rem] border ${daysUntilPayout === 0 ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' :
-                                            daysUntilPayout <= 3 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
-                                                'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                                        }`}>
+                                    <div className={`flex items-center gap-4 p-5 rounded-[2rem] border ${
+                                        daysUntilPayout === 0 ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' :
+                                        daysUntilPayout <= 3 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
+                                        'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                                    }`}>
                                         <div className="p-3 bg-white/10 rounded-2xl"><Clock className="w-6 h-6" /></div>
                                         <div>
                                             <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Payout Counter</p>
@@ -593,11 +601,11 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
                                             </div>
                                             <span className="text-xs font-black text-indigo-400 bg-indigo-500/20 px-3 py-1 rounded-full">{discountRate.toFixed(1)}% Rate</span>
                                         </div>
-
+                                        
                                         <input type="range" min="1" max="5" step="0.1" value={discountRate}
                                             onChange={(e) => setDiscountRate(Number(e.target.value))}
                                             className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-indigo-500" />
-
+                                        
                                         <div className="space-y-2">
                                             <div className="flex justify-between text-xs font-bold text-slate-500"><span>Gross Amount</span><span>{formatCurrency(selectedEvent.amount)}</span></div>
                                             <div className="flex justify-between text-xs font-bold text-rose-500"><span>Service Fee</span><span>-{formatCurrency(discountAmount)}</span></div>
