@@ -121,7 +121,7 @@ const CustomToolbar = (toolbar) => {
     );
 };
 
-export default function DigitalCalendar({ userRole, userEmail }) {
+export default function DigitalCalendar({ userRole, userEmail, refreshTrigger }) {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState(null);
@@ -215,6 +215,10 @@ export default function DigitalCalendar({ userRole, userEmail }) {
             supabase.removeChannel(channel);
         };
     }, [fetchEvents]);
+
+    useEffect(() => {
+        fetchEvents();
+    }, [refreshTrigger, fetchEvents]);
 
     const updateEventDate = useCallback(async (id, start, end) => {
         // Optimistic UI update
