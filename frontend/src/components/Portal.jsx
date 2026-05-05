@@ -561,6 +561,7 @@ function FinancePortal({ user }) {
     const [records, setRecords] = useState([]);
     const [boqs, setBoqs] = useState([]);
     const [pos, setPOs] = useState([]);
+    const [payouts, setPayouts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('All');
     const [reviewSearchTerm, setReviewSearchTerm] = useState('');
@@ -611,7 +612,14 @@ function FinancePortal({ user }) {
             }).then(res => setLogs(res.data.data || []))
                 .catch(error => { if (import.meta.env.DEV) console.warn('Finance polling request failed (logs):', error); });
 
-            await Promise.all([p1, p2, p3, p4]);
+            const p5 = axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts', {
+                params: { _ts: Date.now() },
+                timeout: DASHBOARD_FETCH_TIMEOUT_MS,
+                headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
+            }).then(res => setPayouts(res.data.data || []))
+                .catch(error => { if (import.meta.env.DEV) console.warn('Finance polling request failed (payouts):', error); });
+
+            await Promise.all([p1, p2, p3, p4, p5]);
         } finally {
             isFetchingDataRef.current = false;
         }
@@ -672,21 +680,6 @@ function FinancePortal({ user }) {
     }, [fetchData]);
 
 
-    const handleStagePayout = async (record) => {
-        try {
-            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/stage', {
-                invoice_ref: record.id,
-                supplier_email: record.vendor_email || 'supplier@nestle.com',
-                total_amount: record.invoice_total
-            });
-            alert('Payout Staged successfully!');
-            fetchData(false);
-        } catch (err) {
-            console.error(err);
-            alert('Failed to stage payout.');
-        }
-    };
-
     const handleManualOverride = async (id, decision) => {
         const confirmMsg = decision === 'Approved'
             ? "Are you sure you want to manually APPROVE this document?"
@@ -698,10 +691,29 @@ function FinancePortal({ user }) {
 
         try {
             await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/reconciliations/${id}`, { newStatus: decision });
+            // Ensure status updates immediately in local state if needed, but fetchData(false) should handle it
             fetchData(false);
         } catch {
             alert("Failed to update status.");
             setActionedRecords(prev => ({ ...prev, [id]: false }));
+        }
+    };
+
+    const handleStagePayout = async (record) => {
+        if (actionedRecords[`stage_${record.id}`]) return;
+        setActionedRecords(prev => ({ ...prev, [`stage_${record.id}`]: true }));
+        try {
+            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/stage', {
+                invoice_ref: record.id,
+                supplier_email: record.vendor_email || 'supplier@nestle.com',
+                total_amount: record.invoice_total
+            });
+            alert('Payout Staged successfully!');
+            fetchData(false);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to stage payout.');
+            setActionedRecords(prev => ({ ...prev, [`stage_${record.id}`]: false }));
         }
     };
 
@@ -836,13 +848,33 @@ function FinancePortal({ user }) {
                 events.push({ label: 'Goods Cleared', date: po.updated_at, status: 'completed', icon: '✅' });
             }
 
+            // Steps 9-11: Treasury & Payouts (Enriched from Payout Schedules)
+            const payout = payouts.find(p => p.reconciliation_id === relatedRecon?.id || p.po_number === po.po_number);
+            if (payout) {
+                if (payout.status === 'Pending Finance') {
+                    events.push({ label: 'Payout Staged', date: payout.created_at, status: 'completed', icon: '⏳' });
+                } else {
+                    const isPaid = payout.status === 'Paid';
+                    const isHold = payout.status === 'Hold';
+                    const isScheduled = payout.status === 'Scheduled' || payout.status === 'Early Payment Requested';
+
+                    events.push({
+                        label: isPaid ? 'Paid' : isHold ? 'Payment Hold' : isScheduled ? 'Payout Scheduled' : `Payout: ${payout.status}`,
+                        date: payout.updated_at || payout.created_at,
+                        status: isPaid ? 'completed' : isHold ? 'warning' : 'completed',
+                        icon: isPaid ? '💰' : isHold ? '⏸️' : '📅'
+                    });
+                }
+            }
+
             relatedLogs.forEach(log => {
                 const action = String(log.action || '').toLowerCase();
                 const date = log.created_at || log.date;
-                if (action.includes('payout staged')) events.push({ label: 'Payout Staged', date, status: 'completed', icon: '⏳' });
-                if (action.includes('payout scheduled')) events.push({ label: 'Payout Scheduled', date, status: 'completed', icon: '📅' });
-                if (action.includes('payment hold')) events.push({ label: 'Payment Hold', date, status: 'warning', icon: '⏸️' });
-                if (action.includes('paid') || action.includes('disbursed')) events.push({ label: 'Paid', date, status: 'completed', icon: '💰', isPaid: true });
+                // Only add if not already covered by payout schedule logic to avoid duplicates
+                if (action.includes('payout staged') && !events.some(e => e.label === 'Payout Staged')) events.push({ label: 'Payout Staged', date, status: 'completed', icon: '⏳' });
+                if (action.includes('payout scheduled') && !events.some(e => e.label === 'Payout Scheduled')) events.push({ label: 'Payout Scheduled', date, status: 'completed', icon: '📅' });
+                if (action.includes('payment hold') && !events.some(e => e.label === 'Payment Hold')) events.push({ label: 'Payment Hold', date, status: 'warning', icon: '⏸️' });
+                if ((action.includes('paid') || action.includes('disbursed')) && !events.some(e => e.label === 'Paid')) events.push({ label: 'Paid', date, status: 'completed', icon: '💰', isPaid: true });
             });
 
             // Guarantee logical chronological sorting
@@ -929,7 +961,7 @@ function FinancePortal({ user }) {
         });
 
         return timelines;
-    }, [pos, records, boqs, logs]);
+    }, [pos, records, boqs, logs, payouts]);
 
     const filteredRecords = enrichedRecords.filter(r => {
         if (filter === 'All') return true;
@@ -1114,16 +1146,15 @@ function FinancePortal({ user }) {
                     <table className="w-full text-left text-sm min-w-[1100px]">
                         <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 uppercase text-xs font-bold tracking-wider">
                             <tr>
-                                <th className="p-4 border-b border-slate-200 dark:border-slate-800">Date</th>
+                                <th className="p-4 border-b border-slate-200 dark:border-slate-800">Date & Time</th>
                                 <th className="p-4 border-b border-slate-200 dark:border-slate-800">Vendor</th>
                                 <th className="p-4 border-b border-slate-200 dark:border-slate-800">Shipment ID / PO</th>
-                                <th className="p-4 border-b border-slate-200 dark:border-slate-800">Inv Total</th>
+                                <th className="p-4 border-b border-slate-200 dark:border-slate-800">Invoice Total</th>
                                 <th className="p-4 border-b border-slate-200 dark:border-slate-800">PO Total</th>
-                                <th className="p-4 border-b border-slate-200 dark:border-slate-800">PO Upload Time</th>
-                                <th className="p-4 border-b border-slate-200 dark:border-slate-800">Invoice Upload Time</th>
                                 <th className="p-4 border-b border-slate-200 dark:border-slate-800">Status</th>
                                 <th className="p-4 border-b border-slate-200 dark:border-slate-800 text-center">Chat Hub</th>
-                                <th className="p-4 border-b border-slate-200 dark:border-slate-800 text-right">Finance Action</th>
+                                <th className="p-4 border-b border-slate-200 dark:border-slate-800 text-right">Finance Action - Bills</th>
+                                <th className="p-4 border-b border-slate-200 dark:border-slate-800 text-center">Payout</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1144,10 +1175,12 @@ function FinancePortal({ user }) {
                                 const poUploadTime = relatedBoq ? new Date(relatedBoq.created_at) : null;
                                 const invoiceUploadTime = r.processed_at ? new Date(r.processed_at) : null;
 
-                                return (
+                                 return (
                                     <>
                                         <tr key={r.id} className={`hover:bg-slate-50 dark:bg-slate-800/30 transition-colors ${isExpanded ? 'bg-slate-50 dark:bg-slate-800/20' : ''}`}>
-                                            <td className="p-4 font-mono text-xs text-slate-400">{new Date(r.processed_at).toLocaleDateString()}</td>
+                                            <td className="p-4 font-mono text-xs text-slate-400">
+                                                {new Date(r.processed_at).toLocaleString()}
+                                            </td>
                                             <td className="p-4 font-bold text-slate-800 dark:text-slate-200">
                                                 <div className="mb-1">{r.vendor_name || 'Unknown'}</div>
                                                 <div className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${r.trustColor}`}>
@@ -1161,12 +1194,6 @@ function FinancePortal({ user }) {
                                             </td>
                                             <td className="p-4 font-black text-slate-700 dark:text-slate-300">{formatCurrency(r.invoice_total)}</td>
                                             <td className="p-4 font-black text-slate-700 dark:text-slate-300">{formatCurrency(r.po_total)}</td>
-                                            <td className="p-4 text-xs text-slate-500 dark:text-slate-400">
-                                                {poUploadTime ? poUploadTime.toLocaleString() : 'N/A'}
-                                            </td>
-                                            <td className="p-4 text-xs text-slate-500 dark:text-slate-400">
-                                                {invoiceUploadTime ? invoiceUploadTime.toLocaleString() : 'N/A'}
-                                            </td>
                                             <td className="p-4">
                                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ring-1 ring-inset ${r.displayStatus.includes('Approved') ? 'bg-emerald-50 text-emerald-600 ring-emerald-500/20' : r.displayStatus.includes('Matched') ? 'bg-blue-50 text-blue-600 ring-blue-500/20' : r.displayStatus.includes('Pending') ? 'bg-amber-50 text-amber-600 ring-amber-500/20' : 'bg-red-50 text-red-600 ring-red-500/20'}`}>
                                                     {r.displayStatus}
@@ -1178,38 +1205,46 @@ function FinancePortal({ user }) {
                                                     onClick={() => setExpandedRow(isExpanded ? null : r.id)}
                                                     className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-colors ${isExpanded ? 'bg-slate-700 text-white dark:bg-slate-300 dark:text-slate-900' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300'}`}
                                                 >
-                                                    {isExpanded ? '▼ Close' : '💬 Open Chat'}
+                                                    {isExpanded ? '▼ Close' : '💬 Open Chat Hub'}
                                                 </button>
                                             </td>
                                             <td className="p-4 text-right">
                                                 <div className="flex flex-wrap justify-end gap-1.5">
-                                                    {(r.match_status === 'Approved' && isGrnCompleted) ? (
+                                                    <button
+                                                        type="button"
+                                                        disabled={isActioned}
+                                                        onClick={(e) => { e.stopPropagation(); handleManualOverride(r.id, 'Approved'); }}
+                                                        className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded transition-colors ${isActioned ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-100 dark:bg-slate-800 hover:bg-emerald-500 hover:text-white text-slate-600 dark:text-slate-300'}`}
+                                                    >
+                                                        {r.displayStatus.includes('Approved') ? 'Approved' : 'Approve'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={isActioned}
+                                                        onClick={(e) => { e.stopPropagation(); handleManualOverride(r.id, 'Rejected'); }}
+                                                        className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded transition-colors ${isActioned ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-100 dark:bg-slate-800 hover:bg-red-500 hover:text-white text-slate-600 dark:text-slate-300'}`}
+                                                    >
+                                                        {r.displayStatus.includes('Reject') ? 'Rejected' : 'Reject'}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                {(() => {
+                                                    const existingPayout = payouts.find(p => p.reconciliation_id === r.id || p.po_number === r.po_number);
+                                                    const isStaged = existingPayout || actionedRecords[`stage_${r.id}`];
+                                                    
+                                                    return (
                                                         <button
                                                             type="button"
+                                                            disabled={!isGrnCompleted || r.match_status !== 'Approved' || isStaged}
                                                             onClick={(e) => { e.stopPropagation(); handleStagePayout(r); }}
-                                                            className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                                                            className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded transition-colors ${(!isGrnCompleted || r.match_status !== 'Approved' || isStaged) ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm'}`}
+                                                            title={!isGrnCompleted ? "Awaiting Warehouse Clearing" : isStaged ? "Already Staged" : "Stage for Payout"}
                                                         >
-                                                            Stage Payout
+                                                            {isStaged ? 'Staged' : 'Stage Payout'}
                                                         </button>
-                                                    ) : (
-                                                        <>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => { e.stopPropagation(); handleManualOverride(r.id, 'Approved'); }}
-                                                                className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-500 hover:text-white transition-colors text-slate-600 dark:text-slate-300"
-                                                            >
-                                                                Approve
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => { e.stopPropagation(); handleManualOverride(r.id, 'Rejected'); }}
-                                                                className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded bg-slate-100 dark:bg-slate-800 hover:bg-red-500 hover:text-white transition-colors text-slate-600 dark:text-slate-300"
-                                                            >
-                                                                Reject
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
+                                                    );
+                                                })()}
                                             </td>
                                         </tr>
                                         {isExpanded && (

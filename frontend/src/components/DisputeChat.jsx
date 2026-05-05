@@ -269,7 +269,6 @@ Approach:
                 </div>
             </div>
 
-            <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/50">
                 <button
                     type="button"
                     onClick={() => setChatMode('human')}
@@ -277,14 +276,15 @@ Approach:
                 >
                     <User className="w-4 h-4" /> Live Chat
                 </button>
-                <button
-                    type="button"
-                    onClick={() => setChatMode('ai')}
-                    className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 transition-all ${chatMode === 'ai' ? 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 border-b-2 border-purple-500 shadow-sm' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800/80'}`}
-                >
-                    <Bot className="w-4 h-4" /> AI Chat
-                </button>
-            </div>
+                {userRole !== 'Finance' && (
+                    <button
+                        type="button"
+                        onClick={() => setChatMode('ai')}
+                        className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 transition-all ${chatMode === 'ai' ? 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 border-b-2 border-purple-500 shadow-sm' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800/80'}`}
+                    >
+                        <Bot className="w-4 h-4" /> AI Chat
+                    </button>
+                )}
 
             {userRole === 'Finance' && varianceType && disputeStatus === 'Open' && chatMode === 'human' && (
                 <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 border-b border-red-100 dark:border-red-900/50 p-3 px-5 flex items-start gap-3 shrink-0">
@@ -373,7 +373,7 @@ Approach:
             </div>
 
             <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0">
-                {userRole === 'Finance' && chatMode === 'human' && (
+                {chatMode === 'human' && (
                     <div className="flex border-b border-slate-100 dark:border-slate-800">
                         <button type="button" onClick={() => setIsFormMode(false)} className={`flex-1 py-2 text-xs font-bold ${!isFormMode ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>💬 Quick Chat</button>
                         <button type="button" onClick={() => setIsFormMode(true)} className={`flex-1 py-2 text-xs font-bold flex items-center justify-center gap-1 ${isFormMode ? 'text-red-600 border-b-2 border-red-600' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><FileSpreadsheet className="w-3 h-3" /> Submit Dispute Form</button>
@@ -393,14 +393,7 @@ Approach:
                     </div>
                 ) : (
                     <>
-                        {userRole === 'Finance' && chatMode === 'human' && disputeStatus !== 'Resolved' && (
-                            <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap gap-2">
-                                <span className="text-[10px] font-black uppercase text-slate-500 w-full mb-1 flex items-center gap-1"><FileSignature className="w-3 h-3" /> Support Actions</span>
-                                <button type="button" onClick={() => handleFormalAction('Issue Credit Note')} className="flex-1 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-md transition-all shadow-sm">Credit Note</button>
-                                <button type="button" onClick={() => handleFormalAction('Force Auto-Approve')} className="flex-1 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-emerald-500 text-emerald-600 dark:text-emerald-400 text-xs font-bold rounded-md transition-all shadow-sm">Force Approve</button>
-                                <button type="button" onClick={() => handleFormalAction('Escalate to Procurement')} className="flex-1 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-red-500 text-red-600 dark:text-red-400 text-xs font-bold rounded-md transition-all shadow-sm">Escalate</button>
-                            </div>
-                        )}
+                        {/* Removed Support Actions as per Bug 2 requirements */}
 
                         {chatMode === 'human' && (
                             <div className="px-4 py-2 flex gap-2 overflow-x-auto no-scrollbar">

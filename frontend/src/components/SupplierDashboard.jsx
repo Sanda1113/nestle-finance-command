@@ -1026,15 +1026,23 @@ export default function SupplierDashboard({ user, onLogout }) {
                     <div className="grid grid-cols-2 gap-3 mb-4">
                         <div className="col-span-2">
                             <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Vendor Name</p>
-                            <p className="font-medium text-slate-200 truncate">{data.vendorName}</p>
+                            <p className="font-medium text-slate-200 truncate">{data.vendorName || 'Not Found'}</p>
                         </div>
                         <div>
                             <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Doc #</p>
-                            <p className="font-medium text-slate-200 truncate">{data.invoiceNumber}</p>
+                            <p className="font-medium text-slate-200 truncate">{data.invoiceNumber || 'Not Found'}</p>
                         </div>
                         <div>
                             <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Date</p>
-                            <p className="text-slate-300">{data.invoiceDate}</p>
+                            <p className="text-slate-300">{data.invoiceDate || 'Not Found'}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Subtotal</p>
+                            <p className="text-slate-300">{formatCurrency(data.subtotalAmount || (data.totalAmount - (data.taxAmount || 0)), currency)}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Tax</p>
+                            <p className="text-slate-300">{formatCurrency(data.taxAmount || 0, currency)}</p>
                         </div>
                     </div>
                     <div className="mb-4 grow">

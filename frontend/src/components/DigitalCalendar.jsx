@@ -37,7 +37,8 @@ const getStatusCfg = (status) => {
         case 'Scheduled': return { bg: 'from-blue-400/90 to-indigo-600/90', icon: '📅', glow: 'shadow-[0_0_20px_rgba(96,165,250,0.3)]', label: 'Scheduled' };
         case 'Hold': return { bg: 'from-amber-400/90 to-orange-600/90', icon: '⏸️', glow: 'shadow-[0_0_20px_rgba(251,191,36,0.3)]', label: 'On Hold' };
         case 'Early Payment Requested': return { bg: 'from-purple-400/90 to-pink-600/90', icon: '⚡', glow: 'shadow-[0_0_20px_rgba(192,132,252,0.3)]', label: 'Early Payout' };
-        default: return { bg: 'from-slate-400/90 to-slate-600/90', icon: '❓', glow: 'shadow-[0_0_20px_rgba(148,163,184,0.3)]', label: 'Other' };
+        case 'Pending Finance': return { bg: 'from-blue-400/90 to-indigo-600/90', icon: '⏳', glow: 'shadow-[0_0_20px_rgba(96,165,250,0.3)]', label: 'To be paid' };
+        default: return { bg: 'from-slate-400/90 to-slate-600/90', icon: '❓', glow: 'shadow-[0_0_20px_rgba(148,163,184,0.3)]', label: 'To be paid' };
     }
 };
 

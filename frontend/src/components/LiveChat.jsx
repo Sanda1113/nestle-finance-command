@@ -13,10 +13,10 @@ function getChannel(roleA, roleB) {
 
 // Map each role to the recipients it can message
 const RECIPIENTS = {
-    Supplier: ['Finance', 'Warehouse'],
+    Supplier: ['Finance', 'Warehouse', 'Procurement'],
     Finance: ['Supplier', 'Warehouse', 'Procurement'],
     Warehouse: ['Supplier', 'Finance'],
-    Procurement: ['Finance'],
+    Procurement: ['Finance', 'Supplier'],
 };
 
 const ROLE_COLORS = {

@@ -268,6 +268,68 @@ const BarcodeScannerUI = ({ onScanSuccess, onClose }) => {
     );
 };
 
+const ShipmentCard = React.memo(({ po, onClick, onAcknowledge }) => {
+    const status = String(po.status || '');
+    const isCancelled = status.includes('Cancelled');
+    const isCompleted = status.includes('Cleared') || isCancelled;
+    
+    return (
+        <div
+            onClick={() => !isCompleted && onClick(po)}
+            className={`group bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border ${isCompleted ? 'border-emerald-500/50' : 'border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl cursor-pointer'} transition-all relative overflow-hidden`}
+        >
+            {isCompleted && (
+                <div className={`absolute inset-0 ${isCancelled ? 'bg-red-50/20' : 'bg-emerald-50/10'} dark:bg-slate-900/50 backdrop-blur-[1px] flex flex-col items-center justify-center z-10 p-4`}>
+                    <span className={`${isCancelled ? 'bg-red-600' : 'bg-emerald-500'} text-white px-4 py-2 rounded-xl font-black flex items-center gap-2 shadow-lg w-full justify-center text-sm`}>
+                        {isCancelled ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />} {isCancelled ? 'CANCELLED' : 'COMPLETED'}
+                    </span>
+                    <p className="text-xs text-slate-500 font-bold mt-3 uppercase tracking-wider bg-white dark:bg-slate-800 px-3 py-1 rounded-full">
+                        {getShipmentId(po.po_number)}
+                    </p>
+                </div>
+            )}
+            <div className={`absolute top-0 left-0 w-1.5 h-full ${po.trustScore >= 90 ? 'bg-emerald-500' : po.trustScore >= 75 ? 'bg-blue-500' : 'bg-red-500'} group-hover:w-2 transition-all`}></div>
+            <div className="flex justify-between items-start mb-2">
+                <div>
+                    <h3 className="font-black text-lg sm:text-xl text-slate-800 dark:text-white mb-0.5 leading-tight">
+                        {getShipmentId(po.po_number)}
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-mono mb-2">REF: {po.po_number}</p>
+                </div>
+                <span className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2 py-1 rounded-full shrink-0 ${po.trustScore >= 90 ? 'bg-emerald-100 text-emerald-700' : po.trustScore >= 75 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                    {po.trustScore >= 90 ? <ShieldCheck className="w-3 h-3 shrink-0" /> : <ShieldAlert className="w-3 h-3 shrink-0" />}
+                    <span className="hidden sm:inline">Trust: </span>{po.trustScore}
+                </span>
+            </div>
+            <div className="mb-4">
+                {po.po_data?.delivery_timestamp ? (
+                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-md border border-blue-200 dark:border-blue-800/50 text-[10px] font-bold uppercase tracking-wider">
+                        <Truck className="w-3 h-3" /> Arrived: {new Date(po.po_data.delivery_timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                ) : (
+                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 rounded-md border border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-wider">
+                        <Truck className="w-3 h-3" /> In Transit
+                    </div>
+                )}
+            </div>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium truncate mb-4">{po.supplier_email}</p>
+            <div className="flex justify-between items-center text-[10px] sm:text-xs font-bold mt-4">
+                <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg flex items-center gap-1">
+                    <Package className="w-3 h-3 shrink-0" /> {po.po_data?.lineItems?.length || 0} Pallets
+                </span>
+                {(po.po_data?.delivery_timestamp && !po.status?.includes('Bay') && !po.status?.includes('Received') && !po.status?.includes('Cleared') && !po.status?.includes('Cancelled')) && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onAcknowledge(po); }}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+                    >
+                        <CheckCircle2 className="w-3 h-3" /> Acknowledge Arrival
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+});
+
 export default function WarehousePortal({ user, onLogout }) {
     const [pos, setPOs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -1250,25 +1312,28 @@ export default function WarehousePortal({ user, onLogout }) {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    const rawPendingList = pos.filter(po => {
-        const status = String(po.status || '');
-        const isCompleted = status.includes('Cleared') || status.includes('Cancelled');
-        const isDeliveredToDock = WAREHOUSE_PROCESSABLE_STATUSES.has(status) || Boolean(po.po_data?.delivery_timestamp);
-        return !isCompleted && isDeliveredToDock;
-    });
+    const pendingList = useMemo(() => {
+        return pos.filter(po => {
+            const status = String(po.status || '');
+            return !status.includes('Cleared') && !status.includes('Cancelled');
+        }).sort((a, b) => {
+            const timeA = a.po_data?.delivery_timestamp ? new Date(a.po_data.delivery_timestamp).getTime() : 0;
+            const timeB = b.po_data?.delivery_timestamp ? new Date(b.po_data.delivery_timestamp).getTime() : 0;
+            return timeB - timeA;
+        });
+    }, [pos]);
 
-    const pendingList = [...rawPendingList].sort((a, b) => {
-        const timeA = a.po_data?.delivery_timestamp ? new Date(a.po_data.delivery_timestamp).getTime() : 0;
-        const timeB = b.po_data?.delivery_timestamp ? new Date(b.po_data.delivery_timestamp).getTime() : 0;
-        return timeB - timeA;
-    });
+    const completedList = useMemo(() => {
+        return pos.filter(po => {
+            const status = String(po.status || '');
+            return status.includes('Cleared') || status.includes('Cancelled');
+        });
+    }, [pos]);
 
-    const completedList = pos.filter(po => {
-        const status = String(po.status || '');
-        return status.includes('Cleared') || status.includes('Cancelled');
-    });
-    const activeList = viewMode === 'pending' ? pendingList : completedList;
-    const filteredPOs = activeList.filter(po => po.po_number.toLowerCase().includes(searchTerm.toLowerCase()));
+    const filteredPOs = useMemo(() => {
+        const activeList = viewMode === 'pending' ? pendingList : completedList;
+        return activeList.filter(po => po.po_number.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [viewMode, pendingList, completedList, searchTerm]);
 
     console.log(`[WH] Render state: pos=${pos.length} pending=${pendingList.length} completed=${completedList.length} filtered=${filteredPOs.length} viewMode=${viewMode} searchTerm="${searchTerm}"`);
 
@@ -1609,67 +1674,14 @@ export default function WarehousePortal({ user, onLogout }) {
                                     No {viewMode} shipments found.
                                 </div>
                             ) : (
-                                filteredPOs.map(po => {
-                                    const status = String(po.status || '');
-                                    const isCancelled = status.includes('Cancelled');
-                                    const isCompleted = status.includes('Cleared') || isCancelled;
-                                    return (
-                                        <div
-                                            key={po.id}
-                                            onClick={() => handleSelectPO(po)}
-                                            className={`group bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border ${isCompleted ? 'border-emerald-500/50' : 'border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl cursor-pointer'} transition-all relative overflow-hidden`}
-                                        >
-                                            {isCompleted && (
-                                                <div className={`absolute inset-0 ${isCancelled ? 'bg-red-50/20' : 'bg-emerald-50/10'} dark:bg-slate-900/50 backdrop-blur-[1px] flex flex-col items-center justify-center z-10 p-4`}>
-                                                    <span className={`${isCancelled ? 'bg-red-600' : 'bg-emerald-500'} text-white px-4 py-2 rounded-xl font-black flex items-center gap-2 shadow-lg w-full justify-center text-sm`}>
-                                                        {isCancelled ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />} {isCancelled ? 'CANCELLED' : 'COMPLETED'}
-                                                    </span>
-                                                    <p className="text-xs text-slate-500 font-bold mt-3 uppercase tracking-wider bg-white dark:bg-slate-800 px-3 py-1 rounded-full">
-                                                        {getShipmentId(po.po_number)}
-                                                    </p>
-                                                </div>
-                                            )}
-                                            <div className={`absolute top-0 left-0 w-1.5 h-full ${po.trustScore >= 90 ? 'bg-emerald-500' : po.trustScore >= 75 ? 'bg-blue-500' : 'bg-red-500'} group-hover:w-2 transition-all`}></div>
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div>
-                                                    <h3 className="font-black text-lg sm:text-xl text-slate-800 dark:text-white mb-0.5 leading-tight">
-                                                        {getShipmentId(po.po_number)}
-                                                    </h3>
-                                                    <p className="text-[10px] text-slate-400 font-mono mb-2">REF: {po.po_number}</p>
-                                                </div>
-                                                <span className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2 py-1 rounded-full shrink-0 ${po.trustScore >= 90 ? 'bg-emerald-100 text-emerald-700' : po.trustScore >= 75 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                                                    {po.trustScore >= 90 ? <ShieldCheck className="w-3 h-3 shrink-0" /> : <ShieldAlert className="w-3 h-3 shrink-0" />}
-                                                    <span className="hidden sm:inline">Trust: </span>{po.trustScore}
-                                                </span>
-                                            </div>
-                                            <div className="mb-4">
-                                                {po.po_data?.delivery_timestamp ? (
-                                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-md border border-blue-200 dark:border-blue-800/50 text-[10px] font-bold uppercase tracking-wider">
-                                                        <Truck className="w-3 h-3" /> Arrived: {new Date(po.po_data.delivery_timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                                    </div>
-                                                ) : (
-                                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 rounded-md border border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-wider">
-                                                        <Truck className="w-3 h-3" /> In Transit
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <p className="text-xs sm:text-sm text-slate-500 font-medium truncate mb-4">{po.supplier_email}</p>
-                                            <div className="flex justify-between items-center text-[10px] sm:text-xs font-bold mt-4">
-                                                <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg flex items-center gap-1">
-                                                    <Package className="w-3 h-3 shrink-0" /> {po.po_data?.lineItems?.length || 0} Pallets
-                                                </span>
-                                                {(po.po_data?.delivery_timestamp && !po.status?.includes('Bay') && !po.status?.includes('Received') && !po.status?.includes('Cleared') && !po.status?.includes('Cancelled')) && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleAcknowledgeArrival(po); }}
-                                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
-                                                    >
-                                                        <CheckCircle2 className="w-3 h-3" /> Acknowledge Arrival
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })
+                                filteredPOs.map(po => (
+                                    <ShipmentCard 
+                                        key={po.id} 
+                                        po={po} 
+                                        onClick={handleSelectPO} 
+                                        onAcknowledge={handleAcknowledgeArrival} 
+                                    />
+                                ))
                             )}
                         </div>
                     </div>
