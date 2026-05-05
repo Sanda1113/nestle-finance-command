@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2, Search, FileText, ChevronRight, ShieldCheck, Zap, Activity, Percent, Calendar, TrendingUp, Download } from 'lucide-react';
 import DisputeChat from './DisputeChat';

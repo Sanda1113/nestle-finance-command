@@ -1,5 +1,5 @@
 // frontend/src/components/WarehousePortal.jsx
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
 import {

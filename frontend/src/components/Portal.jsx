@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Truck, CheckCircle2, AlertCircle, RefreshCw, BarChart2, ShoppingCart, ClipboardList, LogOut, Sun, Moon, User, FileText, Clock, DollarSign, Search, Download, CreditCard, Calendar, Settings, Shield, Sliders, Zap, AlertTriangle, Briefcase, ChevronRight, Activity, Percent, ArrowRight, ShieldCheck, ShieldAlert, Target, TrendingUp, X, Tag } from 'lucide-react';
