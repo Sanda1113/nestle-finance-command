@@ -78,140 +78,88 @@ export default function Login({ onLogin }) {
 
             {/* 🎛️ GLASSMORPHISM CARD */}
             <div className="relative z-10 w-full max-w-sm animate-fade-in-up">
-                <div className="bg-slate-900/70 backdrop-blur-2xl p-8 rounded-3xl shadow-2xl border border-slate-600/60 shadow-blue-900/20">
-
+                <div className="bg-slate-900/80 backdrop-blur-2xl p-8 rounded-3xl shadow-2xl border border-slate-700/50 shadow-blue-900/30">
                     {/* LOGO & HEADER */}
                     <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center w-24 h-24 bg-white rounded-3xl shadow-xl shadow-blue-500/20 mb-5 p-4 border-4 border-slate-800">
-                            <img src="/nestle-logo.svg" alt="Nestle Logo" className="w-full h-full object-contain" />
+                        <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-2xl shadow-xl shadow-blue-500/20 mb-5 p-3 border-4 border-slate-800">
+                            <img src="/nestle-logo.svg" alt="Nestle" className="w-full h-full object-contain" />
                         </div>
-                        <h1 className="text-2xl font-extrabold text-white tracking-tight">
+                        <h1 className="text-3xl font-extrabold text-white tracking-tight">
                             Nestle<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Finance</span>
                         </h1>
-                        <p className="text-slate-400 text-xs font-medium mt-2">
+                        <p className="text-slate-400 text-sm font-medium mt-2">
                             {isLoginView ? 'Enterprise Access Gateway' : 'Partner Registration Portal'}
                         </p>
-                        <div className="flex items-center justify-center gap-3 mt-4">
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full">
-                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
-                                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Supplier</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
-                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
-                                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Finance</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full">
-                                <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
-                                <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Warehouse</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
-                                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Procurement</span>
-                            </div>
-                        </div>
                     </div>
 
                     {/* ALERTS */}
                     {error && (
-                        <div className="mb-5 p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-semibold text-center animate-shake">
+                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl text-sm font-semibold text-center animate-shake">
                             {error}
                         </div>
                     )}
                     {successMsg && (
-                        <div className="mb-5 p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs font-semibold text-center animate-fade-in">
+                        <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl text-sm font-semibold text-center animate-fade-in">
                             {successMsg}
                         </div>
                     )}
 
                     {/* FORM */}
-                    <form onSubmit={handleSubmit} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-5">
                         <div className="group">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 transition-colors group-focus-within:text-blue-400">
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 group-focus-within:text-blue-400 transition-colors">
                                 Email Address
                             </label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                    <svg className="h-4 w-4 text-slate-500 group-focus-within:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                                    </svg>
-                                </div>
-                                <input
-                                    type="email"
-                                    required
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2.5 bg-slate-950/50 border border-slate-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600 shadow-inner"
-                                    placeholder="you@company.com"
-                                />
-                            </div>
+                            <input
+                                type="email"
+                                required
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-950/60 border border-slate-800 rounded-2xl text-white text-sm focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-slate-600 shadow-inner"
+                                placeholder="you@company.com"
+                            />
                         </div>
 
                         <div className="group">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 transition-colors group-focus-within:text-blue-400">
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 group-focus-within:text-blue-400 transition-colors">
                                 Password
                             </label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                    <svg className="h-4 w-4 text-slate-500 group-focus-within:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6-4h12a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6a2 2 0 012-2zm10-4V6a4 4 0 00-8 0v4" />
-                                    </svg>
-                                </div>
-                                <input
-                                    type="password"
-                                    required
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2.5 bg-slate-950/50 border border-slate-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600 shadow-inner"
-                                    placeholder="••••••••"
-                                />
-                            </div>
+                            <input
+                                type="password"
+                                required
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-950/60 border border-slate-800 rounded-2xl text-white text-sm focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-slate-600 shadow-inner"
+                                placeholder="••••••••"
+                            />
                         </div>
 
                         {/* SLIDING ROLE SELECTOR (Only visible during Registration) */}
-                        <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isLoginView ? 'max-h-0 opacity-0' : 'max-h-32 opacity-100 pt-2'}`}>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                        <div className={`overflow-hidden transition-all duration-500 ${isLoginView ? 'max-h-0 opacity-0' : 'max-h-40 opacity-100'}`}>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
                                 Account Type
                             </label>
-                            <div className="grid grid-cols-3 gap-2 bg-slate-950/50 p-1 rounded-xl border border-slate-800 shadow-inner">
+                            <div className="grid grid-cols-3 gap-3">
                                 <button
                                     type="button"
                                     onClick={() => setRole('supplier')}
-                                    className={`py-2 text-[11px] font-bold rounded-lg transition-all duration-300 ${role === 'supplier'
-                                        ? 'bg-slate-800 text-white shadow-sm border border-slate-700'
-                                        : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                                        }`}
+                                    className={`py-3 text-sm font-bold rounded-2xl transition-all ${role === 'supplier' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/50' : 'bg-slate-800/40 text-slate-400 border border-transparent hover:border-slate-700'}`}
                                 >
                                     🏢 Supplier
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setRole('finance')}
-                                    className={`py-2 text-[11px] font-bold rounded-lg transition-all duration-300 ${role === 'finance'
-                                        ? 'bg-slate-800 text-white shadow-sm border border-slate-700'
-                                        : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                                        }`}
+                                    className={`py-3 text-sm font-bold rounded-2xl transition-all ${role === 'finance' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/50' : 'bg-slate-800/40 text-slate-400 border border-transparent hover:border-slate-700'}`}
                                 >
                                     💼 Finance
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setRole('warehouse')}
-                                    className={`py-2 text-[11px] font-bold rounded-lg transition-all duration-300 ${role === 'warehouse'
-                                        ? 'bg-slate-800 text-white shadow-sm border border-slate-700'
-                                        : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                                        }`}
+                                    className={`py-3 text-sm font-bold rounded-2xl transition-all ${role === 'warehouse' ? 'bg-purple-600/20 text-purple-400 border border-purple-500/50' : 'bg-slate-800/40 text-slate-400 border border-transparent hover:border-slate-700'}`}
                                 >
                                     📦 Dock
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setRole('procurement')}
-                                    className={`py-2 text-[11px] font-bold rounded-lg transition-all duration-300 ${role === 'procurement'
-                                        ? 'bg-slate-800 text-white shadow-sm border border-slate-700'
-                                        : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                                        }`}
-                                >
-                                    🛡️ Manager
                                 </button>
                             </div>
                         </div>
@@ -219,11 +167,11 @@ export default function Login({ onLogin }) {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full py-3 mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-600/25 disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-2 active:scale-[0.98]"
+                            className="w-full py-3.5 mt-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-600/25 disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-2 active:scale-[0.98] text-base"
                         >
                             {loading ? (
                                 <>
-                                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
@@ -236,7 +184,7 @@ export default function Login({ onLogin }) {
                     </form>
 
                     <div className="mt-8 text-center border-t border-slate-800 pt-6">
-                        <p className="text-slate-500 text-xs font-medium">
+                        <p className="text-slate-500 text-sm">
                             {isLoginView ? "Don't have an account?" : "Already have an account?"}
                             <button
                                 onClick={() => {
