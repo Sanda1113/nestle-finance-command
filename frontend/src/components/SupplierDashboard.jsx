@@ -1727,7 +1727,12 @@ export default function SupplierDashboard({ user, onLogout }) {
                                         </div>
                                     </div>
 
-                                    <DigitalCalendar key={myPayouts.length} userRole="Supplier" userEmail={user?.email} />
+                                    <DigitalCalendar
+                                      key={myPayouts.length} // still useful as a fallback
+                                      refreshTrigger={myPayouts.length * 100 + myPayouts.reduce((acc, p) => acc + (p.status || '').length, 0)}
+                                      userRole="Supplier"
+                                      userEmail={user?.email}
+                                    />
                                 </div>
                             )}
                         </div>
