@@ -13,6 +13,12 @@ import FloatingChat from './FloatingChat';
 import { safePlayAudio } from '../utils/safeAudio';
 import { supabase } from '../utils/supabaseClient';
 
+const formatCurrency = (amount, currencyCode = 'USD') => {
+    if (amount === undefined || amount === null || isNaN(amount)) return '$0.00';
+    try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode }).format(amount); }
+    catch { return `${currencyCode} ${Number(amount).toFixed(2)}`; }
+};
+
 const getShipmentId = (poNum) => {
     if (!poNum || typeof poNum !== 'string') return 'SHP-PENDING';
     const match = poNum.match(/\d+/);
