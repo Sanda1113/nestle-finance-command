@@ -684,17 +684,34 @@ function FinancePortal({ user }) {
         const confirmMsg = decision === 'Approved'
             ? "Are you sure you want to manually APPROVE this document?"
             : "Are you sure you want to manually REJECT this document?";
-
         if (!window.confirm(confirmMsg)) return;
+
+        // Optimistic update: change displayStatus immediately
+        setRecords(prev => prev.map(r => {
+            if (r.id !== id) return r;
+            const invTotal = safeParse(r.invoice_total);
+            const poTotal = safeParse(r.po_total);
+            const _isMathMatch = Math.abs(invTotal - poTotal) <= 0.01;
+            let newDisplayStatus;
+            if (decision === 'Approved') {
+                const relatedPO = pos.find(p => p.po_number === r.po_number);
+                const isGrnCompleted = relatedPO && relatedPO.status && (relatedPO.status.includes('GRN Logged') || relatedPO.status.includes('Cleared'));
+                newDisplayStatus = isGrnCompleted ? 'Approved - Awaiting Payout' : 'Approved (Awaiting Delivery)';
+            } else {
+                newDisplayStatus = 'Rejected by Finance';
+            }
+            return { ...r, match_status: decision, displayStatus: newDisplayStatus };
+        }));
 
         setActionedRecords(prev => ({ ...prev, [id]: true }));
 
         try {
             await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/reconciliations/${id}`, { newStatus: decision });
-            // Ensure status updates immediately in local state if needed, but fetchData(false) should handle it
-            fetchData(false);
+            fetchData(false); // confirm with server
         } catch {
             alert("Failed to update status.");
+            fetchData(false); // revert on error
+        } finally {
             setActionedRecords(prev => ({ ...prev, [id]: false }));
         }
     };
@@ -702,17 +719,23 @@ function FinancePortal({ user }) {
     const handleStagePayout = async (record) => {
         if (actionedRecords[`stage_${record.id}`]) return;
         setActionedRecords(prev => ({ ...prev, [`stage_${record.id}`]: true }));
+
+        // Optimistic: add a temporary payout entry so "Stage Payout" button disappears
+        const tempPayout = { id: `temp-${record.id}`, reconciliation_id: record.id, status: 'Pending Finance' };
+        setPayouts(prev => [...prev, tempPayout]);
+
         try {
             await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/stage', {
                 invoice_ref: record.id,
-                supplier_email: record.vendor_email || 'supplier@nestle.com',
+                supplier_email: record.vendor_email || record.supplier_email || 'supplier@nestle.com',
                 total_amount: record.invoice_total
             });
-            alert('Payout Staged successfully!');
-            fetchData(false);
+            fetchData(false); // refresh to get real payout ID
         } catch (err) {
             console.error(err);
             alert('Failed to stage payout.');
+            setPayouts(prev => prev.filter(p => p.id !== `temp-${record.id}`));
+        } finally {
             setActionedRecords(prev => ({ ...prev, [`stage_${record.id}`]: false }));
         }
     };
