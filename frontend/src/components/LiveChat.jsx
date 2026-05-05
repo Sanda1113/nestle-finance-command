@@ -34,7 +34,8 @@ const ROLE_LABELS = {
 };
 
 export default function LiveChat({ userEmail, userRole }) {
-    const [chatTab, setChatTab] = useState('live'); // 'live' | 'ai'
+    const isSupplier = userRole === 'Supplier';
+    const [chatTab, setChatTab] = useState('live'); 
     const [selectedRecipient, setSelectedRecipient] = useState(null);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
@@ -43,7 +44,7 @@ export default function LiveChat({ userEmail, userRole }) {
     const messagesEndRef = useRef(null);
     const pollRef = useRef(null);
 
-    // AI chat state
+    // AI chat state (Supplier only)
     const [aiMessages, setAiMessages] = useState([{
         id: 'ai-welcome',
         role: 'assistant',

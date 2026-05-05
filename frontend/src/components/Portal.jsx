@@ -720,7 +720,7 @@ function FinancePortal({ user }) {
     const enrichedRecords = records.map(r => {
         const relatedPO = pos.find(p => p.po_number === r.po_number);
         // FIX: Recognize both 'Received' and 'Cleared' for the Payout Stage button visibility
-        const isGrnCompleted = relatedPO && relatedPO.status && (relatedPO.status.includes('Received') || relatedPO.status.includes('Cleared'));
+        const isGrnCompleted = relatedPO && relatedPO.status && (relatedPO.status === 'Goods Cleared - Ready for Payout' || relatedPO.status.includes('GRN Logged'));
         const isDelivered = relatedPO && (relatedPO.status === 'Delivered to Dock' || relatedPO.po_data?.delivery_timestamp);
         const isWarehouseCancelled = relatedPO && String(relatedPO.status || '').includes('Cancelled');
 
@@ -849,7 +849,11 @@ function FinancePortal({ user }) {
             }
 
             // Steps 9-11: Treasury & Payouts (Enriched from Payout Schedules)
-            const payout = payouts.find(p => p.reconciliation_id === relatedRecon?.id || p.po_number === po.po_number);
+            const payout = payouts.find(p => 
+                (p.invoice_ref && String(p.invoice_ref) === String(relatedRecon?.id)) || 
+                (p.reconciliation_id && String(p.reconciliation_id) === String(relatedRecon?.id)) ||
+                (p.po_number && String(p.po_number) === String(po.po_number))
+            );
             if (payout) {
                 if (payout.status === 'Pending Finance') {
                     events.push({ label: 'Payout Staged', date: payout.created_at, status: 'completed', icon: '⏳' });
@@ -1229,24 +1233,41 @@ function FinancePortal({ user }) {
                                                 </div>
                                             </td>
                                             <td className="p-4 text-center">
-                                                {(() => {
-                                                    const existingPayout = payouts.find(p => p.reconciliation_id === r.id || p.po_number === r.po_number);
-                                                    const isStaged = existingPayout || actionedRecords[`stage_${r.id}`];
-                                                    
-                                                    return (
-                                                        <button
-                                                            type="button"
-                                                            disabled={!isGrnCompleted || r.match_status !== 'Approved' || isStaged}
-                                                            onClick={(e) => { e.stopPropagation(); handleStagePayout(r); }}
-                                                            className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded transition-colors ${(!isGrnCompleted || r.match_status !== 'Approved' || isStaged) ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm'}`}
-                                                            title={!isGrnCompleted ? "Awaiting Warehouse Clearing" : isStaged ? "Already Staged" : "Stage for Payout"}
-                                                        >
-                                                            {isStaged ? 'Staged' : 'Stage Payout'}
-                                                        </button>
-                                                    );
-                                                })()}
-                                            </td>
-                                        </tr>
+                                                    {(() => {
+                                                        const existingPayout = payouts.find(p => p.reconciliation_id === r.id || p.po_number === r.po_number);
+                                                        const isStaged = existingPayout || actionedRecords[`stage_${r.id}`];
+                                                        const pStatus = existingPayout?.status;
+                                                        
+                                                        if (pStatus === 'Paid') {
+                                                            return (
+                                                                <span className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase rounded-lg border border-emerald-200 dark:border-emerald-800/50 flex items-center gap-1.5 w-fit mx-auto">
+                                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Paid
+                                                                </span>
+                                                            );
+                                                        }
+
+                                                        if (isStaged) {
+                                                            return (
+                                                                <span className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase rounded-lg border border-blue-200 dark:border-blue-800/50 flex items-center gap-1.5 w-fit mx-auto">
+                                                                    <Clock className="w-3.5 h-3.5" /> Staged
+                                                                </span>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                disabled={!r.isGrnCompleted || !r.displayStatus.includes('Approved') || isStaged}
+                                                                onClick={(e) => { e.stopPropagation(); handleStagePayout(r); }}
+                                                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wide rounded-lg transition-all shadow-sm flex items-center gap-1.5 mx-auto ${(!r.isGrnCompleted || !r.displayStatus.includes('Approved') || isStaged) ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-500/20'}`}
+                                                                title={!r.isGrnCompleted ? "Awaiting Warehouse Clearing" : "Stage for Treasury Payout"}
+                                                            >
+                                                                <CreditCard className="w-3.5 h-3.5" /> Stage Payout
+                                                            </button>
+                                                        );
+                                                    })()}
+                                                </td>
+                                            </tr>
                                         {isExpanded && (
                                             <tr className="bg-slate-100/50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
                                                 <td colSpan="10" className="p-4 px-6">

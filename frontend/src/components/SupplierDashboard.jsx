@@ -1026,15 +1026,23 @@ export default function SupplierDashboard({ user, onLogout }) {
                     <div className="grid grid-cols-2 gap-3 mb-4">
                         <div className="col-span-2">
                             <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Vendor Name</p>
-                            <p className="font-medium text-slate-200 truncate">{data.vendorName || 'Not Found'}</p>
+                            <p className="font-medium text-slate-200 truncate">{data.vendorName || 'Nestle Supplier'}</p>
                         </div>
                         <div>
-                            <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Doc #</p>
+                            <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Invoice #</p>
                             <p className="font-medium text-slate-200 truncate">{data.invoiceNumber || 'Not Found'}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">PO #</p>
+                            <p className="font-medium text-slate-200 truncate">{data.poNumber || 'Not Found'}</p>
                         </div>
                         <div>
                             <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Date</p>
                             <p className="text-slate-300">{data.invoiceDate || 'Not Found'}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Category</p>
+                            <p className="text-slate-300 truncate">{data.category || 'FMCG Goods'}</p>
                         </div>
                         <div>
                             <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Subtotal</p>
@@ -1409,6 +1417,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                                     userRole="Supplier"
                                                                     userEmail={user.email}
                                                                     contextData={{ status: po.status || 'Dispatched', type: 'Purchase Order/Shipment' }}
+                                                                    onResubmit={() => handleResubmit(po.id, 'match')}
                                                                 />
                                                             </div>
                                                         )}
@@ -1652,6 +1661,17 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                                                 </div>
                                                                                 <span className="text-[10px] text-slate-400">{safeDate(event.date)}</span>
                                                                             </div>
+                                                                            {/* Resubmission Loop Trigger */}
+                                                                            {event.status === 'warning' && (event.label.includes('Rejected') || event.label.includes('Discrepancy')) && (
+                                                                                <div className="mt-2.5 pt-2.5 border-t border-slate-700/50">
+                                                                                    <button
+                                                                                        onClick={() => handleResubmit(event.resubmitObj?.id || tx.poNumber, event.resubmitType || 'match')}
+                                                                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-white text-[10px] font-black uppercase rounded-lg transition-all shadow-lg shadow-amber-500/20"
+                                                                                    >
+                                                                                        <RefreshCw className="w-3 h-3" /> Replace & Resubmit Document
+                                                                                    </button>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 ))}
