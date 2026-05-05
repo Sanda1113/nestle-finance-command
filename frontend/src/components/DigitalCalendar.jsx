@@ -148,18 +148,22 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
         const cfg = getStatusCfg(event.status);
         const isOverdue = moment(event.start).isBefore(moment(), 'day') && event.status !== 'Paid';
         return {
-            className: `bg-gradient-to-br ${cfg.bg} backdrop-blur-md border border-white/10 rounded-xl shadow-xl ${cfg.glow} hover:scale-[1.03] active:scale-95 transition-all duration-300 ${isOverdue ? 'ring-2 ring-rose-500 animate-pulse' : ''}`,
+            className: `rbc-event-glass ${cfg.glow} ${isOverdue ? 'ring-2 ring-rose-500 animate-pulse' : ''}`,
             style: {
+                backgroundColor: `var(--tw-gradient-from, ${cfg.bg.split(' ')[0]})`,
+                backgroundImage: `linear-gradient(to bottom right, ${cfg.bg})`,
                 fontSize: '10px',
-                fontWeight: '900',
-                padding: '6px 12px',
+                fontWeight: 900,
+                padding: '4px 8px',
                 color: 'white',
-                minHeight: '30px',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.15)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                letterSpacing: '0.025em',
+                cursor: isFinance ? 'grab' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                textShadow: '0 1px 3px rgba(0,0,0,0.4)',
-                letterSpacing: '0.03em',
-                cursor: isFinance ? 'grab' : 'pointer'
             }
         };
     };
@@ -413,6 +417,18 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger })
             <div className="flex-1 min-w-0">
                 <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
                     <style>{`
+                        .rbc-event-glass {
+                            backdrop-filter: blur(4px);
+                        }
+                        .rbc-month-view .rbc-month-row {
+                            min-height: 120px;
+                        }
+                        .rbc-day-bg {
+                            transition: background-color 0.2s;
+                        }
+                        .rbc-day-bg:hover {
+                            background-color: rgba(99, 102, 241, 0.05) !important;
+                        }
                         .rbc-calendar { 
                             min-height: 750px; 
                             font-family: inherit; 
