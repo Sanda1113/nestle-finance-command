@@ -850,8 +850,10 @@ function FinancePortal({ user }) {
             if (relatedRecon) {
                 events.push({ label: 'Invoice Submitted', date: relatedRecon.processed_at, status: 'completed', icon: '📩' });
                 const reconStatus = relatedRecon.match_status || '';
-                if (reconStatus.includes('Matched') || reconStatus.includes('Approved')) {
+                if (reconStatus === 'Approved' || reconStatus.startsWith('Approved')) {
                     events.push({ label: 'Finance Approved', date: relatedRecon.updated_at || relatedRecon.processed_at, status: 'completed', icon: '✅' });
+                } else if (reconStatus.includes('Matched')) {
+                    events.push({ label: 'Matched - Pending Finance Review', date: relatedRecon.updated_at || relatedRecon.processed_at, status: 'pending', icon: '🔍' });
                 } else if (reconStatus.includes('Discrepancy')) {
                     events.push({ label: 'Discrepancy Detected', date: relatedRecon.processed_at, status: 'warning', icon: '⚠️' });
                 } else if (reconStatus.includes('Rejected')) {
