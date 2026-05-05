@@ -415,6 +415,13 @@ export default function SupplierDashboard({ user, onLogout }) {
         }
     }, [mode, myRecons, myBoqs]);
 
+    // Enhanced fetch when payouts tab is viewed
+    useEffect(() => {
+        if (mode === 'payouts') {
+            fetchData();
+        }
+    }, [mode, fetchData]);
+
     const trustScore = useMemo(() => {
         if (!myRecons.length && !myBoqs.length) return 80;
 
