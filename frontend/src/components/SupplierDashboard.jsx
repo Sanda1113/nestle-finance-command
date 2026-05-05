@@ -684,7 +684,7 @@ export default function SupplierDashboard({ user, onLogout }) {
 
             if (!selectedPO.is_downloaded && !isSandboxMode) {
                 await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/purchase_orders/${selectedPO.id}/downloaded`);
-                fetchData();
+                // No fetchData() – the optimistic update handles the UI; realtime will confirm later.
             }
         } catch (error) {
             // Revert optimistic update on error
