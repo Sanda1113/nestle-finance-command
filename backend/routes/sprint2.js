@@ -742,6 +742,31 @@ router.post('/grn/clear', async (req, res) => {
 
         if (updateErr && updateErr.code !== 'PGRST116') throw updateErr;
 
+        // Update reconciliation timeline to reflect Goods Cleared
+        try {
+            const { data: relatedRecon, error: reconErr } = await supabase
+                .from('reconciliations')
+                .select('id, supplier_email')
+                .eq('po_number', poNumber)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (!reconErr && relatedRecon) {
+                await supabase
+                    .from('reconciliations')
+                    .update({
+                        timeline_status: 'Goods Cleared',
+                        processed_at: new Date().toISOString()
+                    })
+                    .eq('id', relatedRecon.id);
+            } else if (reconErr) {
+                console.error('Failed to update reconciliation timeline for cleared goods:', reconErr);
+            }
+        } catch (reconTryErr) {
+            console.error('Unexpected error updating reconciliation timeline for cleared goods:', reconTryErr);
+        }
+
         // Fetch reconciliation to get invoice total
         const { data: recon } = await supabase
             .from('reconciliations')
@@ -1325,9 +1350,23 @@ router.post('/payouts/stage', async (req, res) => {
 
 router.post('/payouts/:id/disburse', async (req, res) => {
     const { id } = req.params;
-    const { supplier_email, final_amount, mock_supplier_account } = req.body;
+    let { supplier_email, final_amount, mock_supplier_account } = req.body;
 
     try {
+        // If email not provided in body, fetch from payout record
+        if (!supplier_email) {
+            const { data: payoutInfo } = await supabase
+                .from('payout_schedules')
+                .select('supplier_email')
+                .eq('id', id)
+                .single();
+            supplier_email = payoutInfo?.supplier_email;
+        }
+
+        if (!supplier_email) {
+            console.warn('⚠️ Disburse: No supplier email found for payout', id);
+        }
+
         // 1. Call the Mock Bank
         const bankResult = await simulateBankTransfer(mock_supplier_account, final_amount);
 
