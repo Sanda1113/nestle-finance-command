@@ -1720,7 +1720,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                         </div>
                                     </div>
 
-                                    <DigitalCalendar userRole="Supplier" userEmail={user?.email} />
+                                    <DigitalCalendar key={myPayouts.length} userRole="Supplier" userEmail={user?.email} />
                                 </div>
                             )}
                         </div>
