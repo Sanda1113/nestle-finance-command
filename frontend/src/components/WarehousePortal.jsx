@@ -30,7 +30,7 @@ const API_BASE_URL = 'https://nestle-finance-command-production.up.railway.app/a
 const SYNC_QUEUE_STORAGE_KEY = 'grnSyncQueue';
 const OFFLINE_PO_STORAGE_KEY = 'offlinePOs';
 const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
-const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge'];
+const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge', 'clear'];
 const WAREHOUSE_POLL_INTERVAL_MS = 5000;
 const IMMEDIATE_REFRESH_DEBOUNCE_MS = 800;
 const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['Pending', 'PO Generated', 'In Transit', 'Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload', 'Goods Received (GRN Logged)', 'Partially Received (Awaiting Backorder)']);
@@ -526,9 +526,18 @@ export default function WarehousePortal({ user, onLogout }) {
         if (!Array.isArray(payload.itemsReceived)) return payload;
         return {
             ...payload,
-            itemsReceived: sanitizeItemsForOfflineQueue(payload.itemsReceived)
+            itemsReceived: payload.itemsReceived.map(item => {
+                if (!item || typeof item !== 'object') return item;
+                // Keep photo data if size < 500KB (base64 string length approximation)
+                const keepPhoto = item.photoDataUrl && (item.photoDataUrl.length < 500 * 1024);
+                return {
+                    ...item,
+                    hasPhoto: Boolean(item.hasPhoto || item.photoDataUrl),
+                    photoDataUrl: keepPhoto ? item.photoDataUrl : ''
+                };
+            })
         };
-    }, [sanitizeItemsForOfflineQueue]);
+    }, []);
 
     const enqueueOfflineAction = useCallback((type, payload) => {
         const safeType = VALID_SYNC_ACTION_TYPES.includes(type) ? type : null;
@@ -777,7 +786,9 @@ export default function WarehousePortal({ user, onLogout }) {
                 ? `${API_BASE_URL}/grn/reject`
                 : type === 'acknowledge'
                     ? `${API_BASE_URL}/grn/acknowledge`
-                    : `${API_BASE_URL}/grn/submit`;
+                    : type === 'clear'
+                        ? `${API_BASE_URL}/grn/clear`
+                        : `${API_BASE_URL}/grn/submit`;
             try {
                 await axios.post(endpoint, payload);
             } catch (error) {
@@ -1212,21 +1223,40 @@ export default function WarehousePortal({ user, onLogout }) {
             onConfirm: async () => {
                 setDialog(null);
                 setIsClearing(true);
-                try {
-                    await axios.post(`${API_BASE_URL}/grn/clear`, {
-                        poNumber: selectedPO.po_number,
-                        clearedBy: user.email
-                    });
-                    updatePOStatusLocally(selectedPO.po_number, 'Goods Cleared - Ready for Payout');
-                    setDialog({ title: "Success", message: '✅ Goods marked as cleared. Finance has been notified.', type: "alert" });
-                    setSelectedPO(null);
-                    setViewMode('completed');
-                    fetchPOs();
-                } catch {
-                    setDialog({ title: "Error", message: 'Failed to clear goods.', type: "alert" });
-                } finally {
-                    setIsClearing(false);
-                }
+                const payload = {
+                    poNumber: selectedPO.po_number,
+                    clearedBy: user.email
+                };
+
+                const doClear = async () => {
+                    if (isOffline) {
+                        enqueueOfflineAction('clear', payload);
+                        updatePOStatusLocally(selectedPO.po_number, 'Goods Cleared - Ready for Payout');
+                        setDialog({ title: "Offline Save", message: '📡 OFFLINE MODE: Clear saved locally and will auto-sync.', type: "alert" });
+                        setSelectedPO(null);
+                        setViewMode('completed');
+                        fetchPOs();
+                    } else {
+                        try {
+                            await axios.post(`${API_BASE_URL}/grn/clear`, payload);
+                            updatePOStatusLocally(selectedPO.po_number, 'Goods Cleared - Ready for Payout');
+                            setDialog({ title: "Success", message: '✅ Goods marked as cleared. Finance has been notified.', type: "alert" });
+                            setSelectedPO(null);
+                            setViewMode('completed');
+                            fetchPOs();
+                        } catch (err) {
+                            enqueueOfflineAction('clear', payload);
+                            updatePOStatusLocally(selectedPO.po_number, 'Goods Cleared - Ready for Payout');
+                            setDialog({ title: "Offline Save", message: 'Failed to clear goods online, queued for sync.', type: "alert" });
+                            setSelectedPO(null);
+                            setViewMode('completed');
+                            fetchPOs();
+                        } finally {
+                            setIsClearing(false);
+                        }
+                    }
+                };
+                doClear();
             }
         });
     };
