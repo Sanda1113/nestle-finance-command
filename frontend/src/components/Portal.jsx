@@ -1821,18 +1821,17 @@ function PayoutCalendar({ user }) {
     }, []);
 
     const markPaid = async (payout) => {
-        if (!window.confirm("Are you sure you want to disburse funds to the supplier's bank account?")) return;
+        if (!window.confirm(`Disburse ${formatCurrency(payout.final_amount || payout.base_amount)} to ${payout.supplier_email}?`)) return;
         try {
             await axios.post(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${payout.id}/disburse`, { 
                 supplier_email: payout.supplier_email,
                 final_amount: payout.final_amount || payout.base_amount,
-                mock_supplier_account: 'NESTLE-VND-8829' // Mock bank account
+                mock_supplier_account: 'NESTLE-VND-8829'
             });
-            alert('Funds disbursed successfully. Transaction Receipt generated.');
+            alert('Funds disbursed successfully.');
             fetchPayouts();
         } catch (error) {
-            console.error(error);
-            alert('Failed to disburse funds. Check server logs.');
+            alert('Failed to disburse funds.');
         }
     };
 
@@ -1987,10 +1986,10 @@ function PayoutCalendar({ user }) {
                                         <thead className="bg-slate-950/50">
                                             <tr>
                                                 <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Due Date</th>
-                                                <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Supplier Entity</th>
+                                                <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Supplier</th>
                                                 <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Net Payable</th>
-                                                <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Internal Status</th>
-                                                <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Operations</th>
+                                                <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                                                <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Action</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800/50">
@@ -2007,10 +2006,7 @@ function PayoutCalendar({ user }) {
                                                         <span className="text-[10px] font-bold text-slate-500 font-mono mt-0.5 uppercase opacity-60">REF: {p.id.substring(0,12)}</span>
                                                     </td>
                                                     <td className="p-6">
-                                                        <div className="flex flex-col">
-                                                            <span className="font-black text-emerald-400 text-lg tracking-tight">{formatCurrency(p.final_amount || p.base_amount)}</span>
-                                                            {p.status === 'Renegotiated' && <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest mt-1 flex items-center gap-1"><Zap className="w-3 h-3" /> Early Payout</span>}
-                                                        </div>
+                                                        <span className="font-black text-emerald-400 text-lg tracking-tight">{formatCurrency(p.final_amount || p.base_amount)}</span>
                                                     </td>
                                                     <td className="p-6">
                                                         <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm ${
@@ -2022,15 +2018,12 @@ function PayoutCalendar({ user }) {
                                                         </span>
                                                     </td>
                                                     <td className="p-6 text-right">
-                                                        {p.status === 'Pending Finance' ? (
-                                                            <button onClick={() => { setSchedulingPayout(p); setConfirmDate(p.start_date ? new Date(p.start_date).toISOString().split('T')[0] : ''); }} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-blue-600/20 hover:-translate-y-0.5 active:scale-95">
-                                                                Schedule Payout
-                                                            </button>
-                                                        ) : (
-                                                            <button onClick={() => markPaid(p)} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 active:scale-95">
-                                                                Disburse Funds
-                                                            </button>
-                                                        )}
+                                                        <button 
+                                                            onClick={() => markPaid(p)} 
+                                                            className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 active:scale-95"
+                                                        >
+                                                            Pay {formatCurrency(p.final_amount || p.base_amount)}
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             ))}
