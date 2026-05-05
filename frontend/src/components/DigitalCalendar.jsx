@@ -692,7 +692,8 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
                                     </div>
                                 )}
 
-                                {!isFinance && selectedEvent.status === 'Scheduled' && trustTier !== 3 && (
+                                {/* Instant Payout – only for Scheduled payouts */}
+                                {!isFinance && selectedEvent.status === 'Scheduled' && (
                                     <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-[2.5rem] p-6 space-y-6">
                                         {trustTier === 1 && (
                                             <>
@@ -716,9 +717,30 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
                                                 Request Instant Payout (4% fee)
                                             </button>
                                         )}
+                                        {trustTier === 3 && (
+                                            <div className="text-center">
+                                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500/20 rounded-full mb-2">
+                                                    <AlertCircle className="w-4 h-4 text-red-400" />
+                                                    <span className="text-xs font-black text-red-400 uppercase">Not Available</span>
+                                                </div>
+                                                <p className="text-xs text-slate-400">Instant payout is disabled for your risk profile.</p>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
+                                {/* Show message when payout is not yet Scheduled */}
+                                {!isFinance && (selectedEvent.status === 'Pending Finance' || selectedEvent.status === 'Staged') && (
+                                    <div className="bg-blue-900/20 border border-blue-500/20 rounded-[2rem] p-5 text-center">
+                                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/20 rounded-full mb-3">
+                                            <Clock className="w-4 h-4 text-blue-400" />
+                                            <span className="text-xs font-black text-blue-400 uppercase">Pending Scheduling</span>
+                                        </div>
+                                        <p className="text-xs text-slate-300">Instant payout will be available once the payout is <strong>Scheduled</strong> by Finance.</p>
+                                    </div>
+                                )}
+
+                                {/* Existing pending review status */}
                                 {!isFinance && selectedEvent.status === 'Early Payment Requested (Pending Review)' && (
                                     <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-[2.5rem] p-6 text-center">
                                         <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/20 rounded-full mb-3">
