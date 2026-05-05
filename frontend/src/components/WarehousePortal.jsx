@@ -1740,20 +1740,20 @@ export default function WarehousePortal({ user, onLogout }) {
                                 </h4>
                                 <div className="space-y-2.5">
                                     <div className="flex justify-between items-center text-xs">
-                                        <span className="text-slate-500">Vendor Name</span>
-                                        <span className="font-bold text-slate-800 dark:text-slate-200">{selectedPO.vendor_name || selectedPO.po_data?.vendor_name || 'Nestle Supplier'}</span>
+                                        <span className="text-slate-500">Supplier</span>
+                                        <span className="font-bold text-slate-800 dark:text-slate-200">{selectedPO.supplier_email || 'N/A'}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-xs">
-                                        <span className="text-slate-500">Invoice Total</span>
-                                        <span className="font-black text-blue-600 dark:text-blue-400">{formatCurrency(selectedPO.po_data?.invoice_total || selectedPO.po_data?.total_amount || 0, selectedPO.po_data?.currency)}</span>
+                                        <span className="text-slate-500">Total PO Value</span>
+                                        <span className="font-black text-blue-600 dark:text-blue-400">{formatCurrency(selectedPO.total_amount, selectedPO.po_data?.currency)}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-xs">
-                                        <span className="text-slate-500">Tax Amount</span>
-                                        <span className="font-bold text-slate-700 dark:text-slate-300">{formatCurrency(selectedPO.po_data?.tax_amount || 0, selectedPO.po_data?.currency)}</span>
+                                        <span className="text-slate-500">Items</span>
+                                        <span className="font-bold text-slate-700 dark:text-slate-300">{selectedPO.po_data?.lineItems?.length || 0} pallets</span>
                                     </div>
                                     <div className="flex justify-between items-center text-xs">
-                                        <span className="text-slate-500">Category</span>
-                                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[10px] font-bold uppercase">{selectedPO.po_data?.category || 'FMCG Goods'}</span>
+                                        <span className="text-slate-500">Status</span>
+                                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[10px] font-bold uppercase">{selectedPO.status}</span>
                                     </div>
                                 </div>
                             </div>
