@@ -42,8 +42,6 @@ const buildShortageEvidence = (items = []) => {
             status: item?.status || '',
             hasPhoto: Boolean(item?.hasPhoto || item?.photoDataUrl),
             photoFileName: item?.photoFileName || '',
-            photoMimeType: item?.photoMimeType || '',
-            photoAttachedAt: item?.photoAttachedAt || null,
             photoDataUrl: item?.photoDataUrl || ''
         };
     });
