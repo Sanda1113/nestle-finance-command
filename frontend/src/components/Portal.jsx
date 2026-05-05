@@ -34,6 +34,8 @@ const DASHBOARD_IMMEDIATE_REFRESH_DEBOUNCE_MS = 800;
 
 const handlePrintDocument = (docType, docData) => {
     if (!docData) return alert("Document data not available.");
+    // Normalize line items: accept both lineItems and line_items
+    const lineItems = docData.lineItems || docData.line_items || [];
     const printWindow = window.open('', '', 'width=800,height=900');
 
     const html = `
@@ -93,7 +95,7 @@ const handlePrintDocument = (docType, docData) => {
                     <tr><th>Qty</th><th>Description</th><th class="text-right">Unit Price</th><th class="text-right">Total</th></tr>
                 </thead>
                 <tbody>
-                    ${(docData.lineItems || []).map(item => `<tr><td>${item.qty}</td><td>${item.description}</td><td class="text-right">${formatCurrency(item.unitPrice, docData.currency)}</td><td class="text-right">${formatCurrency(item.amount, docData.currency)}</td></tr>`).join('')}
+                    ${lineItems.map(item => `<tr><td>${item.qty}</td><td>${item.description}</td><td class="text-right">${formatCurrency(item.unitPrice, docData.currency)}</td><td class="text-right">${formatCurrency(item.amount, docData.currency)}</td></tr>`).join('')}
                 </tbody>
             </table>
             <div class="summary">
