@@ -1355,12 +1355,37 @@ router.post('/payouts/:id/disburse', async (req, res) => {
     try {
         // If email not provided in body, fetch from payout record
         if (!supplier_email) {
+            // 1. Try from payout_schedules
             const { data: payoutInfo } = await supabase
                 .from('payout_schedules')
                 .select('supplier_email')
                 .eq('id', id)
                 .single();
             supplier_email = payoutInfo?.supplier_email;
+        }
+
+        if (!supplier_email) {
+            // 2. If still missing, try the linked purchase order
+            const { data: payout } = await supabase
+                .from('payout_schedules')
+                .select('invoice_ref')
+                .eq('id', id)
+                .single();
+            if (payout?.invoice_ref) {
+                const { data: recon } = await supabase
+                    .from('reconciliations')
+                    .select('po_number')
+                    .eq('id', payout.invoice_ref)
+                    .single();
+                if (recon?.po_number) {
+                    const { data: po } = await supabase
+                        .from('purchase_orders')
+                        .select('supplier_email')
+                        .eq('po_number', recon.po_number)
+                        .single();
+                    supplier_email = po?.supplier_email;
+                }
+            }
         }
 
         if (!supplier_email) {
