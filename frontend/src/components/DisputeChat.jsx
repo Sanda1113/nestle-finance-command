@@ -236,6 +236,23 @@ Approach:
 
     return (
         <div className="flex flex-col h-[650px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden font-sans">
+            {/* If Finance user, show document context */}
+            {userRole === 'Finance' && contextData?.status && (
+                <div className="px-5 py-3 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800/30 flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2 text-xs font-bold">
+                        <span className="text-blue-600 dark:text-blue-400">📄 {contextData.type || 'Document'}:</span>
+                        <span className="text-slate-600 dark:text-slate-300">{contextData.status}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {referenceNumber && (
+                            <span className="text-[10px] text-slate-500 font-mono">{referenceNumber}</span>
+                        )}
+                        <button type="button" className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded font-bold hover:bg-blue-700 transition-colors">
+                            View Docs
+                        </button>
+                    </div>
+                </div>
+            )}
             <div className="px-5 py-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center relative overflow-hidden shrink-0">
                 <div className={`absolute top-0 left-0 w-full h-1 ${getStatusStyle()}`}></div>
                 <div className="flex items-center gap-4">
@@ -269,6 +286,7 @@ Approach:
                 </div>
             </div>
 
+            <div className="flex border-b border-slate-200 dark:border-slate-800 shrink-0">
                 <button
                     type="button"
                     onClick={() => setChatMode('human')}
@@ -285,6 +303,7 @@ Approach:
                         <Bot className="w-4 h-4" /> AI Chat
                     </button>
                 )}
+            </div>
 
             {userRole === 'Finance' && varianceType && disputeStatus === 'Open' && chatMode === 'human' && (
                 <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 border-b border-red-100 dark:border-red-900/50 p-3 px-5 flex items-start gap-3 shrink-0">
