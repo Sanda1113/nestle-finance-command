@@ -2011,19 +2011,29 @@ function PayoutCalendar({ user }) {
                                                         <span className="font-black text-emerald-400 text-lg tracking-tight">{formatCurrency(p.final_amount || p.base_amount)}</span>
                                                     </td>
                                                     <td className="p-6">
-                                                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm ${
-                                                            p.status === 'Renegotiated' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 
-                                                            p.status === 'Pending Finance' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 
-                                                            'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                                        }`}>
-                                                            {p.status}
-                                                        </span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`w-2 h-2 rounded-full ${
+                                                                p.status === 'Paid' ? 'bg-emerald-400' :
+                                                                p.status === 'Scheduled' ? 'bg-blue-400' :
+                                                                p.status === 'Hold' ? 'bg-amber-400' :
+                                                                p.status === 'Renegotiated' ? 'bg-purple-400' :
+                                                                'bg-slate-400'
+                                                            }`}></span>
+                                                            <span className={`text-[10px] font-black uppercase tracking-wider ${
+                                                                p.status === 'Renegotiated' ? 'text-purple-400' :
+                                                                p.status === 'Pending Finance' ? 'text-blue-400' :
+                                                                'text-amber-400'
+                                                            }`}>
+                                                                {p.status}
+                                                            </span>
+                                                        </div>
                                                     </td>
                                                     <td className="p-6 text-right">
-                                                        <button 
-                                                            onClick={() => markPaid(p)} 
-                                                            className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 active:scale-95"
+                                                        <button
+                                                            onClick={() => markPaid(p)}
+                                                            className="px-5 py-2.5 bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 active:scale-95 flex items-center gap-2"
                                                         >
+                                                            <DollarSign className="w-3.5 h-3.5" />
                                                             Pay {formatCurrency(p.final_amount || p.base_amount)}
                                                         </button>
                                                     </td>
