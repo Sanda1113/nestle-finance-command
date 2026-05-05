@@ -587,6 +587,9 @@ export default function SupplierDashboard({ user, onLogout }) {
     };
 
     const handlePrintPO = async (po) => {
+        // Optimistic UI update for immediate feedback
+        setMyPOs(prev => prev.map(p => p.id === po.id ? { ...p, is_downloaded: true } : p));
+
         try {
             let selectedPO = po;
             if (!selectedPO?.po_data?.lineItems) {
@@ -672,14 +675,13 @@ export default function SupplierDashboard({ user, onLogout }) {
             printWindow.focus();
             setTimeout(() => { printWindow.print(); }, 500);
 
-            // Update local state immediately so button turns green without waiting for server/refresh
-            setMyPOs(prev => prev.map(p => p.id === po.id ? { ...p, is_downloaded: true } : p));
-
             if (!selectedPO.is_downloaded && !isSandboxMode) {
                 await axios.patch(`https://nestle-finance-command-production.up.railway.app/api/purchase_orders/${selectedPO.id}/downloaded`);
                 fetchData();
             }
         } catch (error) {
+            // Revert optimistic update on error
+            setMyPOs(prev => prev.map(p => p.id === po.id ? { ...p, is_downloaded: false } : p));
             console.error('Failed to generate or download PO PDF:', error);
             if (error?.code === 'ECONNABORTED') {
                 alert('PO details request timed out. Please try again.');
