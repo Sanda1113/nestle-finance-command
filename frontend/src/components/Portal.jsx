@@ -1308,7 +1308,15 @@ function FinancePortal({ user }) {
                                                                         <button type="button" onClick={() => handlePrintDocument('Original Quote / BOQ', { ...relatedBoq, lineItems: relatedBoq.line_items, invoiceNumber: relatedBoq.document_number, totalAmount: relatedBoq.total_amount })} className="px-3 py-1.5 text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 rounded-md shadow-sm transition-colors">📄 Print PDF</button>
                                                                     ) : <span className="text-[10px] text-slate-400">Not Found</span>}
                                                                 </div>
-                                                                <p className="text-xl font-black text-slate-800 dark:text-slate-100">{relatedBoq ? formatCurrency(relatedBoq.total_amount) : 'N/A'}</p>
+                                                                <div className="flex justify-between items-end">
+                                                                    <p className="text-xl font-black text-slate-800 dark:text-slate-100">{relatedBoq ? formatCurrency(relatedBoq.total_amount) : 'N/A'}</p>
+                                                                    {relatedBoq && (
+                                                                        <div className="text-right text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase space-y-0.5">
+                                                                            <p>Sub: {formatCurrency(relatedBoq.subtotal_amount || relatedBoq.total_amount)}</p>
+                                                                            {relatedBoq.tax_amount > 0 && <p>Tax: {formatCurrency(relatedBoq.tax_amount)}</p>}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                             <div className="bg-gradient-to-br from-purple-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-purple-200 dark:border-purple-900/50 shadow-sm relative overflow-hidden">
                                                                 <div className="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
@@ -1316,7 +1324,14 @@ function FinancePortal({ user }) {
                                                                     <h4 className="text-xs font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider">2. Purchase Order</h4>
                                                                     <button type="button" onClick={() => handlePrintDocument('Purchase Order', r.po_data)} className="px-3 py-1.5 text-xs font-bold text-white bg-purple-500 hover:bg-purple-600 rounded-md shadow-sm transition-colors">📄 Print PDF</button>
                                                                 </div>
-                                                                <p className="text-xl font-black text-slate-800 dark:text-slate-100">{formatCurrency(r.po_total)}</p>
+                                                                <div className="flex justify-between items-end">
+                                                                    <p className="text-xl font-black text-slate-800 dark:text-slate-100">{formatCurrency(r.po_total)}</p>
+                                                                    <div className="text-right text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase space-y-0.5">
+                                                                        <p>Sub: {formatCurrency(r.po_data?.subtotalAmount || r.po_data?.subtotal || r.po_total)}</p>
+                                                                        {r.po_data?.taxAmount > 0 && <p>Tax: {formatCurrency(r.po_data?.taxAmount)}</p>}
+                                                                        {r.po_data?.shippingAmount > 0 && <p>Ship: {formatCurrency(r.po_data?.shippingAmount)}</p>}
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                             <div className="bg-gradient-to-br from-emerald-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-emerald-200 dark:border-emerald-900/50 shadow-sm relative overflow-hidden">
                                                                 <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
@@ -1324,10 +1339,19 @@ function FinancePortal({ user }) {
                                                                     <h4 className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">3. Final Invoice</h4>
                                                                     <button type="button" onClick={() => handlePrintDocument('Invoice Data Extract', r.invoice_data)} className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-md shadow-sm transition-colors">📄 Print PDF</button>
                                                                 </div>
-                                                                <div className="flex justify-between items-end">
+                                                                <div className="flex justify-between items-start">
                                                                     <p className="text-xl font-black text-slate-800 dark:text-slate-100">{formatCurrency(r.invoice_total)}</p>
-                                                                    <p className="text-[10px] font-bold uppercase">Var: <span className={r.invoice_total === r.po_total ? 'text-emerald-500' : 'text-red-500'}>{formatCurrency(Math.abs(r.invoice_total - r.po_total))}</span></p>
+                                                                    <div className="text-right text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase space-y-0.5">
+                                                                        <p>Sub: {formatCurrency(r.invoice_data?.subtotalAmount || r.invoice_data?.subtotal || r.invoice_total)}</p>
+                                                                        {r.invoice_data?.taxAmount > 0 && <p>Tax: {formatCurrency(r.invoice_data?.taxAmount)}</p>}
+                                                                        {r.invoice_data?.discountAmount > 0 && <p className="text-red-500">Disc: -{formatCurrency(r.invoice_data?.discountAmount)}</p>}
+                                                                        {r.invoice_data?.shippingAmount > 0 && <p>Ship: {formatCurrency(r.invoice_data?.shippingAmount)}</p>}
+                                                                    </div>
                                                                 </div>
+                                                                <p className="text-[10px] font-bold uppercase mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+                                                                    <span>Variance Tracking:</span>
+                                                                    <span className={r.invoice_total === r.po_total ? 'text-emerald-500' : 'text-red-500'}>{formatCurrency(Math.abs(r.invoice_total - r.po_total))}</span>
+                                                                </p>
                                                             </div>
                                                             {shortageEvidence.length > 0 && (
                                                                 <div className="bg-gradient-to-br from-red-50 to-white dark:from-slate-950 dark:to-slate-900 p-4 rounded-xl border border-red-200 dark:border-red-900/50 shadow-sm relative overflow-hidden">

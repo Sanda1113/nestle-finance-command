@@ -1049,12 +1049,24 @@ export default function SupplierDashboard({ user, onLogout }) {
                         </div>
                         <div>
                             <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Subtotal</p>
-                            <p className="text-slate-300">{formatCurrency(data.subtotalAmount || (data.totalAmount - (data.taxAmount || 0)), currency)}</p>
+                            <p className="text-slate-300">{formatCurrency(data.subtotalAmount || data.subtotal || (data.totalAmount - (data.taxAmount || 0)), currency)}</p>
                         </div>
                         <div>
                             <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Tax</p>
-                            <p className="text-slate-300">{formatCurrency(data.taxAmount || 0, currency)}</p>
+                            <p className="text-slate-300">{formatCurrency(data.taxAmount || data.salesTax || 0, currency)}</p>
                         </div>
+                        {data.discountAmount > 0 && (
+                            <div>
+                                <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Discount</p>
+                                <p className="text-red-400">-{formatCurrency(data.discountAmount, currency)}</p>
+                            </div>
+                        )}
+                        {data.shippingAmount > 0 && (
+                            <div>
+                                <p className="text-[10px] uppercase text-slate-400 font-bold mb-0.5">Shipping</p>
+                                <p className="text-slate-300">{formatCurrency(data.shippingAmount, currency)}</p>
+                            </div>
+                        )}
                     </div>
                     <div className="mb-4 grow">
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Line Items</h4>
