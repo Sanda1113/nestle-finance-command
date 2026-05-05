@@ -19,7 +19,9 @@ import {
     Filter,
     Zap,
     Download,
-    CreditCard
+    CreditCard,
+    Shield,
+    ShieldCheck
 } from 'lucide-react';
 
 const localizer = momentLocalizer(moment);
@@ -126,6 +128,7 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
     const [loading, setLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [eventTrustProfile, setEventTrustProfile] = useState(null);
     const [holdDate, setHoldDate] = useState('');
     const [discountRate, setDiscountRate] = useState(2.5);
     const [view, setView] = useState('month');
@@ -219,6 +222,20 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
     useEffect(() => {
         fetchEvents();
     }, [refreshTrigger, fetchEvents]);
+
+    useEffect(() => {
+        if (!selectedEvent || !isFinance) {
+            setEventTrustProfile(null);
+            return;
+        }
+        const fetchTrust = async () => {
+            try {
+                const res = await axios.get(`https://nestle-finance-command-production.up.railway.app/api/sprint2/trust-profile?email=${encodeURIComponent(selectedEvent.supplier_email)}`);
+                if (res.data.success) setEventTrustProfile(res.data.data);
+            } catch { setEventTrustProfile(null); }
+        };
+        fetchTrust();
+    }, [selectedEvent, isFinance]);
 
     const updateEventDate = useCallback(async (id, start, end) => {
         // Optimistic UI update
@@ -547,6 +564,18 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
                                     </div>
                                     <span className="text-xs font-black text-slate-200">{selectedEvent.supplier_email}</span>
                                 </div>
+
+                                {isFinance && eventTrustProfile && (
+                                    <div className="flex items-center justify-between p-4 bg-slate-800/20 rounded-2xl border border-slate-700/30">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-xl ${eventTrustProfile.trust_tier === 1 ? 'bg-emerald-500/10 text-emerald-400' : eventTrustProfile.trust_tier === 2 ? 'bg-blue-500/10 text-blue-400' : 'bg-red-500/10 text-red-400'}`}>
+                                                {eventTrustProfile.trust_tier === 1 ? <ShieldCheck className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-400">Trust Tier: {eventTrustProfile.trust_tier === 1 ? 'Strategic' : eventTrustProfile.trust_tier === 2 ? 'Standard' : 'High Risk'}</span>
+                                        </div>
+                                        <span className="text-xs font-black text-slate-200">Accuracy: {eventTrustProfile.accuracy_score || 0}%</span>
+                                    </div>
+                                )}
 
                                 {selectedEvent.status !== 'Paid' && (
                                     <div className={`flex items-center gap-4 p-5 rounded-[2rem] border ${daysUntilPayout === 0 ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' :
