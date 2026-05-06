@@ -128,6 +128,27 @@ const runBackgroundTask = (label, task) => {
         });
 };
 
+const getTrustTier = async (email) => {
+    try {
+        const cleanEmail = normalizeEmail(email);
+        const [boqs, recons, pos] = await Promise.all([
+            supabase.from('boqs').select('id').eq('supplier_email', cleanEmail).eq('status', 'Rejected'),
+            supabase.from('reconciliations').select('id').eq('supplier_email', cleanEmail).ilike('match_status', '%reject%'),
+            supabase.from('purchase_orders').select('id').eq('supplier_email', cleanEmail).ilike('status', '%cancelled%')
+        ]);
+
+        const boqRejections = boqs.data?.length || 0;
+        const invoiceRejections = recons.data?.length || 0;
+        const shipmentRejections = pos.data?.length || 0;
+
+        const maxRejections = Math.max(boqRejections, invoiceRejections, shipmentRejections);
+        return maxRejections <= 8 ? 1 : maxRejections <= 10 ? 2 : 3;
+    } catch (err) {
+        console.error('[getTrustTier] Error:', err);
+        return 2; // Default to Standard
+    }
+};
+
 // ==========================================
 // 🛡️ TRUST PROFILE ENDPOINT
 // ==========================================
@@ -136,6 +157,8 @@ router.get('/trust-profile', async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email required' });
 
     try {
+        const dynamicTier = await getTrustTier(email);
+        
         let { data: profile, error } = await supabase
             .from('vendor_trust_profiles')
             .select('*')
@@ -148,7 +171,7 @@ router.get('/trust-profile', async (req, res) => {
                 .from('vendor_trust_profiles')
                 .insert([{
                     supplier_email: email,
-                    trust_tier: 2,
+                    trust_tier: dynamicTier,
                     accuracy_score: 100
                 }])
                 .select()
@@ -158,6 +181,11 @@ router.get('/trust-profile', async (req, res) => {
             profile = newProfile;
         } else if (error) {
             throw error;
+        }
+
+        // Always prioritize the dynamic calculation if it differs from the static one (to handle legacy data)
+        if (profile) {
+            profile.trust_tier = dynamicTier;
         }
 
         res.json({ success: true, data: profile });
@@ -1243,12 +1271,7 @@ router.post('/payouts/:id/instant-pay', async (req, res) => {
         }
 
         // Only Tier 1 can use instant pay
-        const { data: trust } = await supabase
-            .from('vendor_trust_profiles')
-            .select('trust_tier')
-            .eq('supplier_email', payout.supplier_email)
-            .single();
-        const tier = trust?.trust_tier || 2;
+        const tier = await getTrustTier(payout.supplier_email);
         if (tier !== 1) {
             return res.status(403).json({ error: 'Instant payout is only available for Strategic Partners (Tier 1).' });
         }
@@ -1367,15 +1390,10 @@ router.post('/payouts/:id/request-early', async (req, res) => {
             .single();
         if (fetchErr || !payout) return res.status(404).json({ error: 'Payout not found' });
 
-        // Restrict to Tier 2 only (backend enforcement)
-        const { data: trust } = await supabase
-            .from('vendor_trust_profiles')
-            .select('trust_tier')
-            .eq('supplier_email', payout.supplier_email)
-            .single();
-        const tier = trust?.trust_tier || 2;
-        if (tier !== 2) {
-            return res.status(403).json({ error: 'Only Standard Tier suppliers can request early payout with review.' });
+        // Restrict to Tier 1 & 2 (backend enforcement)
+        const tier = await getTrustTier(payout.supplier_email);
+        if (tier > 2) {
+            return res.status(403).json({ error: 'Early payout requests are currently disabled for High Risk profiles.' });
         }
 
         const { error: updateErr } = await supabase
