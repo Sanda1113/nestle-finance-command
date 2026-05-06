@@ -524,6 +524,9 @@ router.post('/grn/reject', async (req, res) => {
             .single();
 
         if (poFetchErr) throw poFetchErr;
+        if (!poContext) {
+            return res.status(404).json({ error: 'Purchase order not found' });
+        }
 
         const rejectionContext = {
             rejectedBy,

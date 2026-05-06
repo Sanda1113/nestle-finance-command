@@ -763,7 +763,16 @@ app.post('/api/reconciliations/:id/notify', async (req, res) => {
 app.post('/api/save-boq', async (req, res) => {
     const { boqData, supplierEmail, vendorId } = req.body;
     try {
-        console.log(`💾 Saving BOQ from ${boqData?.vendorName || 'Unknown'}`);
+        // 🛡️ Before saving BOQ, validate the extracted data
+        if (!boqData || !boqData.vendorName) {
+            console.warn('⚠️ BOQ extraction returned invalid or incomplete data');
+            return res.status(400).json({ 
+                error: 'Failed to extract valid BOQ data',
+                details: 'Vendor information is missing from the document'
+            });
+        }
+
+        console.log(`💾 Saving BOQ from ${boqData.vendorName}`);
         const { error } = await supabase.from('boqs').insert([{
             vendor_name: boqData.vendorName,
             document_number: boqData.invoiceNumber !== 'Not Found' ? boqData.invoiceNumber : `BOQ-${Date.now().toString().slice(-6)}`,
