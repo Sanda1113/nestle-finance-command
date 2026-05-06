@@ -16,7 +16,10 @@ jest.mock('../db', () => {
         in: jest.fn().mockResolvedValue({ error: null }),
         not: jest.fn().mockReturnThis(),
         // catch is needed when production code chains .insert(...).catch(...) before awaiting
-        catch: jest.fn().mockReturnThis(),
+        catch: jest.fn().mockImplementation((handler) => {
+            // Pass the error through the handler and return a resolved promise
+            return Promise.resolve(handler({ message: 'Invalid data' }));
+        }),
         then: jest.fn((resolve) => resolve({ data: [], error: null })),
     };
 
@@ -121,10 +124,28 @@ describe('Nestle Finance API', () => {
         expect(res.body).toHaveProperty('error');
     });
 
-    test('POST /api/save-boq with invalid data returns 500', async () => {
+    test('POST /api/save-boq with missing data returns 400', async () => {
         const res = await request(app)
             .post('/api/save-boq')
             .send({ boqData: null });
+        expect(res.statusCode).toBe(400);
+    });
+
+    test('POST /api/save-boq with database error returns 500', async () => {
+        const errorQueryMock = createQueryMock({ data: null, error: { message: 'Database error' } });
+        
+        // Ensure .insert() rejects with the error
+        errorQueryMock.insert.mockImplementation(() => errorQueryMock);
+        errorQueryMock.then.mockImplementation((resolve, reject) => {
+            reject({ message: 'Database error' });
+            return Promise.reject({ message: 'Database error' });
+        });
+        
+        supabase.from.mockReturnValueOnce(errorQueryMock);
+
+        const res = await request(app)
+            .post('/api/save-boq')
+            .send({ boqData: { vendorName: 'Test Vendor' } });
         expect(res.statusCode).toBe(500);
     });
 
