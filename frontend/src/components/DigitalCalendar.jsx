@@ -710,11 +710,39 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <Zap className="w-4 h-4 text-indigo-400" />
-                                                        <span className="text-xs font-black text-white uppercase tracking-widest">Strategic Instant Payout</span>
+                                                        <span className="text-xs font-black text-white uppercase tracking-widest">
+                                                            Strategic Instant Payout
+                                                        </span>
                                                     </div>
                                                 </div>
-                                                <button onClick={handleInstantPayout} disabled={isUpdating}
-                                                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2">
+
+                                                {/* Breakdown card */}
+                                                <div className="space-y-2 bg-slate-800/60 rounded-2xl p-4 border border-slate-700/30">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs text-slate-400">Full scheduled amount</span>
+                                                        <span className="text-sm font-bold text-white">
+                                                            {formatCurrency(selectedEvent.amount)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs text-slate-400">4% early withdrawal fee</span>
+                                                        <span className="text-sm font-bold text-rose-400">
+                                                            - {formatCurrency(selectedEvent.amount * 0.04)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center pt-2 border-t border-slate-700/50">
+                                                        <span className="text-xs text-slate-400">You receive</span>
+                                                        <span className="text-sm font-bold text-emerald-400">
+                                                            {formatCurrency(selectedEvent.amount * 0.96)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    onClick={handleInstantPayout}
+                                                    disabled={isUpdating}
+                                                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2"
+                                                >
                                                     <Download className="w-5 h-5" />
                                                     Get Paid Instant (4% fee)
                                                 </button>
