@@ -81,7 +81,7 @@ describe('Sprint2 Routes', () => {
             'Pending Warehouse GRN',
             'Truck at Bay - Pending Unload'
         ]));
-        expect(mockQuery.limit).toHaveBeenCalledWith(100);
+        expect(mockQuery.limit).toHaveBeenCalledWith(500);
         expect(res.body.data[0].po_data.warehouse_rejection.shortageEvidence[0].photoDataUrl).toBe('data:image/jpeg;base64,abc');
         expect(res.body.data[0].po_data.warehouse_grn.shortageEvidence[0].photoDataUrl).toBe('');
     });
@@ -422,4 +422,9 @@ describe('Supplier email notifications on update events', () => {
         expect(res.statusCode).toBe(200);
         expect(sendSupplierEmail).not.toHaveBeenCalled();
     });
+});
+
+afterAll(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
 });

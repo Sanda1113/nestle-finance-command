@@ -131,6 +131,14 @@ describe('Nestle Finance API', () => {
     test('POST /api/auth/register normalizes email/role before insert', async () => {
         const existingUserCheckQueryMock = createQueryMock({ data: [], error: null });
         const registerQueryMock = createQueryMock({ data: null, error: null });
+        
+        // Ensure .then() resolves immediately after .insert()
+        registerQueryMock.insert.mockImplementation(() => registerQueryMock);
+        registerQueryMock.then.mockImplementation((resolve) => {
+            resolve({ data: null, error: null });
+            return Promise.resolve();
+        });
+        
         supabase.from
             .mockReturnValueOnce(existingUserCheckQueryMock)
             .mockReturnValueOnce(registerQueryMock);
@@ -274,4 +282,9 @@ describe('Supplier email notifications on finance/procurement updates', () => {
             expect.any(Object)
         );
     });
+});
+
+afterAll(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
 });
