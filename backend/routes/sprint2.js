@@ -129,6 +129,7 @@ const runBackgroundTask = (label, task) => {
 };
 
 const getTrustTier = async (email) => {
+    if (!email) return 2; // Default to Standard if email is missing
     try {
         const cleanEmail = normalizeEmail(email);
         const [boqs, recons, pos] = await Promise.all([
@@ -1270,7 +1271,6 @@ router.post('/payouts/:id/instant-pay', async (req, res) => {
             return res.status(400).json({ error: 'Instant payout can only be used on Scheduled payouts.' });
         }
 
-        // Only Tier 1 can use instant pay
         const tier = await getTrustTier(payout.supplier_email);
         if (tier !== 1) {
             return res.status(403).json({ error: 'Instant payout is only available for Strategic Partners (Tier 1).' });
@@ -1279,19 +1279,19 @@ router.post('/payouts/:id/instant-pay', async (req, res) => {
         const feeRate = 0.04;
         const newAmount = Math.round((payout.base_amount || payout.final_amount) * (1 - feeRate) * 100) / 100;
 
+        // 🔥 Only update columns that exist in the table
         const { error: updateErr } = await supabase
             .from('payout_schedules')
             .update({
                 final_amount: newAmount,
                 status: 'Renegotiated',
-                discount_applied: feeRate,
-                early_payout_requested: true,
-                early_payout_accepted_at: new Date().toISOString()
+                start_date: new Date().toISOString(),   // set to today
+                end_date: new Date().toISOString()
             })
             .eq('id', id);
         if (updateErr) throw updateErr;
 
-        // Notify supplier
+        // Notify supplier (unchanged)
         await supabase.from('notifications').insert({
             user_email: payout.supplier_email,
             user_role: 'supplier',
@@ -1331,8 +1331,8 @@ router.post('/payouts/:id/approve-instant', async (req, res) => {
             .update({
                 final_amount: newAmount,
                 status: 'Renegotiated',
-                discount_applied: feeRate,
-                early_payout_accepted_at: new Date().toISOString()
+                start_date: new Date().toISOString(),
+                end_date: new Date().toISOString()
             })
             .eq('id', id);
         if (updateErr) throw updateErr;
