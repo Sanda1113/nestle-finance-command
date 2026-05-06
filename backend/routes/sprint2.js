@@ -662,8 +662,8 @@ router.get('/grn/pending-pos', async (req, res) => {
             console.log(`[pending-pos] Querying with .in('status', [${WAREHOUSE_STATUSES.map(s => `"${s}"`).join(', ')}])`);
             query = query
                 .in('status', WAREHOUSE_STATUSES)
-                .order('created_at', { ascending: false })
-                .limit(100);
+                .order('id', { ascending: false })
+                .limit(500);
         } else if (includePhotos) {
             query = query
                 .order('created_at', { ascending: false })
