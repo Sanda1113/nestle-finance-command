@@ -134,11 +134,10 @@ describe('Nestle Finance API', () => {
     test('POST /api/save-boq with database error returns 500', async () => {
         const errorQueryMock = createQueryMock({ data: null, error: { message: 'Database error' } });
         
-        // Ensure .insert() rejects with the error
+        // Resolve with error object to simulate Supabase behavior
         errorQueryMock.insert.mockImplementation(() => errorQueryMock);
-        errorQueryMock.then.mockImplementation((resolve, reject) => {
-            reject({ message: 'Database error' });
-            return Promise.reject({ message: 'Database error' });
+        errorQueryMock.then.mockImplementation((resolve) => {
+            resolve({ data: null, error: { message: 'Database error' } });
         });
         
         supabase.from.mockReturnValueOnce(errorQueryMock);
