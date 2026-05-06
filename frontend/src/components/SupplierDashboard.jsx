@@ -340,7 +340,7 @@ export default function SupplierDashboard({ user, onLogout }) {
 
             if (isMountedRef.current) {
                 if (posRes.status === 'fulfilled') {
-                    const sortedPOs = (posRes.value.data.data || []).sort((a, b) => {
+                    const serverPOs = (posRes.value.data.data || []).sort((a, b) => {
                         const aTime = a.created_at ? new Date(a.created_at).getTime() : Number.NEGATIVE_INFINITY;
                         const bTime = b.created_at ? new Date(b.created_at).getTime() : Number.NEGATIVE_INFINITY;
                         const dateDiff = bTime - aTime;
@@ -350,7 +350,18 @@ export default function SupplierDashboard({ user, onLogout }) {
                         if (bId !== aId) return bId - aId;
                         return String(b.po_number || '').localeCompare(String(a.po_number || ''));
                     });
-                    setMyPOs(sortedPOs);
+
+                    // Merge with existing POs to preserve optimistic is_downloaded flag
+                    setMyPOs(prev => {
+                        const prevMap = new Map(prev.map(p => [p.id, p]));
+                        return serverPOs.map(po => {
+                            const existing = prevMap.get(po.id);
+                            if (existing && existing.is_downloaded) {
+                                return { ...po, is_downloaded: true };
+                            }
+                            return po;
+                        });
+                    });
                 }
                 if (logsRes.status === 'fulfilled') {
                     setMyLogs(logsRes.value.data.logs || []);
@@ -962,10 +973,10 @@ export default function SupplierDashboard({ user, onLogout }) {
                     } else {
                         const isPaid = payout.status === 'Paid';
                         const isHold = payout.status === 'Hold';
-                        const isStaged = payout.status === 'Staged' || payout.status === 'Scheduled';
-
+                        const isScheduled = payout.status === 'Scheduled';
+                        const isRenegotiated = payout.status === 'Renegotiated';
                         events.push({
-                            label: isPaid ? '💰 Paid (Funds Disbursed)' : isHold ? '⏸️ Payment Hold' : isStaged ? '📅 Payout Scheduled' : `Payout: ${payout.status}`,
+                            label: isPaid ? '💰 Paid (Funds Disbursed)' : isHold ? '⏸️ Payment Hold' : isScheduled ? '📅 Payout Scheduled' : isRenegotiated ? '⚡ Early Payout (Renegotiated)' : `Payout: ${payout.status}`,
                             date: payout.updated_at || payout.created_at,
                             status: isHold ? 'warning' : 'completed',
                             icon: isPaid ? '💰' : isHold ? '⏸️' : '🗓️',
@@ -974,6 +985,8 @@ export default function SupplierDashboard({ user, onLogout }) {
                             note: isPaid ? `Paid on ${new Date(payout.start_date).toLocaleDateString()}` : `Est. Payout: ${new Date(payout.start_date).toLocaleDateString()}`
                         });
                     }
+                } else if (po.status === 'Goods Cleared - Ready for Payout' || po.status.includes('GRN Logged')) {
+                    events.push({ label: '⏳ Awaiting Payout Scheduling', date: new Date().toISOString(), status: 'pending', icon: '⏳' });
                 }
             } else {
                 if (po.status === 'Delivered to Dock' || po.po_data?.delivery_timestamp) {
@@ -993,9 +1006,10 @@ export default function SupplierDashboard({ user, onLogout }) {
                     if (label.includes('Delivered to Dock')) return 7;
                     if (label.includes('Warehouse Acknowledged')) return 8;
                     if (label.includes('Goods Cleared')) return 9;
-                    if (label.includes('Payout Staged')) return 10;
-                    if (label.includes('Payout Scheduled') || label.includes('Payment Hold')) return 11;
-                    if (label.includes('Paid')) return 12;
+                    if (label.includes('Awaiting Payout Scheduling')) return 10;
+                    if (label.includes('Payout Staged')) return 11;
+                    if (label.includes('Payout Scheduled') || label.includes('Payment Hold') || label.includes('Early Payout')) return 12;
+                    if (label.includes('Paid')) return 13;
                     return 99;
                 };
                 const orderA = getOrder(a.label);

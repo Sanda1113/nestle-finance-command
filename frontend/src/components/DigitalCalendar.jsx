@@ -40,6 +40,7 @@ const getStatusCfg = (status) => {
         case 'Staged': return { bg: 'from-blue-400/90 to-indigo-600/90', icon: '⏳', glow: 'shadow-[0_0_20px_rgba(96,165,250,0.3)]', label: 'To be paid' };
         case 'Hold': return { bg: 'from-amber-400/90 to-orange-600/90', icon: '⏸️', glow: 'shadow-[0_0_20px_rgba(251,191,36,0.3)]', label: 'On Hold' };
         case 'Early Payment Requested': return { bg: 'from-purple-400/90 to-pink-600/90', icon: '⚡', glow: 'shadow-[0_0_20px_rgba(192,132,252,0.3)]', label: 'Early Payout' };
+        case 'Renegotiated': return { bg: 'from-purple-400/90 to-pink-600/90', icon: '⚡', glow: 'shadow-[0_0_20px_rgba(192,132,252,0.3)]', label: 'Early Payout' };
         case 'Pending Finance': return { bg: 'from-blue-400/90 to-indigo-600/90', icon: '⏳', glow: 'shadow-[0_0_20px_rgba(96,165,250,0.3)]', label: 'To be paid' };
         default: return { bg: 'from-slate-400/90 to-slate-600/90', icon: '⏳', glow: 'shadow-[0_0_20px_rgba(148,163,184,0.3)]', label: 'To be paid' };
     }
@@ -123,7 +124,7 @@ const CustomToolbar = (toolbar) => {
     );
 };
 
-export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, trustTier = 2, onAcceptEarlyPayout }) {
+export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, trustTier = 2, onAcceptEarlyPayout, selectedEventId, onSelectEvent }) {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState(null);
@@ -222,7 +223,6 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
     useEffect(() => {
         fetchEvents();
     }, [refreshTrigger, fetchEvents]);
-
     useEffect(() => {
         if (!selectedEvent || !isFinance) {
             setEventTrustProfile(null);
@@ -236,6 +236,16 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
         };
         fetchTrust();
     }, [selectedEvent, isFinance]);
+    
+    useEffect(() => {
+        if (selectedEventId && events.length > 0) {
+            const ev = events.find(e => e.id === selectedEventId);
+            if (ev) {
+                setSelectedEvent(ev);
+                setCurrentDate(new Date(ev.start)); // navigate to month
+            }
+        }
+    }, [selectedEventId, events]);
 
     const updateEventDate = useCallback(async (id, start, end) => {
         // Optimistic UI update
@@ -477,7 +487,7 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
                 <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-5 shadow-2xl">
                     <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Status Legend</h3>
                     <div className="grid grid-cols-2 gap-3">
-                        {['Scheduled', 'Paid', 'Hold', 'Early Payment Requested'].map((k) => {
+                        {['Scheduled', 'Paid', 'Hold', 'Early Payment Requested', 'Renegotiated'].map((k) => {
                             const cfg = getStatusCfg(k);
                             return (
                                 <div key={k} className="flex items-center gap-2">

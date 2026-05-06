@@ -1788,6 +1788,7 @@ function PayoutCalendar({ user }) {
     const [loading, setLoading] = useState(true);
     const [schedulingPayout, setSchedulingPayout] = useState(null);
     const [confirmDate, setConfirmDate] = useState('');
+    const [selectedPayoutId, setSelectedPayoutId] = useState(null);
 
     const fetchPayouts = async () => {
         try {
@@ -1940,14 +1941,14 @@ function PayoutCalendar({ user }) {
 
                     {/* Premium Digital Calendar wrapper */}
                     <div className="relative z-10 animate-in fade-in duration-1000">
-                        <DigitalCalendar userRole="Finance" userEmail={user.email} />
+                        <DigitalCalendar userRole="Finance" userEmail={user.email} selectedEventId={selectedPayoutId} onSelectEvent={setSelectedPayoutId} />
                     </div>
 
                     {/* Split View: Batching & Upcoming Table */}
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                    <div className={`grid grid-cols-1 ${batchedPayments.length > 0 ? 'xl:grid-cols-3' : ''} gap-8`}>
                         {/* Batching Column */}
-                        <div className="xl:col-span-1 space-y-6">
-                            {batchedPayments.length > 0 && (
+                        {batchedPayments.length > 0 && (
+                            <div className="xl:col-span-1 space-y-6">
                                 <div className="bg-gradient-to-b from-purple-900/40 to-slate-900/60 backdrop-blur-xl rounded-[2rem] p-6 border border-purple-500/20 shadow-2xl relative overflow-hidden">
                                     <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl"></div>
                                     <h3 className="text-sm font-black text-purple-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Briefcase className="w-5 h-5" /> Intelligent Batching</h3>
@@ -1970,11 +1971,11 @@ function PayoutCalendar({ user }) {
                                         ))}
                                     </div>
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
 
                         {/* Upcoming Table Column */}
-                        <div className="xl:col-span-2 pb-24">
+                        <div className={batchedPayments.length > 0 ? 'xl:col-span-2 pb-24' : 'col-span-full pb-24'}>
                             <div className="bg-slate-900/60 backdrop-blur-xl shadow-2xl rounded-[2.5rem] overflow-hidden border border-slate-800/50">
                                 <div className="p-8 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
                                     <div>
@@ -1996,7 +1997,7 @@ function PayoutCalendar({ user }) {
                                         </thead>
                                         <tbody className="divide-y divide-slate-800/50">
                                             {upcoming.map(p => (
-                                                <tr key={p.id} className="hover:bg-slate-800/30 transition-all group">
+                                                <tr key={p.id} onClick={() => setSelectedPayoutId(p.id)} className="hover:bg-slate-800/30 transition-all cursor-pointer group">
                                                     <td className="p-6">
                                                         <div className="flex items-center gap-3">
                                                             <div className="p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors"><Calendar className="w-4 h-4" /></div>
