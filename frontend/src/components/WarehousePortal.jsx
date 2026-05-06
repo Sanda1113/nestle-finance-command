@@ -38,6 +38,13 @@ const WAREHOUSE_COMPLETED_STATUSES = new Set([
     'Transaction Cancelled (Shortage)',
     'Goods Cleared - Ready for Payout'
 ]);
+const ACKNOWLEDGED_PATTERNS = [
+    'Truck at Bay',          // Acknowledged
+    'Pending Unload',        // After acknowledgment
+    'Received',              // GRN logged
+    'Cleared',               // Completed
+    'Cancelled'              // Rejected
+];
 const OFFLINE_PO_FALLBACK_MAX_RECORDS = 120;
 const OFFLINE_PO_FALLBACK_MAX_LINE_ITEMS = 200;
 
@@ -323,14 +330,22 @@ const ShipmentCard = React.memo(({ po, onClick, onAcknowledge }) => {
                 <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg flex items-center gap-1">
                     <Package className="w-3 h-3 shrink-0" /> {po.po_data?.lineItems?.length || 0} Pallets
                 </span>
-                {(po.po_data?.delivery_timestamp && !po.status?.includes('Bay') && !po.status?.includes('Received') && !po.status?.includes('Cleared') && !po.status?.includes('Cancelled')) && (
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onAcknowledge(po); }}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
-                    >
-                        <CheckCircle2 className="w-3 h-3" /> Acknowledge Arrival
-                    </button>
-                )}
+                {(() => {
+                    const isDelivered = Boolean(po.po_data?.delivery_timestamp);
+                    const alreadyAcknowledged = ACKNOWLEDGED_PATTERNS.some(pattern =>
+                        po.status?.includes(pattern)
+                    );
+                    const showAcknowledgeButton = isDelivered && !alreadyAcknowledged;
+                    
+                    return showAcknowledgeButton && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onAcknowledge(po); }}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+                        >
+                            <CheckCircle2 className="w-3 h-3" /> Acknowledge Arrival
+                        </button>
+                    );
+                })()}
             </div>
         </div>
     );
@@ -1833,11 +1848,19 @@ export default function WarehousePortal({ user, onLogout }) {
                             )}
 
                             <div className="hidden lg:block mt-auto space-y-3 pt-4">
-                                {(!selectedPO.status?.includes('Bay') && !selectedPO.status?.includes('Received') && !selectedPO.status?.includes('Cleared') && !selectedPO.status?.includes('Cancelled') && (selectedPO.status === 'Delivered to Dock' || selectedPO.po_data?.delivery_timestamp)) && (
-                                    <button onClick={(e) => { e.stopPropagation(); handleAcknowledgeArrival(selectedPO); }} className="w-full min-h-12 px-4 text-base bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-[0.99]">
-                                        <CheckCircle2 className="w-5 h-5" /> Acknowledge Arrival
-                                    </button>
-                                )}
+                                {(() => {
+                                    const isDelivered = Boolean(selectedPO.po_data?.delivery_timestamp);
+                                    const alreadyAcknowledged = ACKNOWLEDGED_PATTERNS.some(pattern =>
+                                        selectedPO.status?.includes(pattern)
+                                    );
+                                    const showDetailAcknowledge = isDelivered && !alreadyAcknowledged;
+                                    
+                                    return showDetailAcknowledge && (
+                                        <button onClick={(e) => { e.stopPropagation(); handleAcknowledgeArrival(selectedPO); }} className="w-full min-h-12 px-4 text-base bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-[0.99]">
+                                            <CheckCircle2 className="w-5 h-5" /> Acknowledge Arrival
+                                        </button>
+                                    );
+                                })()}
                                 {(!selectedPO.status?.includes('Received') && !selectedPO.status?.includes('Cleared') && !selectedPO.status?.includes('Cancelled')) && (
                                     <button onClick={submitGRN} className="w-full min-h-12 px-4 text-base bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-transform active:scale-[0.99]">
                                         <CheckCircle2 className="w-5 h-5" /> Confirm Goods Received (Sign GRN)
@@ -1985,11 +2008,19 @@ export default function WarehousePortal({ user, onLogout }) {
                                     <RefreshCw className="w-3 h-3 animate-spin" /> Syncing live data...
                                 </div>
                             )}
-                                {(!selectedPO.status?.includes('Bay') && !selectedPO.status?.includes('Received') && !selectedPO.status?.includes('Cleared') && !selectedPO.status?.includes('Cancelled') && (selectedPO.status === 'Delivered to Dock' || selectedPO.po_data?.delivery_timestamp)) && (
-                                    <button onClick={(e) => { e.stopPropagation(); handleAcknowledgeArrival(selectedPO); }} className="w-full min-h-12 px-4 text-base sm:text-lg bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-[0.98]">
-                                        <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> Acknowledge Arrival
-                                    </button>
-                                )}
+                                {(() => {
+                                    const isDelivered = Boolean(selectedPO.po_data?.delivery_timestamp);
+                                    const alreadyAcknowledged = ACKNOWLEDGED_PATTERNS.some(pattern =>
+                                        selectedPO.status?.includes(pattern)
+                                    );
+                                    const showDetailAcknowledge = isDelivered && !alreadyAcknowledged;
+                                    
+                                    return showDetailAcknowledge && (
+                                        <button onClick={(e) => { e.stopPropagation(); handleAcknowledgeArrival(selectedPO); }} className="w-full min-h-12 px-4 text-base sm:text-lg bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-[0.98]">
+                                            <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> Acknowledge Arrival
+                                        </button>
+                                    );
+                                })()}
                                 {(!selectedPO.status?.includes('Received') && !selectedPO.status?.includes('Cleared') && !selectedPO.status?.includes('Cancelled')) && (
                                     <button onClick={submitGRN} className="w-full min-h-12 px-4 text-base sm:text-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 active:scale-[0.98] mt-3">
                                         <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> Confirm Goods Received (Sign GRN)
