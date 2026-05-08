@@ -139,7 +139,7 @@ export default function SupplierDashboard({ user, onLogout }) {
         {
             title: '💸 Tab: Liquidity & Payout Calendar',
             body: 'This tab shows your scheduled payments on a Google Calendar-style view. Blue = Scheduled, Green = Paid, Yellow = On Hold. Click any event to see details. You can also request early payment with 4% fee.',
-            tip: '⚡ Early payment = get paid today, minus a small 4% fee. Finance is notified automatically.',
+            tip: '⚡ Early payment = get paid today, minus a small % fee. Finance is notified automatically.',
             targetId: 'tut-tab-payouts',
             action: () => setMode('payouts')
         },
@@ -1786,7 +1786,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                 <Zap className="w-5 h-5 text-indigo-400" />
                                             </div>
                                             <div>
-                                                <h3 className="text-base font-bold text-white">Active Payout Request</h3>
+                                                <h3 className="text-base font-bold text-white">Active Liquidity Request</h3>
                                                 <p className="text-sm text-indigo-100 mt-1">You have pending early payout requests. Finance is currently reviewing your schedule to optimize cash delivery.</p>
                                             </div>
                                         </div>
@@ -1798,7 +1798,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                                 <TrendingUp className="w-5 h-5 text-emerald-400" />
                                             </div>
                                             <div>
-                                                <h3 className="text-base font-bold text-white">Strategic Payout Offer</h3>
+                                                <h3 className="text-base font-bold text-white">Strategic Liquidity Offer</h3>
                                                 <p className="text-sm text-emerald-100 mt-1">As a Strategic Partner, you can unlock instant early-payouts at a preferred 4% rate. No manual review required from Nestle Finance - Instant Payouts.</p>
                                             </div>
                                         </div>
@@ -1823,7 +1823,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     <button type="button" id="tut-quick-boq" onClick={() => { setMode('boq'); setBoqFile(null); }} className={`w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${spotlightClass('tut-quick-boq')}`} title="Submit a Bill of Quantities (BOQ) to get a Purchase Order">📤 Submit Quote</button>
                                     <button type="button" id="tut-quick-match" onClick={() => { setMode('match'); setInvoiceFile(null); setPoFile(null); setShowWalkthrough(false); localStorage.setItem('hasSeenWalkthrough', 'true'); }} className={`w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${showWalkthrough ? 'relative z-[102] ring-4 ring-purple-500 ring-offset-2 ring-offset-slate-900 animate-pulse' : ''} ${spotlightClass('tut-quick-match')}`} title="Upload your Invoice and the Purchase Order to start the 3-Way Match process">🔗 Match Invoice & PO</button>
                                     <button type="button" id="tut-quick-logs" onClick={() => { setMode('logs'); }} className={`w-full py-2 bg-slate-800 text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-700 transition-all flex items-center justify-center gap-2 ${spotlightClass('tut-quick-logs')}`} title="View the complete lifecycle and history of your transactions">📜 View Timeline</button>
-                                    <button type="button" id="tut-quick-payouts" onClick={() => setMode('payouts')} className={`w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${spotlightClass('tut-quick-payouts')}`} title="Manage your cash flow and access early payment options via Dynamic Discounting">💸 Payout calender</button>
+                                    <button type="button" id="tut-quick-payouts" onClick={() => setMode('payouts')} className={`w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all flex items-center justify-center gap-2 ${spotlightClass('tut-quick-payouts')}`} title="Manage your cash flow and access early payment options via Dynamic Discounting">💸 Liquidity Engine</button>
                                 </div>
                             </div>
 
