@@ -761,7 +761,7 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
                                                     <AlertCircle className="w-4 h-4 text-red-400" />
                                                     <span className="text-xs font-black text-red-400 uppercase">Not Available</span>
                                                 </div>
-                                                <p className="text-xs text-slate-400">Instant payout is disabled for your risk profile. Please wait till the Finance Pays you.</p>
+                                                <p className="text-xs text-slate-400">Instant payout is disabled for your risk profile.</p>
                                             </div>
                                         )}
                                     </div>
