@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2, Search, FileText, ChevronRight, ShieldCheck, Zap, Activity, Percent, Calendar, TrendingUp, Download } from 'lucide-react';
+import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2, Search, FileText, ChevronRight, ShieldCheck, Zap, Activity, Percent, Calendar, TrendingUp, Download, ShieldAlert } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import NotificationBell from './NotificationBell';
 import AppNotifier from './AppNotifier';
@@ -303,22 +303,9 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [isDarkMode, setIsDarkMode] = useState(true);
     const isFetchingDataRef = useRef(false);
     const isMountedRef = useRef(true);
-    const [trustProfile, setTrustProfile] = useState(null);
 
-    useEffect(() => {
-        const fetchTrust = async () => {
-            try {
-                const res = await axios.get(`https://nestle-finance-command-production.up.railway.app/api/sprint2/trust-profile?email=${encodeURIComponent(user.email)}`);
-                if (res.data.success) {
-                    setTrustProfile(res.data.data);
-                }
-            } catch (err) {
-                console.error(`[SupplierDashboard] Unexpected error fetching trust profile:`, err);
-                setTrustProfile(null);
-            }
-        };
-        if (user?.email) fetchTrust();
-    }, [user?.email]);
+
+
 
     useEffect(() => {
         if (isDarkMode) document.documentElement.classList.add('dark');
@@ -433,31 +420,31 @@ export default function SupplierDashboard({ user, onLogout }) {
         }
     }, [mode, fetchData]);
 
+    // 🛡️ Dynamic Trust Score (derived from supplier's actual data)
     const trustScore = useMemo(() => {
         if (!myRecons.length && !myBoqs.length) return 80;
-
         const totalRecons = myRecons.length;
         const approvedRecons = myRecons.filter(r => (r.match_status || '').includes('Approve')).length;
         const accuracyScore = totalRecons > 0 ? (approvedRecons / totalRecons) * 100 : 80;
-
         const totalBoqs = myBoqs.length;
         const rejectedBoqs = myBoqs.filter(b => b.status === 'Rejected').length;
         const rejectionScore = totalBoqs > 0 ? (1 - (rejectedBoqs / totalBoqs)) * 100 : 80;
-
         return Math.round((accuracyScore * 0.6) + (rejectionScore * 0.4));
     }, [myRecons, myBoqs]);
 
-    // Compute rejection counts
+    // Tier logic – based on worst category of rejections
     const boqRejections = myBoqs.filter(b => b.status === 'Rejected').length;
     const invoiceRejections = myRecons.filter(r => String(r.match_status).toLowerCase().includes('reject')).length;
-    // For shipments: count POs with status containing "Cancelled" (rejected by warehouse)
     const shipmentRejections = myPOs.filter(p => String(p.status || '').toLowerCase().includes('cancelled')).length;
-
-    // Tier logic: based on worst category
     const maxRejections = Math.max(boqRejections, invoiceRejections, shipmentRejections);
     const trustTier = maxRejections <= 8 ? 1 : maxRejections <= 10 ? 2 : 3;
 
+    // Tier display properties
     const tierLabel = trustTier === 1 ? 'Strategic Partner' : trustTier === 2 ? 'Standard Tier' : 'High Risk';
+    const tierColor = trustTier === 1 ? 'text-emerald-400' : trustTier === 2 ? 'text-blue-400' : 'text-red-400';
+    const tierBg = trustTier === 1 ? 'bg-emerald-900/30' : trustTier === 2 ? 'bg-blue-900/30' : 'bg-red-900/30';
+    const tierIcon = trustTier === 1 ? ShieldCheck : trustTier === 2 ? Zap : ShieldAlert;
+
     const tierRestrictions = trustTier === 1
         ? 'Instant early payouts available. No manual review.'
         : trustTier === 2
@@ -1247,17 +1234,10 @@ export default function SupplierDashboard({ user, onLogout }) {
                     </div>
                     <div className="flex items-center gap-1 sm:gap-3">
                         <div className="hidden lg:flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
-                            {trustProfile?.trust_tier === 1 ? (
-                                <div className="flex items-center gap-1.5" title="Strategic Partner: 2x Tolerance Multiplier">
-                                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Strategic Partner</span>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-1.5">
-                                    <Zap className="w-3.5 h-3.5 text-blue-400" />
-                                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Standard Tier</span>
-                                </div>
-                            )}
+                            <div className={`flex items-center gap-1.5`} title={tierLabel}>
+                                {React.createElement(tierIcon, { className: `w-3.5 h-3.5 ${tierColor}` })}
+                                <span className={`text-[10px] font-black uppercase tracking-widest ${tierColor}`}>{tierLabel}</span>
+                            </div>
                         </div>
                         <button type="button" id="tut-refresh" onClick={fetchData} className={`p-2 sm:p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors ${spotlightClass('tut-refresh')}`} title="Force Refresh Data">
                             <RefreshCw className="w-5 h-5 sm:w-4 sm:h-4" />
@@ -1337,17 +1317,15 @@ export default function SupplierDashboard({ user, onLogout }) {
                                 </div>
                             </div>
                         </div>
-                        <div id="tut-stats-trust" className={`bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all ${spotlightClass('tut-stats-trust')}`} title="Strategic Partner status grants you 2x higher tolerance thresholds for automated invoice approval.">
+                        <div id="tut-stats-trust" className={`bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800 hover:shadow-md transition-all ${spotlightClass('tut-stats-trust')}`} title="Your supplier reliability rating. High accuracy in BOQs and Invoices keeps this score high.">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-xs uppercase text-slate-400 font-semibold tracking-wider">Vendor Trust Tier</p>
-                                    <p className={`text-xl font-black mt-1 ${trustProfile?.trust_tier === 1 ? 'text-emerald-400' : 'text-blue-400'}`}>
-                                        {trustProfile?.trust_tier === 1 ? 'Strategic Partner' : 'Standard Tier'}
-                                    </p>
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Accuracy: {trustProfile?.accuracy_score || 0}%</p>
+                                    <p className={`text-xl font-black mt-1 ${tierColor}`}>{tierLabel}</p>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Accuracy: {trustScore}%</p>
                                 </div>
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${trustProfile?.trust_tier === 1 ? 'bg-emerald-900/30 text-emerald-400 shadow-emerald-500/10' : 'bg-blue-900/30 text-blue-400 shadow-blue-500/10'}`}>
-                                    {trustProfile?.trust_tier === 1 ? <ShieldCheck className="w-6 h-6" /> : <Activity className="w-6 h-6" />}
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${tierBg} ${tierColor}`}>
+                                    {React.createElement(tierIcon, { className: "w-6 h-6" })}
                                 </div>
                             </div>
                         </div>
