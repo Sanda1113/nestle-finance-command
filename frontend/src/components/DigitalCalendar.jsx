@@ -667,35 +667,53 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
 
                             {/* Advanced Actions */}
                             <div className="pt-4 space-y-4">
-                                {isFinance && selectedEvent.status !== 'Paid' && (
-                                    <div className="space-y-3">
-                                        <button onClick={handleApproveTransfer} disabled={isUpdating}
-                                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all shadow-[0_10px_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2 group">
-                                            <CheckCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                            {isUpdating ? 'Executing Payment...' : 'Pay Funds'}
-                                        </button>
-                                        <div className="flex gap-2">
-                                            <div className="flex-1 bg-slate-800/80 rounded-2xl border border-slate-700 p-1 flex items-center pr-3">
-                                                <input type="date" value={holdDate} onChange={(e) => setHoldDate(e.target.value)}
-                                                    className="bg-transparent border-0 text-white text-xs font-bold w-full p-2 outline-none" />
-                                            </div>
-                                            <button onClick={handleHoldPayment} disabled={isUpdating || !holdDate}
-                                                className="px-6 py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-2xl transition-all">
-                                                Hold Payment
+                                {isFinance &&
+                                    selectedEvent.status !== 'Paid' &&
+                                    selectedEvent.status !== 'Early Payment Requested (Pending Review)' && (
+                                        <div className="space-y-3">
+                                            <button
+                                                onClick={handleApproveTransfer}
+                                                disabled={isUpdating}
+                                                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all shadow-[0_10px_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2 group"
+                                            >
+                                                <CheckCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                                {isUpdating ? 'Executing Payment...' : 'Pay Funds'}
                                             </button>
+                                            <div className="flex gap-2">
+                                                <div className="flex-1 bg-slate-800/80 rounded-2xl border border-slate-700 p-1 flex items-center pr-3">
+                                                    <input
+                                                        type="date"
+                                                        value={holdDate}
+                                                        onChange={(e) => setHoldDate(e.target.value)}
+                                                        className="bg-transparent border-0 text-white text-xs font-bold w-full p-2 outline-none"
+                                                    />
+                                                </div>
+                                                <button
+                                                    onClick={handleHoldPayment}
+                                                    disabled={isUpdating || !holdDate}
+                                                    className="px-6 py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-2xl transition-all"
+                                                >
+                                                    Hold Payment
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
                                 {isFinance && selectedEvent.status === 'Early Payment Requested (Pending Review)' && (
                                     <div className="space-y-3">
-                                        <button onClick={handleApproveInstantPayout} disabled={isUpdating}
-                                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all shadow-[0_10px_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2">
+                                        <button
+                                            onClick={handleApproveInstantPayout}
+                                            disabled={isUpdating}
+                                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all shadow-[0_10px_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2"
+                                        >
                                             <CheckCircle2 className="w-5 h-5" />
                                             Approve Instant Payout (4% fee)
                                         </button>
-                                        <button onClick={handleRejectEarlyPayout} disabled={isUpdating}
-                                            className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-2xl transition-all">
+                                        <button
+                                            onClick={handleRejectEarlyPayout}
+                                            disabled={isUpdating}
+                                            className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-2xl transition-all"
+                                        >
                                             <X className="w-5 h-5" />
                                             Reject Request
                                         </button>
