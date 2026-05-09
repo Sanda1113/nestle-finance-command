@@ -88,9 +88,8 @@ The platform serves **three key stakeholder portals**:
     │   │   └── Scanner.jsx              # Barcode/QR scanner for GRN
     │   ├── App.jsx                # Main entry point & state management
     │   └── index.css              # Tailwind v4 configuration
-
+```
 ---
-
 ## 🎯 Key Features by Portal
 ### Supplier Dashboard
 * ✅ Upload BOQs/Invoices (PDF, Image, Excel, CSV)
