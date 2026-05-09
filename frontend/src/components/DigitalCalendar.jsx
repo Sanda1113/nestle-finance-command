@@ -744,7 +744,8 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
                                 {/* Instant Payout – only for Scheduled payouts (Supplier side) */}
                                 {!isFinance && selectedEvent.status === 'Scheduled' && (
                                     <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-[2.5rem] p-6 space-y-6">
-                                        {trustTier === 1 && (
+                                        {/* Show breakdown for Tier 1 and Tier 2 */}
+                                        {(trustTier === 1 || trustTier === 2) && (
                                             <>
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
@@ -776,20 +777,26 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
                                                         </span>
                                                     </div>
                                                 </div>
-
-                                                <button
-                                                    onClick={handleInstantPayout}
-                                                    disabled={isUpdating}
-                                                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2"
-                                                >
-                                                    <Download className="w-5 h-5" />
-                                                    Get Paid Instant (4% fee)
-                                                </button>
                                             </>
                                         )}
+
+                                        {/* Tier‑specific action buttons */}
+                                        {trustTier === 1 && (
+                                            <button
+                                                onClick={handleInstantPayout}
+                                                disabled={isUpdating}
+                                                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2"
+                                            >
+                                                <Download className="w-5 h-5" />
+                                                Get Paid Instant (4% fee)
+                                            </button>
+                                        )}
                                         {trustTier === 2 && (
-                                            <button onClick={handleRequestInstantPayout} disabled={isUpdating}
-                                                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2">
+                                            <button
+                                                onClick={handleRequestInstantPayout}
+                                                disabled={isUpdating}
+                                                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2"
+                                            >
                                                 <Clock className="w-5 h-5" />
                                                 Request Instant Payout (4% fee)
                                             </button>
