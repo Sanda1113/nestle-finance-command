@@ -2417,21 +2417,28 @@ function SettingsPortal() {
             setLoading(true);
             try {
                 // 1) Fetch existing active rules
+                console.log('[Settings] Fetching active tolerance rules...');
                 let { data, error } = await supabase
                     .from('tolerance_rules')
                     .select('*')
                     .eq('is_active', true);
 
-                if (error) throw error;
+                if (error) {
+                    console.error('[Settings] Fetch error:', error);
+                    throw error;
+                }
+
+                console.log('[Settings] Fetched rules:', data);
 
                 const hasTax = data?.some(r => r.category === 'Tax');
                 const hasFreight = data?.some(r => r.category === 'Freight');
 
                 // 2) Insert missing default rules with a proper UUID
                 if (!hasTax || !hasFreight) {
+                    console.log('[Settings] Missing rules – creating defaults...');
                     const defaults = [];
                     if (!hasTax) defaults.push({
-                        id: crypto.randomUUID(),        // ✅ required primary key
+                        id: crypto.randomUUID(),
                         category: 'Tax',
                         threshold_value: 1.00,
                         is_active: true
@@ -2447,21 +2454,31 @@ function SettingsPortal() {
                         .from('tolerance_rules')
                         .insert(defaults);
 
-                    if (insertErr) throw insertErr;
+                    if (insertErr) {
+                        console.error('[Settings] Insert defaults failed:', insertErr);
+                        throw insertErr;
+                    }
 
-                    // Re‑fetch to get the new rows
+                    console.log('[Settings] Defaults inserted. Re‑fetching...');
+                    // Re‑fetch to get the new rows with real IDs
                     const { data: freshData, error: refetchErr } = await supabase
                         .from('tolerance_rules')
                         .select('*')
                         .eq('is_active', true);
 
-                    if (refetchErr) throw refetchErr;
+                    if (refetchErr) {
+                        console.error('[Settings] Refetch after insert failed:', refetchErr);
+                        throw refetchErr;
+                    }
                     data = freshData;
+                    console.log('[Settings] Refetched rules:', data);
                 }
 
                 setRules(data || []);
+                console.log('[Settings] rules state set to:', data);
             } catch (err) {
                 console.error('[Settings] Failed to load/create rules:', err);
+                setRules([]);  // fallback to empty – UI will show loading or error state
             } finally {
                 setLoading(false);
             }
@@ -2471,22 +2488,36 @@ function SettingsPortal() {
     }, []);
 
     const handleSave = async () => {
+        if (rules.length === 0) {
+            alert('No tolerance rules available to save. Please refresh the page.');
+            return;
+        }
+
+        // 🔒 Prevent saving with invalid fallback IDs
+        const hasInvalidIds = rules.some(r => r.id === 'tax' || r.id === 'freight');
+        if (hasInvalidIds) {
+            alert('Invalid rule IDs detected. Please refresh the page to reload proper rules.');
+            return;
+        }
+
+        console.log('[SaveRule] Saving rules:', rules);
         setSaving(true);
         try {
             const updates = rules.map(async (rule) => {
+                console.log(`[SaveRule] Updating rule ${rule.id} (${rule.category}) to ${rule.threshold_value}`);
                 const { data, error } = await supabase
                     .from('tolerance_rules')
                     .update({ threshold_value: rule.threshold_value })
                     .eq('id', rule.id)
-                    .select('*');   // optional, but confirms the row exists
+                    .select('*');
 
                 if (error) {
-                    console.error('[SaveRule] DB error for rule', rule.id, error);
-                    throw new Error(`Failed to update rule ${rule.id}: ${error.message}`);
+                    console.error(`[SaveRule] Update error for ${rule.id}:`, error);
+                    throw new Error(`Failed to update rule ${rule.category}: ${error.message}`);
                 }
                 if (!data || data.length === 0) {
-                    console.warn('[SaveRule] No row updated for rule', rule.id);
-                    throw new Error(`Rule ${rule.id} not found in database.`);
+                    console.warn(`[SaveRule] No row updated for rule ${rule.id} (${rule.category})`);
+                    throw new Error(`Rule ${rule.category} not found in database.`);
                 }
                 return data;
             });
@@ -2505,8 +2536,9 @@ function SettingsPortal() {
         setRules(prev => prev.map(r => r.id === id ? { ...r, threshold_value: parseFloat(val) || 0 } : r));
     };
 
-    const taxRule = rules.find(r => r.category === 'Tax') || { threshold_value: 1.00, id: 'tax' };
-    const freightRule = rules.find(r => r.category === 'Freight') || { threshold_value: 0.02, id: 'freight' };
+    // Now we never use fallback IDs – rules contains the real objects.
+    const taxRule = rules.find(r => r.category === 'Tax');
+    const freightRule = rules.find(r => r.category === 'Freight');
 
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -2516,6 +2548,11 @@ function SettingsPortal() {
             {loading ? (
                 <div className="h-40 flex items-center justify-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+            ) : rules.length === 0 ? (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-6 rounded-xl text-red-600 dark:text-red-300">
+                    <p className="font-bold">Failed to load tolerance rules.</p>
+                    <p className="text-sm mt-1">Please refresh the page. If the problem persists, check the browser console and ensure the database has valid rows.</p>
                 </div>
             ) : (
                 <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 space-y-6 max-w-xl">
@@ -2530,9 +2567,10 @@ function SettingsPortal() {
                                 <input
                                     type="number"
                                     step="0.01"
-                                    value={taxRule.threshold_value}
-                                    onChange={(e) => updateRuleValue(taxRule.id, e.target.value)}
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 pl-8 pr-4 py-3 rounded-xl text-sm outline-none font-black text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                                    value={taxRule?.threshold_value ?? 0}
+                                    onChange={(e) => taxRule && updateRuleValue(taxRule.id, e.target.value)}
+                                    disabled={!taxRule}
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 pl-8 pr-4 py-3 rounded-xl text-sm outline-none font-black text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50"
                                 />
                             </div>
                         </div>
@@ -2546,9 +2584,10 @@ function SettingsPortal() {
                                 <input
                                     type="number"
                                     step="0.01"
-                                    value={freightRule.threshold_value * 100}
-                                    onChange={(e) => updateRuleValue(freightRule.id, parseFloat(e.target.value) / 100)}
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-sm outline-none font-black text-slate-800 dark:text-white focus:ring-2 focus:ring-purple-500/20"
+                                    value={freightRule ? (freightRule.threshold_value * 100) : 0}
+                                    onChange={(e) => freightRule && updateRuleValue(freightRule.id, parseFloat(e.target.value) / 100)}
+                                    disabled={!freightRule}
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-sm outline-none font-black text-slate-800 dark:text-white focus:ring-2 focus:ring-purple-500/20 disabled:opacity-50"
                                 />
                             </div>
                         </div>
@@ -2557,7 +2596,7 @@ function SettingsPortal() {
                     <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
                         <button
                             onClick={handleSave}
-                            disabled={saving}
+                            disabled={saving || rules.length === 0}
                             className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-xl transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
                         >
                             {saving ? 'Synchronizing Engine...' : 'Apply & Save Rules'}
