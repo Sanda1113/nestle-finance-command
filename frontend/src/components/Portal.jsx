@@ -2498,20 +2498,35 @@ function SettingsPortal() {
         try {
             const updates = rules.map(async (rule) => {
                 console.log(`[SaveRule] Updating rule ${rule.id} (${rule.category}) to ${rule.threshold_value}`);
-                const { error } = await supabase
+                const { data, error } = await supabase
                     .from('tolerance_rules')
                     .update({ threshold_value: rule.threshold_value })
-                    .eq('id', rule.id);
+                    .eq('id', rule.id)
+                    .select('id');               // fetch at least one column to confirm row exists
 
                 if (error) {
                     console.error(`[SaveRule] Update error for ${rule.id}:`, error);
-                    throw new Error(`Failed to update rule ${rule.category}: ${error.message}`);
+                    throw new Error(`Database error for ${rule.category}: ${error.message}`);
                 }
-                // Success – further verification is not needed
+                if (!data || data.length === 0) {
+                    console.warn(`[SaveRule] No row updated for ${rule.id} (${rule.category}) – possible RLS block`);
+                    throw new Error(`Rule ${rule.category} was not updated – check database permissions.`);
+                }
+                console.log(`[SaveRule] Rule ${rule.id} updated successfully.`);
             });
 
             await Promise.all(updates);
-            alert('Tolerance rules updated successfully! The 3-way match engine will now apply these thresholds.');
+
+            // Re‑fetch to show the values actually saved
+            const { data: freshData, error: refetchErr } = await supabase
+                .from('tolerance_rules')
+                .select('*')
+                .eq('is_active', true);
+
+            if (refetchErr) throw refetchErr;
+            setRules(freshData || []);
+
+            alert('Tolerance rules updated and verified!');
         } catch (err) {
             console.error('[SaveRule] Save failed:', err);
             alert(`Failed to save rules. ${err.message}`);
