@@ -2413,10 +2413,10 @@ function SettingsPortal() {
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        const fetchRules = async () => {
+        const fetchOrCreateRules = async () => {
             setLoading(true);
             try {
-                // 1) Fetch existing rules
+                // 1) Fetch existing active rules
                 let { data, error } = await supabase
                     .from('tolerance_rules')
                     .select('*')
@@ -2424,15 +2424,24 @@ function SettingsPortal() {
 
                 if (error) throw error;
 
-                // 2) Check if required categories are present
                 const hasTax = data?.some(r => r.category === 'Tax');
                 const hasFreight = data?.some(r => r.category === 'Freight');
 
+                // 2) Insert missing default rules with a proper UUID
                 if (!hasTax || !hasFreight) {
-                    // Missing rules – insert default rows
                     const defaults = [];
-                    if (!hasTax) defaults.push({ category: 'Tax', threshold_value: 1.00, is_active: true });
-                    if (!hasFreight) defaults.push({ category: 'Freight', threshold_value: 0.02, is_active: true });
+                    if (!hasTax) defaults.push({
+                        id: crypto.randomUUID(),        // ✅ required primary key
+                        category: 'Tax',
+                        threshold_value: 1.00,
+                        is_active: true
+                    });
+                    if (!hasFreight) defaults.push({
+                        id: crypto.randomUUID(),
+                        category: 'Freight',
+                        threshold_value: 0.02,
+                        is_active: true
+                    });
 
                     const { error: insertErr } = await supabase
                         .from('tolerance_rules')
@@ -2440,24 +2449,25 @@ function SettingsPortal() {
 
                     if (insertErr) throw insertErr;
 
-                    // Re‑fetch to get the real IDs
-                    const { data: newData, error: refetchErr } = await supabase
+                    // Re‑fetch to get the new rows
+                    const { data: freshData, error: refetchErr } = await supabase
                         .from('tolerance_rules')
                         .select('*')
                         .eq('is_active', true);
 
                     if (refetchErr) throw refetchErr;
-                    data = newData;
+                    data = freshData;
                 }
 
                 setRules(data || []);
             } catch (err) {
-                console.error('[Settings] Failed to load rules:', err);
+                console.error('[Settings] Failed to load/create rules:', err);
             } finally {
                 setLoading(false);
             }
         };
-        fetchRules();
+
+        fetchOrCreateRules();
     }, []);
 
     const handleSave = async () => {
