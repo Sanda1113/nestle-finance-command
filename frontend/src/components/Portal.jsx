@@ -2425,14 +2425,29 @@ function SettingsPortal() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const updates = rules.map(rule =>
-                supabase.from('tolerance_rules').update({ threshold_value: rule.threshold_value }).eq('id', rule.id)
-            );
+            const updates = rules.map(async (rule) => {
+                const { data, error } = await supabase
+                    .from('tolerance_rules')
+                    .update({ threshold_value: rule.threshold_value })
+                    .eq('id', rule.id)
+                    .select('*');   // optional, but confirms the row exists
+
+                if (error) {
+                    console.error('[SaveRule] DB error for rule', rule.id, error);
+                    throw new Error(`Failed to update rule ${rule.id}: ${error.message}`);
+                }
+                if (!data || data.length === 0) {
+                    console.warn('[SaveRule] No row updated for rule', rule.id);
+                    throw new Error(`Rule ${rule.id} not found in database.`);
+                }
+                return data;
+            });
+
             await Promise.all(updates);
             alert('Tolerance rules updated successfully! The 3-way match engine will now apply these thresholds.');
         } catch (err) {
-            console.error('Save failed:', err);
-            alert('Failed to save rules.');
+            console.error('[SaveRule] Save failed:', err);
+            alert(`Failed to save rules. ${err.message}`);
         } finally {
             setSaving(false);
         }
