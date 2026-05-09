@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2, Search, FileText, ChevronRight, ShieldCheck, Zap, Activity, Percent, Calendar, TrendingUp, Download, ShieldAlert } from 'lucide-react';
+import { RefreshCw, Truck, Tag, LogOut, User, Sun, Moon, Package, DollarSign, Clock, CheckCircle2, Search, FileText, ChevronRight, ShieldCheck, Zap, Activity, Percent, Calendar, TrendingUp, Download, ShieldAlert, Info } from 'lucide-react';
 import DisputeChat from './DisputeChat';
 import NotificationBell from './NotificationBell';
 import AppNotifier from './AppNotifier';
@@ -295,6 +295,7 @@ export default function SupplierDashboard({ user, onLogout }) {
     const [myPayouts, setMyPayouts] = useState([]);
     const [matchStatus, setMatchStatus] = useState('Pending');
     const [dbStatus, setDbStatus] = useState('');
+    const [toleranceDisplay, setToleranceDisplay] = useState({ tax: 1.00, freight: 2.0 });
     const [, setError] = useState(null);
 
     const [expandedLog, setExpandedLog] = useState(null);
@@ -419,6 +420,31 @@ export default function SupplierDashboard({ user, onLogout }) {
             fetchData();
         }
     }, [mode, fetchData]);
+
+    const fetchActiveToleranceRules = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('tolerance_rules')
+                .select('*')
+                .eq('is_active', true);
+            if (error) throw error;
+            const taxRule = data?.find(r => r.category === 'Tax') || { threshold_value: 1.00 };
+            const freightRule = data?.find(r => r.category === 'Freight') || { threshold_value: 0.02 }; // stored as decimal
+            setToleranceDisplay({
+                tax: taxRule.threshold_value,
+                freight: freightRule.threshold_value * 100   // convert to percentage for display
+            });
+        } catch (err) {
+            console.warn('Could not fetch tolerance rules:', err);
+            // keep defaults
+        }
+    };
+
+    useEffect(() => {
+        if (mode === 'match') {
+            fetchActiveToleranceRules();
+        }
+    }, [mode]);
 
     // 🛡️ Dynamic Trust Score (derived from supplier's actual data)
     const trustScore = useMemo(() => {
@@ -1545,6 +1571,30 @@ export default function SupplierDashboard({ user, onLogout }) {
                                     <div className="mb-4">
                                         <h2 className="text-2xl font-bold tracking-tight">Invoice Clearance</h2>
                                         <p className="text-sm text-slate-400">Upload Invoice and PO for 3-Way Match.</p>
+                                    </div>
+
+                                    {/* ── Tolerance Rules Info ── */}
+                                    <div className="mb-4 bg-blue-900/20 border border-blue-500/20 p-4 rounded-xl flex items-start gap-3">
+                                        <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                                        <div>
+                                            <h3 className="text-sm font-bold text-blue-300 flex items-center gap-2">
+                                                <ShieldCheck className="w-4 h-4 text-blue-400" /> Current Matching Tolerances
+                                            </h3>
+                                            <p className="text-xs text-blue-200 mt-1">
+                                                Finance has set the following automated thresholds:
+                                            </p>
+                                            <ul className="text-xs text-blue-100 mt-2 space-y-1">
+                                                <li>
+                                                    <span className="font-bold">Tax Variance (Absolute):</span> {formatCurrency(toleranceDisplay.tax)}
+                                                </li>
+                                                <li>
+                                                    <span className="font-bold">Freight Variance (%):</span> {toleranceDisplay.freight.toFixed(1)}%
+                                                </li>
+                                            </ul>
+                                            <p className="text-[10px] text-blue-400 mt-2 opacity-80">
+                                                If your invoice total falls within these limits, it will be automatically considered “Matched” and sent to Finance for final approval.
+                                            </p>
+                                        </div>
                                     </div>
 
                                     {/* AI Behavior-Triggered Micro-Learning */}
