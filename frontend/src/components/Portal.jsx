@@ -723,20 +723,57 @@ function FinancePortal({ user }) {
         setActionedRecords(prev => ({ ...prev, [`stage_${record.id}`]: true }));
 
         // Optimistic: add a temporary payout entry so "Stage Payout" button disappears
-        const tempPayout = { id: `temp-${record.id}`, reconciliation_id: record.id, status: 'Pending Finance' };
+        const tempPayoutId = `temp-${record.id}`;
+        const tempPayout = { id: tempPayoutId, reconciliation_id: record.id, status: 'Pending Finance' };
         setPayouts(prev => [...prev, tempPayout]);
 
         try {
-            await axios.post('https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/stage', {
-                invoice_ref: record.id,
-                supplier_email: record.vendor_email || record.supplier_email || 'supplier@nestle.com',
-                total_amount: record.invoice_total
-            });
-            fetchData(false); // refresh to get real payout ID
+            // 1. Stage the payout
+            const stageRes = await axios.post(
+                'https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/stage',
+                {
+                    invoice_ref: record.id,
+                    supplier_email: record.vendor_email || record.supplier_email || 'supplier@nestle.com',
+                    total_amount: record.invoice_total
+                }
+            );
+
+            // 2. Get the newly created payout ID (adjust according to your API response)
+            const stagingPayoutId = stageRes.data?.payoutId || stageRes.data?.id;
+            if (!stagingPayoutId) {
+                throw new Error('Staging response did not include a payout ID');
+            }
+
+            // 3. Auto-schedule the payout (e.g., Net 30 from today)
+            const scheduledDate = new Date();
+            scheduledDate.setDate(scheduledDate.getDate() + 30);
+            await axios.patch(
+                `https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${stagingPayoutId}/confirm`,
+                {
+                    start_date: scheduledDate.toISOString(),
+                    base_amount: record.invoice_total
+                }
+            );
+
+            // 4. Optimistically update the temporary payout and replace it with the real one
+            setPayouts(prev =>
+                prev.filter(p => p.id !== tempPayoutId)
+                    .concat({
+                        id: stagingPayoutId,
+                        reconciliation_id: record.id,
+                        status: 'Scheduled',
+                        start_date: scheduledDate.toISOString(),
+                        supplier_email: record.vendor_email || record.supplier_email || 'supplier@nestle.com',
+                        base_amount: record.invoice_total
+                    })
+            );
+
+            // 5. Refresh all payouts from the server to stay in sync
+            fetchData(false);
         } catch (err) {
-            console.error(err);
-            alert('Failed to stage payout.');
-            setPayouts(prev => prev.filter(p => p.id !== `temp-${record.id}`));
+            console.error('Stage & Schedule failed:', err);
+            alert('Failed to stage and schedule payout.');
+            setPayouts(prev => prev.filter(p => p.id !== tempPayoutId));
         } finally {
             setActionedRecords(prev => ({ ...prev, [`stage_${record.id}`]: false }));
         }
@@ -1261,7 +1298,9 @@ function FinancePortal({ user }) {
                                             </td>
                                             <td className="p-4 text-center">
                                                 {(() => {
-                                                    const existingPayout = payouts.find(p => p.reconciliation_id === r.id || p.po_number === r.po_number);
+                                                    const existingPayout = payouts.find(
+                                                        p => p.reconciliation_id === r.id || p.po_number === r.po_number
+                                                    );
                                                     const isStaged = existingPayout || actionedRecords[`stage_${r.id}`];
                                                     const pStatus = existingPayout?.status;
 
@@ -1269,6 +1308,14 @@ function FinancePortal({ user }) {
                                                         return (
                                                             <span className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase rounded-lg border border-emerald-200 dark:border-emerald-800/50 flex items-center gap-1.5 w-fit mx-auto">
                                                                 <CheckCircle2 className="w-3.5 h-3.5" /> Paid
+                                                            </span>
+                                                        );
+                                                    }
+
+                                                    if (pStatus === 'Scheduled') {
+                                                        return (
+                                                            <span className="px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase rounded-lg border border-indigo-200 dark:border-indigo-800/50 flex items-center gap-1.5 w-fit mx-auto">
+                                                                <Calendar className="w-3.5 h-3.5" /> Scheduled
                                                             </span>
                                                         );
                                                     }
@@ -1286,8 +1333,16 @@ function FinancePortal({ user }) {
                                                             type="button"
                                                             disabled={!r.isGrnCompleted || !r.displayStatus.includes('Approved') || isStaged}
                                                             onClick={(e) => { e.stopPropagation(); handleStagePayout(r); }}
-                                                            className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wide rounded-lg transition-all shadow-sm flex items-center gap-1.5 mx-auto ${(!r.isGrnCompleted || !r.displayStatus.includes('Approved') || isStaged) ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-500/20'}`}
-                                                            title={!r.isGrnCompleted ? "Awaiting Warehouse Clearing" : "Stage for Treasury Payout"}
+                                                            className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wide rounded-lg transition-all shadow-sm flex items-center gap-1.5 mx-auto ${
+                                                                (!r.isGrnCompleted || !r.displayStatus.includes('Approved') || isStaged)
+                                                                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                                                                    : 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-500/20'
+                                                            }`}
+                                                            title={
+                                                                !r.isGrnCompleted
+                                                                    ? "Awaiting Warehouse Clearing"
+                                                                    : "Stage & Schedule Payout"
+                                                            }
                                                         >
                                                             <CreditCard className="w-3.5 h-3.5" /> Stage Payout
                                                         </button>
