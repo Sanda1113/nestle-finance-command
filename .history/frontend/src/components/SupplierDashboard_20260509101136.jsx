@@ -751,7 +751,7 @@ export default function SupplierDashboard({ user, onLogout }) {
         if (type === 'boq') {
             try {
                 await axios.delete(`https://nestle-finance-command-production.up.railway.app/api/boqs/${id}`);
-                alert('Rejected BOQ cleared. You can now submit a corrected document.');
+                alert('Rejected BOQ cleared. You can now submit a corrected quote.');
                 setMode('boq');
                 fetchData();
             } catch { alert('Failed to clear BOQ for resubmission'); }

@@ -626,7 +626,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                 setResultData(data);
                 setMatchStatus('Submitted');
                 if (isSandboxMode) {
-                    setDbStatus('🛠️ Sandbox: BOQ digitized. No data sent to Procurement - You are in Sandbox Mode.');
+                    setDbStatus('🛠️ Sandbox: BOQ digitized. No data sent to Procurement.');
                 } else {
                     await axios.post('https://nestle-finance-command-production.up.railway.app/api/save-boq', {
                         boqData: data, supplierEmail: user.email, vendorId: user.id || user.email
@@ -751,7 +751,7 @@ export default function SupplierDashboard({ user, onLogout }) {
         if (type === 'boq') {
             try {
                 await axios.delete(`https://nestle-finance-command-production.up.railway.app/api/boqs/${id}`);
-                alert('Rejected BOQ cleared. You can now submit a corrected document.');
+                alert('Rejected BOQ cleared. You can now submit a corrected quote.');
                 setMode('boq');
                 fetchData();
             } catch { alert('Failed to clear BOQ for resubmission'); }
