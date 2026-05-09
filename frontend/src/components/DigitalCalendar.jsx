@@ -389,7 +389,13 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
         setIsUpdating(true);
         try {
             await axios.post(`https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${selectedEvent.id}/approve-instant`);
-            fetchEvents();
+            
+            // 🔥 Optimistic update: mark as Paid immediately
+            setEvents(prev => prev.map(ev => String(ev.id) === String(selectedEvent.id) 
+                ? { ...ev, status: 'Paid', title: '✅ Payout Paid' } 
+                : ev));
+                
+            fetchEvents();  // background refresh to confirm server state
             setSelectedEvent(null);
             alert('Early payout approved.');
         } catch (error) {
