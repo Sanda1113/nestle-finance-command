@@ -71,23 +71,80 @@ The platform serves **three key stakeholder portals**:
 
 ```text
 ├── backend/
-│   ├── server.js                # Core Express API (Extraction, Matching, PDF Logic)
+│   ├── .gitignore
+│   ├── babel.config.js
+│   ├── backend-init.txt
 │   ├── db.js                    # Supabase connection singleton
+│   ├── Dockerfile
+│   ├── jest.config.js
 │   ├── mailer.js                # Email notification service
-│   ├── routes/
-│   │   ├── sprint2.js           # Invoice processing, Payouts, & Reconciliation routes
+│   ├── migrations/
+│   │   ├── fix_procurement_role.sql
+│   │   ├── fix_treasury_schema.sql
+│   │   ├── mvp_5_6_7_updates.sql
+│   │   ├── payout_schedules_rls.sql
+│   │   └── supabase_migrations.sql
+│   ├── package-lock.json
 │   ├── package.json             # Backend dependencies
-└── frontend/
-    ├── src/
-    │   ├── components/
-    │   │   ├── SupplierDashboard.jsx    # Supplier Inbox, Liquidity Slider, Sandbox & Timeline
-    │   │   ├── Portal.jsx               # Finance Queue, Tolerance Settings & Treasury Calendar
-    │   │   ├── WarehousePortal.jsx      # GRN Vault — goods receipt & 3-way match
-    │   │   ├── DigitalCalendar.jsx      # Drag-and-drop payout management component
-    │   │   ├── DisputeChat.jsx          # Context-aware messaging hub
-    │   │   └── Scanner.jsx              # Barcode/QR scanner for GRN
-    │   ├── App.jsx                # Main entry point & state management
-    │   └── index.css              # Tailwind v4 configuration
+│   ├── payoutReminder.js
+│   ├── railway.json
+│   ├── routes/
+│   │   ├── auth.js              # Authentication routing
+│   │   ├── notifications.js     # Push/In-app notifications
+│   │   └── sprint2.js           # Invoice processing, Payouts, & Reconciliation routes
+│   ├── server.js                # Core Express API (Extraction, Matching, PDF Logic)
+│   └── utils/
+│       └── bankMock.js          # Mock API configurations for testing
+├── frontend/
+│   ├── .gitignore
+│   ├── babel.config.js
+│   ├── cypress/
+│   │   └── e2e/
+│   │       └── supplier.cy.js   # E2E Tests
+│   ├── cypress.config.js
+│   ├── eslint.config.js
+│   ├── frontend-init.txt
+│   ├── index.html
+│   ├── jest.config.js
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── public/
+│   │   ├── favicon.svg
+│   │   ├── icons.svg
+│   │   └── nestle-logo.svg
+│   ├── README.md
+│   ├── src/
+│   │   ├── App.css
+│   │   ├── App.jsx              # Main entry point & state management
+│   │   ├── assets/
+│   │   │   ├── hero.png
+│   │   │   ├── react.svg
+│   │   │   └── vite.svg
+│   │   ├── components/
+│   │   │   ├── AppNotifier.jsx        # Notification pop-ups
+│   │   │   ├── DigitalCalendar.jsx    # Drag-and-drop payout management component
+│   │   │   ├── DisputeChat.jsx        # Context-aware messaging hub
+│   │   │   ├── FloatingChat.jsx       # Floating messaging helper component
+│   │   │   ├── LiveChat.jsx           # Global live support chat module
+│   │   │   ├── Login.jsx              # Application authentication portal
+│   │   │   ├── NotificationBell.jsx   # Topbar notification indicator
+│   │   │   ├── Portal.jsx             # Finance Queue, Tolerance Settings & Treasury Calendar
+│   │   │   ├── ProcurementPortal.jsx  # Procurement dashboard logic
+│   │   │   ├── Scanner.jsx            # Barcode/QR scanner for GRN
+│   │   │   ├── scratch.cjs            
+│   │   │   ├── scratch.py             
+│   │   │   ├── SupplierDashboard.jsx  # Supplier Inbox, Liquidity Slider, Sandbox & Timeline
+│   │   │   ├── Upload.jsx             # File upload module
+│   │   │   └── WarehousePortal.jsx    # GRN Vault — goods receipt & 3-way match
+│   │   ├── index.css            # Tailwind v4 configuration
+│   │   ├── main.jsx             # React initialization
+│   │   ├── setupTests.js        # Global Test Setups
+│   │   └── utils/
+│   │       ├── safeAudio.js     # Sound effects utility for UI actions
+│   │       └── supabaseClient.js # Frontend Supabase client initialization
+│   ├── tailwind.config.js
+│   └── vite.config.js
 ```
 ---
 ## 🎯 Key Features by Portal
