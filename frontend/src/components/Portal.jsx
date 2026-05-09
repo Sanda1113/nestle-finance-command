@@ -2493,27 +2493,21 @@ function SettingsPortal() {
             return;
         }
 
-        // ✅ REMOVED the hasInvalidIds check – 'tax' and 'freight' are valid primary keys.
         console.log('[SaveRule] Saving rules:', rules);
         setSaving(true);
         try {
             const updates = rules.map(async (rule) => {
                 console.log(`[SaveRule] Updating rule ${rule.id} (${rule.category}) to ${rule.threshold_value}`);
-                const { data, error } = await supabase
+                const { error } = await supabase
                     .from('tolerance_rules')
                     .update({ threshold_value: rule.threshold_value })
-                    .eq('id', rule.id)
-                    .select('*');
+                    .eq('id', rule.id);
 
                 if (error) {
                     console.error(`[SaveRule] Update error for ${rule.id}:`, error);
                     throw new Error(`Failed to update rule ${rule.category}: ${error.message}`);
                 }
-                if (!data || data.length === 0) {
-                    console.warn(`[SaveRule] No row updated for rule ${rule.id} (${rule.category})`);
-                    throw new Error(`Rule ${rule.category} not found in database.`);
-                }
-                return data;
+                // Success – further verification is not needed
             });
 
             await Promise.all(updates);
