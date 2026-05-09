@@ -113,7 +113,7 @@ The platform serves **three key stakeholder portals**:
 
 ---
 
-##🗄️ Database Schema
+## 🗄️ Database Schema
 | Table | Purpose |
 |---|---|
 | `users` | Authentication & role management (Supplier / Finance / Warehouse) |
