@@ -89,6 +89,8 @@ The platform serves **three key stakeholder portals**:
     │   ├── App.jsx                # Main entry point & state management
     │   └── index.css              # Tailwind v4 configuration
 
+---
+
 ## 🎯 Key Features by Portal
 ### Supplier Dashboard
 * ✅ Upload BOQs/Invoices (PDF, Image, Excel, CSV)
@@ -110,6 +112,8 @@ The platform serves **three key stakeholder portals**:
 * ✅ Smart risk detection (shortage/overage)
 * ✅ 1-Click "Clear Goods for Payout" trigger
 
+---
+
 ##🗄️ Database Schema
 | Table | Purpose |
 |---|---|
@@ -129,10 +133,14 @@ The platform serves **three key stakeholder portals**:
 | `notifications` | Alert history for audit trail |
 | `resubmissions` | Document resubmission tracking |
 
+---
+
 ## 🔐 Security & Authentication
 * Role-Based Access Control (RLS & RBAC) — Strict separation between Supplier, Finance, and Warehouse data.
 * Mathematical Immutability — Financial payloads cannot be edited post-submission; they must be formally renegotiated or resubmitted.
 * Audit trail — Complete transaction and timestamp history for SOX compliance.
+
+---
 
 ## 📊 Impact & ROI
 ### Financial Risk Mitigation
@@ -141,6 +149,8 @@ The platform serves **three key stakeholder portals**:
 ### Operational Efficiency & Treasury Yield
 * Transforms AP from a cost-center to a revenue generator via Dynamic Discounting fees.
 * Optimizes working capital by allowing Finance to visually balance the Treasury Calendar.
+
+---
 
 ## 📝 License & Credits
 Group 01B — Nestle Finance Command Center Development Team - Commercial Computing - APIIT- Stafforshire University London.
