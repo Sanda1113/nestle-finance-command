@@ -2493,13 +2493,7 @@ function SettingsPortal() {
             return;
         }
 
-        // 🔒 Prevent saving with invalid fallback IDs
-        const hasInvalidIds = rules.some(r => r.id === 'tax' || r.id === 'freight');
-        if (hasInvalidIds) {
-            alert('Invalid rule IDs detected. Please refresh the page to reload proper rules.');
-            return;
-        }
-
+        // ✅ REMOVED the hasInvalidIds check – 'tax' and 'freight' are valid primary keys.
         console.log('[SaveRule] Saving rules:', rules);
         setSaving(true);
         try {
