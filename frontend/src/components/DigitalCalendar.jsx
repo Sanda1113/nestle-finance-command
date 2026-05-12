@@ -125,7 +125,7 @@ const CustomToolbar = (toolbar) => {
     );
 };
 
-export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, trustTier = 2, onAcceptEarlyPayout, selectedEventId, onSelectEvent }) {
+export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, trustTier = 2, onAcceptEarlyPayout, selectedEventId, onSelectEvent, sandboxMode = false }) {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState(null);
@@ -352,6 +352,10 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
 
     const handleInstantPayout = async () => {
         if (!selectedEvent || trustTier !== 1) return;
+        if (sandboxMode) {
+            alert('🛠️ Sandbox Mode: Instant payout simulated. No funds will be transferred.');
+            return;
+        }
         const confirmMsg = `Instant payout will deduct a 4% fee. You will receive ${formatCurrency(selectedEvent.amount * 0.96)}.\n\nProceed?`;
         if (!window.confirm(confirmMsg)) return;
         setIsUpdating(true);
@@ -369,6 +373,10 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
 
     const handleRequestInstantPayout = async () => {
         if (!selectedEvent || trustTier !== 2) return;
+        if (sandboxMode) {
+            alert('🛠️ Sandbox Mode: Request for early payout simulated. No real request sent.');
+            return;
+        }
         if (!window.confirm('Request an early payout at a 4% fee? Finance will review your request.')) return;
         setIsUpdating(true);
         try {

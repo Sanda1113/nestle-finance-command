@@ -144,6 +144,13 @@ export default function SupplierDashboard({ user, onLogout }) {
             action: () => setMode('payouts')
         },
         {
+            title: '⚡ Practice Early Payout',
+            body: 'In Sandbox Mode, you can safely click any scheduled payout event and request early payment. No real funds are transferred and no notification is sent to Finance.',
+            tip: '💡 Click the "Request Instant Payout" button to see the simulation message.',
+            targetId: 'tut-tab-payouts',   // highlights the same tab area
+            action: () => setMode('payouts')
+        },
+        {
             title: '🔍 Search Shipments',
             body: 'Looking for a specific Purchase Order? Type the PO number or amount here to filter your active shipments list instantly.',
             tip: '⌨️ Real-time filtering as you type.',
@@ -588,6 +595,14 @@ export default function SupplierDashboard({ user, onLogout }) {
 
 
     const handleAcceptEarlyPayout = async (payoutId, payoutAmount) => {
+        if (isSandboxMode) {
+            setDialog({
+                title: '🛠️ Sandbox Mode',
+                message: 'This early payout request is simulated. In a real scenario it would notify Finance and process a 4% discount.',
+                type: 'info'
+            });
+            return;
+        }
         if (trustTier === 3) {
             setDialog({
                 title: 'Action Restricted',
@@ -1839,6 +1854,7 @@ export default function SupplierDashboard({ user, onLogout }) {
                                         userEmail={user?.email}
                                         trustTier={trustTier}
                                         onAcceptEarlyPayout={handleAcceptEarlyPayout}
+                                        sandboxMode={isSandboxMode}
                                     />
                                 </div>
                             )}
