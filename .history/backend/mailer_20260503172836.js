@@ -2,7 +2,7 @@
 const { Resend } = require('resend');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const DEFAULT_PORTAL_BASE_URL = 'https://www.nestlefinancecommand.com';
+const DEFAULT_PORTAL_BASE_URL = 'https://nestle-finance-command.vercel.app';
 
 const getPortalBaseUrl = () => {
     const configured = (process.env.APP_BASE_URL || DEFAULT_PORTAL_BASE_URL).trim();

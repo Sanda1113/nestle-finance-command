@@ -43,8 +43,7 @@ app.use((req, res, next) => {
 });
 
 const allowedOrigins = [
-    'https://www.nestlefinancecommand.com',
-    'https://nestlefinancecommand.com',
+    'https://nestle-finance-command.vercel.app', // ✅ Added your new active domain
     'http://localhost:5173',
     'http://localhost:3000',
     'http://127.0.0.1:5173',
@@ -437,7 +436,7 @@ app.post('/api/save-reconciliation', async (req, res) => {
                 .select('*')
                 .eq('supplier_email', supplierEmail)
                 .single();
-            
+
             // If missing, create a default one
             if (trustErr && (trustErr.code === 'PGRST116' || trustErr.status === 406)) {
                 console.log(`🐣 Creating default trust profile for ${supplierEmail}`);
@@ -448,12 +447,12 @@ app.post('/api/save-reconciliation', async (req, res) => {
                     .single();
                 trustProfile = newProfile;
             }
-            
+
             const trustMultiplier = trustProfile?.trust_tier === 1 ? 2.0 : (trustProfile?.trust_tier === 3 ? 0.0 : 1.0);
-            
+
             // 2. Fetch tolerance rules from DB
             const { data: rules } = await supabase.from('tolerance_rules').select('*').eq('is_active', true);
-            
+
             // Rules applied based on category
             const taxRule = rules?.find(r => r.category === 'Tax') || { threshold_value: 1.00 };
             const freightRule = rules?.find(r => r.category === 'Freight') || { threshold_value: 0.02, rule_type: 'percentage' };
@@ -461,7 +460,7 @@ app.post('/api/save-reconciliation', async (req, res) => {
 
             // Logic for classification and auto-approval
             const taxDelta = Math.abs(invTax - poTax);
-            
+
             if (taxDelta > 0 && delta <= taxRule.threshold_value * trustMultiplier) {
                 classification = 'Tax Rounding Difference';
                 willAutoApprove = true;
@@ -496,7 +495,7 @@ app.post('/api/save-reconciliation', async (req, res) => {
                 autoApproved = false; // Changed from true!
                 autoApprovalReason = `Matched within tolerance: Invoice total ${invTotal.toFixed(2)} vs PO ${poTotal.toFixed(2)}. Delta of ${delta.toFixed(2)} classified as ${classification} (Rule: ${ruleName}). Pending Finance Review.`;
                 console.log(`🤖 MVP5: ${autoApprovalReason}`);
-                
+
                 // Database Injection: Generate JSON payload for external ERP
                 const erpPayload = {
                     journal_entry: "JRNL-VAR-PENDING",
@@ -766,7 +765,7 @@ app.post('/api/save-boq', async (req, res) => {
         // 🛡️ Before saving BOQ, validate the extracted data
         if (!boqData || !boqData.vendorName) {
             console.warn('⚠️ BOQ extraction returned invalid or incomplete data');
-            return res.status(400).json({ 
+            return res.status(400).json({
                 error: 'Failed to extract valid BOQ data',
                 details: 'Vendor information is missing from the document'
             });
@@ -1409,7 +1408,7 @@ app.patch('/api/payouts/:id/paid', async (req, res) => {
         let { data, error } = await supabase.from('payout_schedule')
             .update({ status: 'Paid', paid_at: new Date().toISOString(), paid_by: paidBy || 'Finance Team' })
             .eq('id', id).select().single();
-            
+
         if (error) {
             console.warn(`[Mark Payout Paid] Failed on payout_schedule (Code: ${error.code}). Falling back to payout_schedules...`, error);
             ({ data, error } = await supabase.from('payout_schedules')
@@ -1421,14 +1420,14 @@ app.patch('/api/payouts/:id/paid', async (req, res) => {
             console.error(`[Mark Payout Paid] Failed on payout_schedules too (Code: ${error.code}).`, error);
             throw error;
         }
-        
+
         // Try to update timeline and notify
         const reconId = data && (data.reconciliation_id || data.invoice_ref);
         if (reconId) {
             await supabase.from('reconciliations')
                 .update({ timeline_status: 'Paid' })
                 .eq('id', reconId);
-                
+
             try {
                 await supabase.from('notifications').insert([{
                     user_email: data.supplier_email,
@@ -1480,7 +1479,7 @@ app.post('/api/tolerance/simulate', async (req, res) => {
     const { ruleType, thresholdValue, category } = req.body;
     try {
         console.log(`📊 Simulating Shadow Mode: ${category} rule at ${thresholdValue}`);
-        
+
         // Fetch last 100 discrepancies
         const { data: historical } = await supabase
             .from('reconciliations')
@@ -1492,15 +1491,15 @@ app.post('/api/tolerance/simulate', async (req, res) => {
 
         let leakage = 0;
         let impactedCount = 0;
-        const LABOR_COST_PER_HOUR = 45; 
-        const TIME_PER_REVIEW_MINS = 15; 
+        const LABOR_COST_PER_HOUR = 45;
+        const TIME_PER_REVIEW_MINS = 15;
 
         historical.forEach(recon => {
             const invTotal = Number(recon.invoice_total) || 0;
             const poTotal = Number(recon.po_total) || 0;
             const delta = Math.abs(invTotal - poTotal);
             const percentageDelta = poTotal > 0 ? delta / poTotal : 0;
-            
+
             let wouldApprove = false;
             if (category === 'Tax' && delta <= thresholdValue) wouldApprove = true;
             else if (category === 'Freight' && percentageDelta <= thresholdValue) wouldApprove = true;
@@ -1547,9 +1546,9 @@ app.patch('/api/payouts/:id/discount', async (req, res) => {
             .select('value_numeric')
             .eq('key', 'monthly_early_payout_cap')
             .single();
-        
+
         const cap = capSetting?.value_numeric || 5000000;
-        
+
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         const { data: deployed } = await supabase
@@ -1557,7 +1556,7 @@ app.patch('/api/payouts/:id/discount', async (req, res) => {
             .select('final_amount')
             .eq('early_payout_requested', true)
             .gte('early_payout_accepted_at', startOfMonth.toISOString());
-        
+
         const currentTotal = deployed?.reduce((sum, p) => sum + Number(p.final_amount), 0) || 0;
 
         if (currentTotal + Number(finalAmount) > cap) {
@@ -1583,7 +1582,7 @@ app.patch('/api/payouts/:id/discount', async (req, res) => {
         await supabase.from('notifications').insert([{
             user_role: 'Finance',
             title: '💰 Yield Captured',
-            message: `Supplier ${pData?.supplier_email || 'partner'} accepted a ${ (Number(discountRate) * 100).toFixed(1) }% discount. $${discountCaptured.toFixed(2)} ROI generated.`,
+            message: `Supplier ${pData?.supplier_email || 'partner'} accepted a ${(Number(discountRate) * 100).toFixed(1)}% discount. $${discountCaptured.toFixed(2)} ROI generated.`,
             link: '/finance/treasury',
             is_read: false
         }]);
@@ -1601,14 +1600,14 @@ app.post('/api/payouts/:id/accept-early-payment', async (req, res) => {
     const { discountRate, earlyPaymentAmount } = req.body;
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     // Redirect to the new logic
     req.url = `/api/payouts/${id}/discount`;
     req.method = 'PATCH';
-    req.body = { 
-        requestedDate: tomorrow.toISOString(), 
-        discountRate: discountRate / 100, 
-        finalAmount: earlyPaymentAmount 
+    req.body = {
+        requestedDate: tomorrow.toISOString(),
+        discountRate: discountRate / 100,
+        finalAmount: earlyPaymentAmount
     };
     return app._router.handle(req, res);
 });

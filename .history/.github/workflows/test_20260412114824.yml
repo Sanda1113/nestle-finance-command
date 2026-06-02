@@ -51,4 +51,4 @@ jobs:
       - run: npm ci
       - run: npx cypress run
         env:
-          CYPRESS_BASE_URL: https://nestlefinancecommand.com
+          CYPRESS_BASE_URL: https://nestle-finance-command.vercel.app

@@ -65,7 +65,7 @@ const handlePrintDocument = (docType, docData) => {
         </head>
         <body>
             <div class="letterhead">
-                <img src="https://nestlefinancecommand.com/nestle-logo.svg" alt="Nestlé" />
+                <img src="https://nestle-finance-command.vercel.app/nestle-logo.svg" alt="Nestlé" />
                 <div class="letterhead-text">
                     <h1>Nestlé</h1>
                     <p>Global Procurement & Finance Command Center</p>

@@ -9,7 +9,7 @@ file = file.replace(
 
 // 2. Change proofUrl
 file = file.replace(
-    "const proofUrl = 'https://nestlefinancecommand.com/mock-promise-to-pay.pdf'; // mocked for MVP",
+    "const proofUrl = 'https://nestle-finance-command.vercel.app/mock-promise-to-pay.pdf'; // mocked for MVP",
     "const proofUrl = `https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${id}/promise-to-pay.pdf`;"
 );
 

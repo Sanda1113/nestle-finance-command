@@ -1,4 +1,8 @@
 // server.js
+if (process.env.NODE_ENV !== 'production') {
+    require('dotenv').config();
+}
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -9,25 +13,54 @@ const xlsx = require('xlsx');
 const sprint2Routes = require('./routes/sprint2');
 const { sendSupplierEmail } = require('./mailer');
 
-if (process.env.NODE_ENV !== 'production') {
-    require('dotenv').config();
-}
-
 const app = express();
+require('./payoutReminder');
 const port = process.env.PORT || 8080;
+const MAX_LOG_FIELD_LENGTH = 400;
+const SUPABASE_REQUEST_TIMEOUT_MS = 12000;
+
+const HIGH_FREQUENCY_LOG_PATHS = [
+    '/api/sprint2/notifications',
+    '/api/supplier/pos/',
+    '/api/supplier/logs/',
+    '/api/reconciliations'
+];
+
+const shouldSkipRequestLog = (req, statusCode, duration) => {
+    if (statusCode >= 400 || duration >= 10000) return false;
+    return HIGH_FREQUENCY_LOG_PATHS.some(path => req.originalUrl.startsWith(path));
+};
 
 // 🔍 Request logging middleware
 app.use((req, res, next) => {
     const start = Date.now();
     res.on('finish', () => {
         const duration = Date.now() - start;
+        if (shouldSkipRequestLog(req, res.statusCode, duration)) return;
         console.log(`${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
     });
     next();
 });
 
-app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS', 'PATCH'] }));
-app.use(express.json());
+const allowedOrigins = [
+    'https://nestle-finance-command.vercel.app', // ✅ Added your new active domain
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+];
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ['GET', 'POST', 'OPTIONS', 'PATCH', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma'],
+}));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -50,18 +83,58 @@ const upload = multer({ storage: multer.memoryStorage() });
 // ==========================================
 // 🛡️ ERROR LOGGING HELPER
 // ==========================================
+const truncateLogField = (value, maxLength = MAX_LOG_FIELD_LENGTH) => {
+    if (value === undefined || value === null) return '';
+    const text = String(value);
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, maxLength)}… [truncated]`;
+};
+
 const logError = (context, error, additional = {}) => {
     console.error(`\n❌ ERROR [${context}]`);
-    console.error(`   Message: ${error.message}`);
+    console.error(`   Message: ${truncateLogField(error?.message || 'Unknown error')}`);
     if (error.code) console.error(`   Code: ${error.code}`);
-    if (error.details) console.error(`   Details: ${error.details}`);
-    if (error.hint) console.error(`   Hint: ${error.hint}`);
+    if (error.details) console.error(`   Details: ${truncateLogField(error.details)}`);
+    if (error.hint) console.error(`   Hint: ${truncateLogField(error.hint)}`);
     if (Object.keys(additional).length) {
         console.error(`   Context:`, JSON.stringify(additional, null, 2));
     }
-    if (process.env.NODE_ENV !== 'production' && error.stack) {
-        console.error(`   Stack: ${error.stack}`);
+    if (process.env.NODE_ENV !== 'production' && error?.stack) {
+        console.error(`   Stack: ${truncateLogField(error.stack, 1200)}`);
     }
+};
+
+const withSupabaseTimeout = async (queryBuilder, timeoutMs = SUPABASE_REQUEST_TIMEOUT_MS) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        if (queryBuilder && typeof queryBuilder.abortSignal === 'function') {
+            return await queryBuilder.abortSignal(controller.signal);
+        }
+        return await queryBuilder;
+    } catch (error) {
+        if (error?.name === 'AbortError') {
+            const timeoutError = new Error(`Supabase request timed out after ${timeoutMs}ms`);
+            timeoutError.code = 'SUPABASE_TIMEOUT';
+            throw timeoutError;
+        }
+        throw error;
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
+const isMissingColumnError = (error, columns = []) => {
+    if (!error || !columns.length) return false;
+    const details = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`.toLowerCase();
+    const hasMissingTextSignal = details.includes('could not find')
+        || details.includes('does not exist')
+        || details.includes('not found');
+    const hasMissingColumnSignal = error.code === '42703'
+        || error.code === 'PGRST204'
+        || (details.includes('column') && hasMissingTextSignal)
+        || (details.includes('schema cache') && hasMissingTextSignal);
+    return hasMissingColumnSignal && columns.some(col => details.includes(col.toLowerCase()));
 };
 
 // ==========================================
@@ -288,7 +361,11 @@ app.post('/api/extract-invoice', upload.single('invoiceFile'), async (req, res) 
             billTo: getAddressText(rawFields.customer_address) || getAddressText(rawFields.billing_address) || getSafeString(rawFields.customer_name) || 'Not Found',
             shipTo: getAddressText(rawFields.shipping_address) || 'Not Found',
             subtotal: getNum(rawFields.total_net) || getNum(rawFields.subtotal),
+            subtotalAmount: getNum(rawFields.total_net) || getNum(rawFields.subtotal),
             salesTax: getNum(rawFields.total_tax) || getNum(rawFields.tax),
+            taxAmount: getNum(rawFields.total_tax) || getNum(rawFields.tax),
+            discountAmount: getNum(rawFields.discount) || getNum(rawFields.total_discount),
+            shippingAmount: getNum(rawFields.shipping) || getNum(rawFields.freight) || getNum(rawFields.total_shipping),
             totalAmount: getNum(rawFields.total_amount) || getNum(rawFields.total),
             currency: extractCurrency(rawFields.locale),
             lineItems: extractLineItems(rawFields.line_items)
@@ -311,37 +388,162 @@ app.post('/api/save-reconciliation', async (req, res) => {
     try {
         console.log(`💾 Saving reconciliation: ${invoiceData?.invoiceNumber} / ${poData?.poNumber}`);
 
-        const { error: invErr } = await supabase.from('invoices').insert([{
-            invoice_number: invoiceData.invoiceNumber,
-            extracted_amount: invoiceData.totalAmount,
-            status: matchStatus
-        }]);
-        if (invErr) {
-            logError('Insert Invoice', invErr, { invoiceNumber: invoiceData.invoiceNumber });
+        // 🛡️ Ensure unique invoice number even if OCR fails
+        let safeInvoiceNumber = invoiceData.invoiceNumber;
+        if (!safeInvoiceNumber || safeInvoiceNumber === 'Not Found' || safeInvoiceNumber === 'unknown invoice') {
+            safeInvoiceNumber = `REQ-TEMP-${Date.now().toString().slice(-6)}`;
+            console.log(`🏷️ Generated temporary invoice number: ${safeInvoiceNumber}`);
         }
 
-        let timeline = matchStatus === 'Approved' ? 'Awaiting Payout' : 'Discrepancy - Manual Review';
+        const invoiceFileUrl = invoiceData?.fileUrl || invoiceData?.file_url;
+        if (invoiceFileUrl) {
+            const { error: invErr } = await supabase.from('invoices').insert([{
+                invoice_number: safeInvoiceNumber,
+                file_url: invoiceFileUrl,
+                extracted_amount: invoiceData.totalAmount,
+                status: matchStatus
+            }]);
+            if (invErr) {
+                logError('Insert Invoice', invErr, { invoiceNumber: safeInvoiceNumber });
+            }
+        } else {
+            console.warn(`⚠️ Skipping invoices table insert for ${safeInvoiceNumber}: missing file URL. Proceeding with reconciliation save.`);
+        }
 
-        const { error: reconErr } = await supabase.from('reconciliations').insert([{
+        let finalStatus = matchStatus;
+        let finalTimeline = finalStatus === 'Approved' ? 'Awaiting Payout' : 'Discrepancy - Manual Review';
+        let autoApprovalReason = null;
+        let autoApproved = false;
+
+        // MVP 5: Smart Tolerance System - Classify discrepancies
+        if (finalStatus.includes('Discrepancy')) {
+            const invTotal = Number(invoiceData.totalAmount) || 0;
+            const poTotal = Number(poData.totalAmount) || 0;
+            const invTax = Number(invoiceData.salesTax) || 0;
+            const poTax = Number(poData.salesTax) || 0;
+            const invQty = invoiceData.lineItems?.length || 0;
+            const poQty = poData.lineItems?.length || 0;
+            const delta = Math.abs(invTotal - poTotal);
+            const percentageDelta = poTotal > 0 ? delta / poTotal : 0;
+
+            let classification = null;
+            let willAutoApprove = false;
+            let ruleName = null;
+
+            // 1. Fetch vendor trust profile
+            let { data: trustProfile, error: trustErr } = await supabase
+                .from('vendor_trust_profiles')
+                .select('*')
+                .eq('supplier_email', supplierEmail)
+                .single();
+
+            // If missing, create a default one
+            if (trustErr && (trustErr.code === 'PGRST116' || trustErr.status === 406)) {
+                console.log(`🐣 Creating default trust profile for ${supplierEmail}`);
+                const { data: newProfile } = await supabase
+                    .from('vendor_trust_profiles')
+                    .insert([{ supplier_email: supplierEmail, trust_tier: 2, accuracy_score: 1.0 }])
+                    .select()
+                    .single();
+                trustProfile = newProfile;
+            }
+
+            const trustMultiplier = trustProfile?.trust_tier === 1 ? 2.0 : (trustProfile?.trust_tier === 3 ? 0.0 : 1.0);
+
+            // 2. Fetch tolerance rules from DB
+            const { data: rules } = await supabase.from('tolerance_rules').select('*').eq('is_active', true);
+
+            // Rules applied based on category
+            const taxRule = rules?.find(r => r.category === 'Tax') || { threshold_value: 1.00 };
+            const freightRule = rules?.find(r => r.category === 'Freight') || { threshold_value: 0.02, rule_type: 'percentage' };
+            const unitPriceRule = rules?.find(r => r.category === 'Unit Price') || { threshold_value: 0.00 };
+
+            // Logic for classification and auto-approval
+            const taxDelta = Math.abs(invTax - poTax);
+
+            if (taxDelta > 0 && delta <= taxRule.threshold_value * trustMultiplier) {
+                classification = 'Tax Rounding Difference';
+                willAutoApprove = true;
+                ruleName = 'Tax Tolerance Rule';
+            } else if (percentageDelta <= (freightRule.rule_type === 'percentage' ? freightRule.threshold_value : 0.02) * trustMultiplier) {
+                classification = 'Freight Fluctuation';
+                willAutoApprove = true;
+                ruleName = 'Freight Variance Rule';
+            } else if (delta === 0) {
+                classification = 'Perfect Match';
+                willAutoApprove = true;
+            } else {
+                classification = 'Price/Quantity Discrepancy';
+                // Allow up to $1.00 base absolute variance as a catch-all for small discrepancies
+                const baseAbsoluteThreshold = taxRule.threshold_value || 1.00;
+                willAutoApprove = delta <= baseAbsoluteThreshold * trustMultiplier;
+                ruleName = 'Minor Variance Catch-all';
+            }
+
+            // Strict $0.00 for Unit Price discrepancies if flagged (simulation)
+            if (unitPriceRule.threshold_value === 0 && delta > 0 && !classification.includes('Tax') && !classification.includes('Freight')) {
+                // If it's a core line item price mismatch, we might override auto-approval if trust is low
+                if (trustProfile?.trust_tier === 3) {
+                    willAutoApprove = false;
+                    classification = 'Strict Unit Price Variance (High Risk Vendor)';
+                }
+            }
+
+            if (willAutoApprove) {
+                finalStatus = 'Matched - Pending Finance Review';
+                finalTimeline = 'Matched - Pending Finance Review';
+                autoApproved = false; // Changed from true!
+                autoApprovalReason = `Matched within tolerance: Invoice total ${invTotal.toFixed(2)} vs PO ${poTotal.toFixed(2)}. Delta of ${delta.toFixed(2)} classified as ${classification} (Rule: ${ruleName}). Pending Finance Review.`;
+                console.log(`🤖 MVP5: ${autoApprovalReason}`);
+
+                // Database Injection: Generate JSON payload for external ERP
+                const erpPayload = {
+                    journal_entry: "JRNL-VAR-PENDING",
+                    account: "61000-Rounding Difference Review",
+                    debit: delta.toFixed(2),
+                    currency: invoiceData.currency || "USD",
+                    reason: "Variance detected - pending manual review"
+                };
+                console.log(`🏦 MVP5 ERP Payload: ${JSON.stringify(erpPayload)}`);
+
+                // Insert Comms Notification to Finance
+                await supabase.from('notifications').insert([{
+                    user_role: 'Finance',
+                    title: '✅ Match Found - Pending Review',
+                    message: `Invoice ${invoiceData.invoiceNumber} matched within tolerance. Pending Finance approval.`,
+                    link: `/logs?po=${poData.poNumber}`,
+                    is_read: false
+                }]);
+            } else {
+                console.log(`🔴 MVP5: Escalated to Finance due to ${classification}`);
+            }
+        }
+
+        const { data: reconData, error: reconErr } = await supabase.from('reconciliations').insert([{
             vendor_name: invoiceData.vendorName,
-            invoice_number: invoiceData.invoiceNumber,
-            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : invoiceData.invoiceNumber,
+            invoice_number: safeInvoiceNumber,
+            po_number: poData.poNumber !== 'Not Found' ? poData.poNumber : (invoiceData.poNumber !== 'Not Found' ? invoiceData.poNumber : safeInvoiceNumber),
             invoice_total: invoiceData.totalAmount,
             po_total: poData.totalAmount,
-            match_status: matchStatus,
-            timeline_status: timeline,
+            match_status: finalStatus,
+            timeline_status: finalTimeline,
             supplier_email: supplierEmail,
-            invoice_data: invoiceData,
+            invoice_data: { ...invoiceData, invoiceNumber: safeInvoiceNumber },
             po_data: poData,
-            processed_at: new Date().toISOString()
-        }]);
+            processed_at: new Date().toISOString(),
+            auto_approval_reason: autoApprovalReason,
+            auto_approved: autoApproved
+        }]).select();
 
         if (reconErr) {
-            logError('Insert Reconciliation', reconErr, { invoiceNumber: invoiceData.invoiceNumber });
+            logError('Insert Reconciliation', reconErr, { invoiceNumber: safeInvoiceNumber });
             throw reconErr;
         }
 
-        console.log(`✅ Reconciliation saved`);
+        console.log(`✅ Reconciliation saved: ${safeInvoiceNumber}`);
+        const reconId = reconData[0].id;
+
+
         res.json({ success: true });
     } catch (error) {
         logError('Save Reconciliation', error);
@@ -352,14 +554,33 @@ app.post('/api/save-reconciliation', async (req, res) => {
 app.get('/api/reconciliations', async (req, res) => {
     try {
         const { email } = req.query;
-        let query = supabase.from('reconciliations').select('*').order('processed_at', { ascending: false });
+        let query = supabase
+            .from('reconciliations')
+            .select('*')
+            .order('processed_at', { ascending: false });
         // If a supplier email is passed, filter to only their records
         if (email) {
             query = query.eq('supplier_email', email);
         }
         const { data, error } = await query;
         if (error) throw error;
-        res.json({ success: true, data });
+        const responseData = email
+            ? (data || []).map(item => ({
+                id: item.id,
+                vendor_name: item.vendor_name,
+                invoice_number: item.invoice_number,
+                po_number: item.po_number,
+                invoice_total: item.invoice_total,
+                po_total: item.po_total,
+                match_status: item.match_status,
+                timeline_status: item.timeline_status,
+                supplier_email: item.supplier_email,
+                processed_at: item.processed_at,
+                created_at: item.created_at,
+                updated_at: item.updated_at || item.processed_at || item.created_at || null
+            }))
+            : data;
+        res.json({ success: true, data: responseData });
     } catch (error) {
         logError('Fetch Reconciliations', error);
         res.status(500).json({ error: 'Failed to fetch ledger' });
@@ -418,7 +639,7 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
                 const { data: suppliers } = await supabase
                     .from('app_users')
                     .select('email')
-                    .eq('role', 'Supplier');
+                    .ilike('role', 'supplier');
 
                 if (suppliers && suppliers.length === 1) {
                     supplierEmail = suppliers[0].email;
@@ -490,6 +711,7 @@ app.patch('/api/reconciliations/:id', async (req, res) => {
             }
         }
 
+
         res.json({ success: true });
     } catch (error) {
         logError('Update Reconciliation', error, { id, newStatus });
@@ -540,14 +762,23 @@ app.post('/api/reconciliations/:id/notify', async (req, res) => {
 app.post('/api/save-boq', async (req, res) => {
     const { boqData, supplierEmail, vendorId } = req.body;
     try {
-        console.log(`💾 Saving BOQ from ${boqData?.vendorName || 'Unknown'}`);
+        // 🛡️ Before saving BOQ, validate the extracted data
+        if (!boqData || !boqData.vendorName) {
+            console.warn('⚠️ BOQ extraction returned invalid or incomplete data');
+            return res.status(400).json({
+                error: 'Failed to extract valid BOQ data',
+                details: 'Vendor information is missing from the document'
+            });
+        }
+
+        console.log(`💾 Saving BOQ from ${boqData.vendorName}`);
         const { error } = await supabase.from('boqs').insert([{
             vendor_name: boqData.vendorName,
             document_number: boqData.invoiceNumber !== 'Not Found' ? boqData.invoiceNumber : `BOQ-${Date.now().toString().slice(-6)}`,
             total_amount: boqData.totalAmount,
             currency: boqData.currency,
             status: 'Pending Review',
-            line_items: boqData.lineItems,
+            line_items: boqData.lineItems,   // line items already contain unit price etc.
             supplier_email: supplierEmail,
             vendor_id: vendorId
         }]);
@@ -564,13 +795,30 @@ app.post('/api/save-boq', async (req, res) => {
 app.get('/api/boqs', async (req, res) => {
     try {
         const { email } = req.query;
-        let query = supabase.from('boqs').select('*').order('created_at', { ascending: false });
+        let query = supabase
+            .from('boqs')
+            .select('*')
+            .order('created_at', { ascending: false });
         if (email) {
             query = query.eq('supplier_email', email);
         }
         const { data, error } = await query;
         if (error) throw error;
-        res.json({ success: true, data });
+        const responseData = email
+            ? (data || []).map(item => ({
+                id: item.id,
+                vendor_name: item.vendor_name,
+                document_number: item.document_number,
+                total_amount: item.total_amount,
+                currency: item.currency,
+                status: item.status,
+                supplier_email: item.supplier_email,
+                created_at: item.created_at,
+                updated_at: item.updated_at || item.created_at || null,
+                rejection_reason: item.rejection_reason || null
+            }))
+            : data;
+        res.json({ success: true, data: responseData });
     } catch (error) {
         logError('Fetch BOQs', error);
         res.status(500).json({ error: 'Failed to fetch BOQs' });
@@ -650,6 +898,8 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
             supplierDetails: `${boqData.vendor_name}\n${boqData.supplier_email}`,
             currency: boqData.currency,
             totalAmount: boqData.total_amount,
+            subtotalAmount: boqData.subtotal_amount || boqData.total_amount,
+            taxAmount: boqData.tax_amount || 0,
             lineItems: boqData.line_items,
             deliveryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
             deliveryLocation: "Nestle Main Warehouse, Colombo",
@@ -717,12 +967,67 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
 app.get('/api/supplier/pos/:email', async (req, res) => {
     const { email } = req.params;
     try {
-        const { data, error } = await supabase.from('purchase_orders').select('*').eq('supplier_email', email).not('po_data', 'is', null).order('id', { ascending: false });
+        let { data, error } = await withSupabaseTimeout(
+            supabase
+                .from('purchase_orders')
+                .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email')
+                .eq('supplier_email', email)
+                .order('id', { ascending: false })
+        );
+
+        if (error && isMissingColumnError(error, ['updated_at', 'is_downloaded'])) {
+            ({ data, error } = await withSupabaseTimeout(
+                supabase
+                    .from('purchase_orders')
+                    .select('id, po_number, total_amount, status, created_at, supplier_email')
+                    .eq('supplier_email', email)
+                    .order('id', { ascending: false })
+            ));
+        }
+
         if (error) throw error;
-        res.json({ success: true, data });
+        const responseData = (data || []).map(item => ({
+            id: item.id,
+            po_number: item.po_number,
+            total_amount: item.total_amount,
+            status: item.status,
+            created_at: item.created_at,
+            updated_at: item.updated_at || item.created_at || null,
+            is_downloaded: Boolean(item.is_downloaded),
+            supplier_email: item.supplier_email
+        }));
+        res.json({ success: true, data: responseData });
     } catch (error) {
         logError('Fetch Supplier POs', error, { email });
         res.status(500).json({ error: 'Failed to fetch POs' });
+    }
+});
+
+app.get('/api/purchase_orders/:id', async (req, res) => {
+    const { id } = req.params;
+    const { email } = req.query;
+    try {
+        const { data, error } = await supabase
+            .from('purchase_orders')
+            .select('id, po_number, total_amount, status, created_at, is_downloaded, supplier_email, po_data')
+            .eq('id', id)
+            .single();
+        if (error) throw error;
+
+        if (email && data?.supplier_email && data.supplier_email !== email) {
+            return res.status(403).json({ error: 'Unauthorized for this PO' });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                ...data,
+                updated_at: null
+            }
+        });
+    } catch (error) {
+        logError('Fetch Purchase Order', error, { id });
+        res.status(500).json({ error: 'Failed to fetch purchase order' });
     }
 });
 
@@ -737,27 +1042,134 @@ app.patch('/api/purchase_orders/:id/downloaded', async (req, res) => {
     }
 });
 
-// ==========================================
-// 🚀 THE UNIFIED SUPPLIER TIMELINE ENGINE
-// ==========================================
-// ==========================================
-// 🚀 THE UNIFIED SUPPLIER TIMELINE ENGINE (ENHANCED)
-// ==========================================
+app.get('/api/logs', async (req, res) => {
+    try {
+        console.log(`📜 Fetching ALL global logs for Finance Portal`);
+
+        const [
+            { data: boqs, error: boqErr },
+            { data: pos, error: posErr },
+            { data: recs, error: recErr }
+        ] = await Promise.all([
+            supabase
+                .from('boqs')
+                .select('id, document_number, total_amount, status, created_at, rejection_reason, vendor_name, supplier_email'),
+            supabase
+                .from('purchase_orders')
+                .select('id, po_number, total_amount, status, created_at, is_downloaded, supplier_email'),
+            supabase
+                .from('reconciliations')
+                .select('id, invoice_number, match_status, timeline_status, processed_at, supplier_email, po_number')
+        ]);
+
+        if (boqErr) logError('Fetch BOQs for Global Logs', boqErr);
+        if (posErr) logError('Fetch POs for Global Logs', posErr);
+        if (recErr) logError('Fetch Recons for Global Logs', recErr);
+
+        let logs = [];
+
+        // BOQ Timeline Events
+        if (boqs) {
+            boqs.forEach(b => {
+                const isRejected = b.status === 'Rejected';
+                const timelineStatus = isRejected
+                    ? `❌ Rejected - Resubmission Available`
+                    : b.status.includes('PO Generated')
+                        ? `✅ Approved - PO Generated`
+                        : `⏳ Pending Review`;
+
+                logs.push({
+                    id: `boq-${b.id}`,
+                    date: b.created_at,
+                    type: 'BOQ / Quote',
+                    ref: b.document_number,
+                    status: b.status,
+                    timeline: timelineStatus,
+                    action: 'Supplier Upload',
+                    rejection_reason: b.rejection_reason || null,
+                    supplier_email: b.supplier_email,
+                    vendor_name: b.vendor_name
+                });
+            });
+        }
+
+        // PO Timeline Events
+        if (pos) {
+            pos.forEach(p => logs.push({
+                id: `po-${p.id}`,
+                date: p.created_at || new Date().toISOString(),
+                type: 'Official PO Generated',
+                ref: p.po_number,
+                status: p.is_downloaded ? 'Downloaded' : 'Available',
+                timeline: p.is_downloaded ? '✅ Downloaded by Supplier' : '🌟 Ready for Download',
+                action: 'Procurement Approval',
+                supplier_email: p.supplier_email
+            }));
+        }
+
+        // Invoice & Reconciliation Timeline Events
+        if (recs) {
+            recs.forEach(r => {
+                const isApproved = r.match_status === 'Approved';
+                const isRejected = r.match_status === 'Rejected';
+
+                const timelineStatus = isApproved
+                    ? `✅ ${r.timeline_status}`
+                    : isRejected
+                        ? `❌ ${r.timeline_status} - Resubmission Available`
+                        : `⏳ ${r.timeline_status}`;
+
+                logs.push({
+                    id: `rec-${r.id}`,
+                    date: r.processed_at,
+                    type: 'Invoice Match Process',
+                    ref: r.invoice_number,
+                    po_number: r.po_number,
+                    status: r.match_status,
+                    timeline: timelineStatus,
+                    action: 'Finance Review',
+                    supplier_email: r.supplier_email
+                });
+            });
+        }
+
+        // Sort by date (most recent first)
+        logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        console.log(`✅ Returning ${logs.length} global log entries`);
+        res.json({ success: true, data: logs });
+    } catch (error) {
+        logError('Global Logs', error);
+        res.status(500).json({ error: 'Failed to fetch global logs' });
+    }
+});
+
 app.get('/api/supplier/logs/:email', async (req, res) => {
     const { email } = req.params;
     try {
         console.log(`📜 Fetching timeline logs for ${email}`);
 
-        // Fetch BOQs with approval/rejection status
-        const { data: boqs, error: boqErr } = await supabase.from('boqs').select('id, document_number, total_amount, status, created_at, rejection_reason, vendor_name').eq('supplier_email', email);
+        const [
+            { data: boqs, error: boqErr },
+            { data: pos, error: posErr },
+            { data: recs, error: recErr }
+        ] = await Promise.all([
+            supabase
+                .from('boqs')
+                .select('id, document_number, total_amount, status, created_at, rejection_reason, vendor_name')
+                .eq('supplier_email', email),
+            supabase
+                .from('purchase_orders')
+                .select('id, po_number, total_amount, status, created_at, is_downloaded')
+                .eq('supplier_email', email),
+            supabase
+                .from('reconciliations')
+                .select('id, invoice_number, match_status, timeline_status, processed_at')
+                .eq('supplier_email', email)
+        ]);
+
         if (boqErr) logError('Fetch BOQs for Logs', boqErr, { email });
-
-        // Fetch POs with download status
-        const { data: pos, error: posErr } = await supabase.from('purchase_orders').select('id, po_number, total_amount, status, created_at, is_downloaded').eq('supplier_email', email);
         if (posErr) logError('Fetch POs for Logs', posErr, { email });
-
-        // Fetch Reconciliations with approval/rejection status
-        const { data: recs, error: recErr } = await supabase.from('reconciliations').select('id, invoice_number, match_status, timeline_status, processed_at').eq('supplier_email', email);
         if (recErr) logError('Fetch Recons for Logs', recErr, { email });
 
         let logs = [];
@@ -970,6 +1382,234 @@ app.post('/api/reconciliations/:id/resubmit', async (req, res) => {
         logError('Resubmit Reconciliation', error, { reconId: id });
         res.status(500).json({ error: 'Failed to resubmit invoice' });
     }
+});
+
+// ==========================================
+// 💸 PAYOUT ENGINE & EARLY PAYMENT (MVP 6 & 7)
+// ==========================================
+app.get('/api/payouts', async (req, res) => {
+    try {
+        const { email } = req.query;
+        let query = supabase.from('payout_schedule').select('*').order('due_date', { ascending: true });
+        if (email) query = query.eq('supplier_email', email);
+        const { data, error } = await query;
+        if (error) throw error;
+        res.json({ success: true, data });
+    } catch (err) {
+        logError('Fetch Payouts', err);
+        res.status(500).json({ error: 'Failed to fetch payouts' });
+    }
+});
+
+app.patch('/api/payouts/:id/paid', async (req, res) => {
+    const { id } = req.params;
+    const { paidBy } = req.body;
+    try {
+        let { data, error } = await supabase.from('payout_schedule')
+            .update({ status: 'Paid', paid_at: new Date().toISOString(), paid_by: paidBy || 'Finance Team' })
+            .eq('id', id).select().single();
+
+        if (error) {
+            console.warn(`[Mark Payout Paid] Failed on payout_schedule (Code: ${error.code}). Falling back to payout_schedules...`, error);
+            ({ data, error } = await supabase.from('payout_schedules')
+                .update({ status: 'Paid' })
+                .eq('id', id).select().single());
+        }
+
+        if (error) {
+            console.error(`[Mark Payout Paid] Failed on payout_schedules too (Code: ${error.code}).`, error);
+            throw error;
+        }
+
+        // Try to update timeline and notify
+        const reconId = data && (data.reconciliation_id || data.invoice_ref);
+        if (reconId) {
+            await supabase.from('reconciliations')
+                .update({ timeline_status: 'Paid' })
+                .eq('id', reconId);
+
+            try {
+                await supabase.from('notifications').insert([{
+                    user_email: data.supplier_email,
+                    user_role: 'Supplier',
+                    title: '💰 Payment Processed',
+                    message: `Nestlé Finance has processed payment for Invoice ${data.invoice_number || data.title}.`,
+                    link: `/logs?po=${data.po_number || data.po_ref || data.invoice_number || data.title}`,
+                    is_read: false
+                }]);
+            } catch (notifErr) {
+                console.warn('[Mark Payout Paid] Notification skipped due to error:', notifErr.message);
+            }
+
+            // 📧 Email supplier about payment processed
+            if (data.supplier_email) {
+                const invoiceRef = data.invoice_number || data.title || 'your invoice';
+                const paymentEmailBody = `
+                    <p>Hello,</p>
+                    <p>Nestlé Finance has successfully processed payment for <strong>${invoiceRef}</strong>.</p>
+                    <p><strong>Amount Paid:</strong> ${data.payout_amount || data.final_amount || data.base_amount || ''}</p>
+                    <p><strong>Payment Date:</strong> ${new Date().toLocaleDateString()}</p>
+                    <p>The funds have been disbursed as per your agreed payment terms. You can view the full transaction history in your Supplier Dashboard.</p>
+                    <p>Thank you for your continued partnership with Nestlé.</p>
+                `;
+                sendSupplierEmail(
+                    data.supplier_email,
+                    `Payment Processed – ${invoiceRef}`,
+                    paymentEmailBody,
+                    {
+                        invoiceNumber: data.invoice_number,
+                        poNumber: data.po_number,
+                        amount: data.payout_amount || data.final_amount || data.base_amount
+                    }
+                ).catch(err => console.warn('[Mark Payout Paid] Email failed:', err.message));
+            }
+        }
+
+        res.json({ success: true, data });
+    } catch (err) {
+        logError('Mark Payout Paid', err);
+        res.status(500).json({ error: 'Failed to mark paid' });
+    }
+});
+
+// ==========================================
+// 📊 MVP 5: SHADOW MODE ROI SIMULATOR
+// ==========================================
+app.post('/api/tolerance/simulate', async (req, res) => {
+    const { ruleType, thresholdValue, category } = req.body;
+    try {
+        console.log(`📊 Simulating Shadow Mode: ${category} rule at ${thresholdValue}`);
+
+        // Fetch last 100 discrepancies
+        const { data: historical } = await supabase
+            .from('reconciliations')
+            .select('*')
+            .not('match_status', 'eq', 'Approved')
+            .limit(100);
+
+        if (!historical) return res.json({ hoursSaved: 0, leakage: 0, impactedCount: 0 });
+
+        let leakage = 0;
+        let impactedCount = 0;
+        const LABOR_COST_PER_HOUR = 45;
+        const TIME_PER_REVIEW_MINS = 15;
+
+        historical.forEach(recon => {
+            const invTotal = Number(recon.invoice_total) || 0;
+            const poTotal = Number(recon.po_total) || 0;
+            const delta = Math.abs(invTotal - poTotal);
+            const percentageDelta = poTotal > 0 ? delta / poTotal : 0;
+
+            let wouldApprove = false;
+            if (category === 'Tax' && delta <= thresholdValue) wouldApprove = true;
+            else if (category === 'Freight' && percentageDelta <= thresholdValue) wouldApprove = true;
+            else if (delta <= thresholdValue) wouldApprove = true;
+
+            if (wouldApprove) {
+                leakage += delta;
+                impactedCount++;
+            }
+        });
+
+        const hoursSaved = (impactedCount * TIME_PER_REVIEW_MINS) / 60;
+        const totalLaborSavings = hoursSaved * LABOR_COST_PER_HOUR;
+        const netROI = totalLaborSavings - leakage;
+
+        res.json({
+            success: true,
+            results: {
+                hoursSaved: hoursSaved.toFixed(1),
+                leakage: leakage.toFixed(2),
+                impactedCount,
+                laborSavings: totalLaborSavings.toFixed(2),
+                netROI: netROI.toFixed(2)
+            }
+        });
+    } catch (error) {
+        logError('Shadow Mode Simulation', error);
+        res.status(500).json({ error: 'Simulation failed' });
+    }
+});
+
+// ==========================================
+// 💸 MVP 7: DYNAMIC DISCOUNTING ENGINE
+// ==========================================
+app.patch('/api/payouts/:id/discount', async (req, res) => {
+    const { id } = req.params;
+    const { requestedDate, discountRate, finalAmount } = req.body;
+    try {
+        console.log(`💸 Dynamic Discount Accepted: Payout ${id} for ${finalAmount} on ${requestedDate}`);
+
+        // 1. Check Capital Deployment Cap
+        const { data: capSetting } = await supabase
+            .from('treasury_settings')
+            .select('value_numeric')
+            .eq('key', 'monthly_early_payout_cap')
+            .single();
+
+        const cap = capSetting?.value_numeric || 5000000;
+
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        const { data: deployed } = await supabase
+            .from('payout_schedules')
+            .select('final_amount')
+            .eq('early_payout_requested', true)
+            .gte('early_payout_accepted_at', startOfMonth.toISOString());
+
+        const currentTotal = deployed?.reduce((sum, p) => sum + Number(p.final_amount), 0) || 0;
+
+        if (currentTotal + Number(finalAmount) > cap) {
+            return res.status(403).json({ error: 'Monthly capital deployment cap reached. Early payouts suspended.' });
+        }
+
+        const { data: pData, error: updateErr } = await supabase
+            .from('payout_schedules')
+            .update({
+                scheduled_date: requestedDate,
+                final_amount: finalAmount,
+                discount_applied: Number(discountRate),
+                early_payout_requested: true,
+                early_payout_accepted_at: new Date().toISOString(),
+                status: 'Early Payment Renegotiated'
+            })
+            .eq('id', id).select().single();
+
+        if (updateErr) throw updateErr;
+
+        const discountCaptured = (Number(finalAmount) / (1 - Number(discountRate))) - Number(finalAmount);
+
+        await supabase.from('notifications').insert([{
+            user_role: 'Finance',
+            title: '💰 Yield Captured',
+            message: `Supplier ${pData?.supplier_email || 'partner'} accepted a ${(Number(discountRate) * 100).toFixed(1)}% discount. $${discountCaptured.toFixed(2)} ROI generated.`,
+            link: '/finance/treasury',
+            is_read: false
+        }]);
+
+        res.json({ success: true, message: 'Early payout scheduled and discount applied.', data: pData });
+    } catch (error) {
+        logError('Dynamic Discounting', error);
+        res.status(500).json({ error: 'Discount application failed' });
+    }
+});
+
+// Old endpoint wrapper for backward compatibility
+app.post('/api/payouts/:id/accept-early-payment', async (req, res) => {
+    const { id } = req.params;
+    const { discountRate, earlyPaymentAmount } = req.body;
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Redirect to the new logic
+    req.url = `/api/payouts/${id}/discount`;
+    req.method = 'PATCH';
+    req.body = {
+        requestedDate: tomorrow.toISOString(),
+        discountRate: discountRate / 100,
+        finalAmount: earlyPaymentAmount
+    };
+    return app._router.handle(req, res);
 });
 
 // Global error handlers
