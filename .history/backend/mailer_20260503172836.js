@@ -84,7 +84,7 @@ const sendSupplierEmail = async (toEmail, subject, htmlBody, refs = {}) => {
 
     try {
         const fullHtml = buildEmailHtml(subject, htmlBody, refs);
-        const emailFromAddress = process.env.EMAIL_FROM || 'Nestle Finance Command Notifications <notifications@nestlefinancecommand.com>';
+        const emailFromAddress = process.env.EMAIL_FROM || 'Nestle Finance Command Notifications <notifications@nestle-finance-command.vercel.app>';
         const { data, error } = await resend.emails.send({
             from: `Nestle Finance <${emailFromAddress}>`,
             to: [toEmail],

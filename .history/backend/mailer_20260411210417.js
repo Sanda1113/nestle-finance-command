@@ -11,7 +11,7 @@ const sendSupplierEmail = async (toEmail, subject, htmlContent) => {
 
     try {
         const { data, error } = await resend.emails.send({
-            from: 'Nestlé Finance Command <notifications@nestlefinancecommand.com>', // ✅ Updated
+            from: 'Nestlé Finance Command <notifications@nestle-finance-command.vercel.app>', // ✅ Updated
             to: [toEmail],
             subject: `Nestlé Portal: ${subject}`,
             html: htmlContent

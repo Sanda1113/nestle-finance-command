@@ -70,7 +70,7 @@ const sendSupplierEmail = async (toEmail, subject, htmlBody, refs = {}) => {
     try {
         const fullHtml = buildEmailHtml(subject, htmlBody, refs);
         const { data, error } = await resend.emails.send({
-            from: 'Nestlé Finance Command <notifications@nestlefinancecommand.com>',
+            from: 'Nestlé Finance Command <notifications@nestle-finance-command.vercel.app>',
             to: [toEmail],
             subject: `Nestlé Portal: ${subject}`,
             html: fullHtml
