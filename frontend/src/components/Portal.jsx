@@ -51,6 +51,9 @@ const DASHBOARD_FETCH_TIMEOUT_MS = 15000;
 // PO statuses to match against.
 const DASHBOARD_POS_FETCH_TIMEOUT_MS = 30000;
 const DASHBOARD_IMMEDIATE_REFRESH_DEBOUNCE_MS = 800;
+// Cache the last good PO list so a timed-out fetch doesn't leave the queue with
+// no PO statuses to match against (the warehouse caches; Finance didn't).
+const FINANCE_POS_CACHE_KEY = 'financePOsCache';
 
 const handlePrintDocument = (docType, docData) => {
     if (!docData) return alert("Document data not available.");
@@ -582,7 +585,14 @@ function ProcurementPortal({ user }) {
 function FinancePortal({ user }) {
     const [records, setRecords] = useState([]);
     const [boqs, setBoqs] = useState([]);
-    const [pos, setPOs] = useState([]);
+    const [pos, setPOs] = useState(() => {
+        try {
+            const cached = JSON.parse(localStorage.getItem(FINANCE_POS_CACHE_KEY));
+            return Array.isArray(cached) ? cached : [];
+        } catch {
+            return [];
+        }
+    });
     const [payouts, setPayouts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('All');
@@ -630,7 +640,10 @@ function FinancePortal({ user }) {
                 timeout: DASHBOARD_POS_FETCH_TIMEOUT_MS,
                 headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
             }).then(res => {
-                if (Array.isArray(res.data?.data)) setPOs(res.data.data);
+                if (Array.isArray(res.data?.data)) {
+                    setPOs(res.data.data);
+                    try { localStorage.setItem(FINANCE_POS_CACHE_KEY, JSON.stringify(res.data.data)); } catch { /* quota — ignore */ }
+                }
             })
                 .catch(error => { if (import.meta.env.DEV) console.warn('Finance polling request failed (pos):', error); });
 
@@ -695,6 +708,24 @@ function FinancePortal({ user }) {
             clearInterval(pollInterval);
         };
     }, [fetchData]);
+
+    // TEMP DIAGNOSTIC — remove once the queue is confirmed working. Logs how each
+    // reconciliation joins to its PO so we can see exactly why a row is stuck.
+    useEffect(() => {
+        if (!records || records.length === 0) return;
+        const report = records.slice(0, 40).map(r => {
+            const po = findRelatedPO(pos, r.po_number);
+            return {
+                recon_po: r.po_number,
+                match_status: r.match_status,
+                matched_po: po ? po.po_number : 'NO_MATCH',
+                po_status: po ? po.status : '-'
+            };
+        });
+        console.log(`[FinanceMatch] pos=${pos.length} records=${records.length} — reconciliation → PO join:`);
+        // eslint-disable-next-line no-console
+        (console.table || console.log)(report);
+    }, [pos, records]);
 
     useEffect(() => {
         const shouldRefreshImmediately = () => {
