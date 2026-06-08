@@ -967,10 +967,13 @@ app.post('/api/boqs/:id/generate-po', async (req, res) => {
 app.get('/api/supplier/pos/:email', async (req, res) => {
     const { email } = req.params;
     try {
+        // NOTE: purchase_orders has no `updated_at` column — selecting it returns a
+        // 400 on every call (the fallback below recovered, but wasted a round-trip).
+        // We omit it and derive `updated_at` from created_at in the response map.
         let { data, error } = await withSupabaseTimeout(
             supabase
                 .from('purchase_orders')
-                .select('id, po_number, total_amount, status, created_at, updated_at, is_downloaded, supplier_email')
+                .select('id, po_number, total_amount, status, created_at, is_downloaded, supplier_email')
                 .eq('supplier_email', email)
                 .order('id', { ascending: false })
         );
