@@ -33,6 +33,12 @@ const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
 const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge', 'clear'];
 const WAREHOUSE_POLL_INTERVAL_MS = 5000;
 const IMMEDIATE_REFRESH_DEBOUNCE_MS = 800;
+// Abort a warehouse fetch if it hangs (e.g. backend cold start) so it can't
+// hold the in-flight guard and freeze every subsequent refresh.
+const WAREHOUSE_FETCH_TIMEOUT_MS = 12000;
+// Safety net: if the in-flight guard is somehow still set this long after a
+// fetch started, force-release it so polling/realtime can recover.
+const WAREHOUSE_FETCH_STUCK_MS = 20000;
 const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['Pending', 'PO Generated', 'In Transit', 'Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload', 'Goods Received (GRN Logged)', 'Partially Received (Awaiting Backorder)']);
 const WAREHOUSE_COMPLETED_STATUSES = new Set([
     'Transaction Cancelled (Shortage)',
@@ -385,6 +391,7 @@ export default function WarehousePortal({ user, onLogout }) {
     const isFetchingPOsRef = useRef(false);
     const fetchCounterRef = useRef(0);
     const lastImmediateRefreshAtRef = useRef(0);
+    const fetchStartedAtRef = useRef(0);
 
     const latestState = useRef({ pos, selectedPO, receivedItems });
     useEffect(() => { latestState.current = { pos, selectedPO, receivedItems }; }, [pos, selectedPO, receivedItems]);
@@ -615,6 +622,7 @@ export default function WarehousePortal({ user, onLogout }) {
             return;
         }
         isFetchingPOsRef.current = true;
+        fetchStartedAtRef.current = Date.now();
         setIsFetching(true);
 
         const currentFetchId = ++fetchCounterRef.current;
@@ -639,6 +647,7 @@ export default function WarehousePortal({ user, onLogout }) {
             const url = `${API_BASE_URL}/grn/pending-pos`;
             console.log(`[WH] GET ${url} scope=warehouse`);
             const res = await axios.get(url, {
+                timeout: WAREHOUSE_FETCH_TIMEOUT_MS,
                 params: {
                     scope: 'warehouse',
                     includePhotos: false,
@@ -713,7 +722,11 @@ export default function WarehousePortal({ user, onLogout }) {
         const scheduleFetch = () => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
-                if (!document.hidden && navigator.onLine) {
+                // Fetch even when the tab is hidden. Realtime events only fire on a
+                // real DB change (e.g. a supplier marking a shipment delivered), so
+                // this is cheap and keeps a backgrounded dock board up to date the
+                // instant the operator looks at it.
+                if (navigator.onLine) {
                     fetchPOs();
                 }
             }, 300);
@@ -737,7 +750,18 @@ export default function WarehousePortal({ user, onLogout }) {
 
         // Polling fallback – respects the in-flight guard; skips if a fetch is running
         const pollInterval = setInterval(() => {
-            if (!document.hidden && navigator.onLine && !isFetchingPOsRef.current) {
+            // Watchdog: a request with no response (e.g. backend cold start) would
+            // otherwise leave the in-flight guard set and block every refresh for
+            // minutes. Release it once it exceeds the stuck threshold; any late
+            // response is safely discarded by the fetchCounterRef check in fetchPOs.
+            if (isFetchingPOsRef.current && (Date.now() - fetchStartedAtRef.current) > WAREHOUSE_FETCH_STUCK_MS) {
+                console.warn('[WH] In-flight fetch exceeded stuck threshold — releasing guard');
+                isFetchingPOsRef.current = false;
+            }
+            // Poll even when hidden. Browsers throttle background timers to ~1/min,
+            // which is an acceptable safety net when Realtime is unavailable, and
+            // means the board is never stale for minutes while the tab sits in back.
+            if (navigator.onLine && !isFetchingPOsRef.current) {
                 fetchPOs();
             }
         }, WAREHOUSE_POLL_INTERVAL_MS);
