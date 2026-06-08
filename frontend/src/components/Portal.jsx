@@ -652,9 +652,20 @@ function FinancePortal({ user }) {
         const handleSync = () => fetchData(false);
         window.addEventListener('force-sync', handleSync);
 
+        // Polling fallback — keeps the Review Queue current even when Supabase
+        // Realtime isn't delivering events. Visible-only (so it doesn't contend
+        // with other requests) and self-guarded by isFetchingDataRef inside
+        // fetchData, so it can't pile up.
+        const pollInterval = setInterval(() => {
+            if (!document.hidden && navigator.onLine && !isFetchingDataRef.current) {
+                fetchData(false);
+            }
+        }, DASHBOARD_POLL_INTERVAL_MS);
+
         return () => {
             channels.forEach(ch => supabase.removeChannel(ch));
             window.removeEventListener('force-sync', handleSync);
+            clearInterval(pollInterval);
         };
     }, [fetchData]);
 
@@ -697,8 +708,14 @@ function FinancePortal({ user }) {
             let newDisplayStatus;
             if (decision === 'Approved') {
                 const relatedPO = pos.find(p => p.po_number === r.po_number);
-                const isGrnCompleted = relatedPO && relatedPO.status && (relatedPO.status.includes('GRN Logged') || relatedPO.status.includes('Cleared'));
-                newDisplayStatus = isGrnCompleted ? 'Approved - Awaiting Payout' : 'Approved (Awaiting Delivery)';
+                const _poStatus = relatedPO && relatedPO.status ? String(relatedPO.status) : '';
+                const _clearedForPayout = _poStatus === 'Goods Cleared - Ready for Payout';
+                const _goodsReceived = !_clearedForPayout && (_poStatus.includes('GRN Logged') || _poStatus.includes('Goods Received'));
+                newDisplayStatus = _clearedForPayout
+                    ? 'Approved - Cleared for Payout'
+                    : _goodsReceived
+                        ? 'Approved - Goods Received'
+                        : 'Approved (Awaiting Delivery)';
             } else {
                 newDisplayStatus = 'Rejected by Finance';
             }
@@ -781,10 +798,15 @@ function FinancePortal({ user }) {
 
     const enrichedRecords = records.map(r => {
         const relatedPO = pos.find(p => p.po_number === r.po_number);
-        // FIX: Recognize both 'Received' and 'Cleared' for the Payout Stage button visibility
-        const isGrnCompleted = relatedPO && relatedPO.status && (relatedPO.status === 'Goods Cleared - Ready for Payout' || relatedPO.status.includes('GRN Logged'));
+        const poStatus = relatedPO && relatedPO.status ? String(relatedPO.status) : '';
+        // Two distinct warehouse stages, kept separate so the queue shows the
+        // progression and Stage Payout only unlocks at the final step:
+        //   • Goods Received     → GRN logged at the dock (goods confirmed)
+        //   • Cleared for Payout → warehouse clicked "Clear to Payout"
+        const isClearedForPayout = poStatus === 'Goods Cleared - Ready for Payout';
+        const isGoodsReceived = !isClearedForPayout && (poStatus.includes('GRN Logged') || poStatus.includes('Goods Received'));
         const isDelivered = relatedPO && (relatedPO.status === 'Delivered to Dock' || relatedPO.po_data?.delivery_timestamp);
-        const isWarehouseCancelled = relatedPO && String(relatedPO.status || '').includes('Cancelled');
+        const isWarehouseCancelled = poStatus.includes('Cancelled');
 
         let displayStatus = String(r.match_status || '');
 
@@ -832,14 +854,17 @@ function FinancePortal({ user }) {
         if (isWarehouseCancelled) {
             displayStatus = 'Rejected by Warehouse (Shortage)';
         } else if (displayStatus.toLowerCase().includes('approve')) {
-            if (isGrnCompleted) displayStatus = 'Approved - Awaiting Payout';
+            // Keep the word "Approved" in every post-approval label so the badge
+            // colour and the "already actioned" check (both test for it) keep working.
+            if (isClearedForPayout) displayStatus = 'Approved - Cleared for Payout';
+            else if (isGoodsReceived) displayStatus = 'Approved - Goods Received';
             else if (isDelivered) displayStatus = 'Pending Warehouse GRN';
             else displayStatus = 'Approved (Awaiting Delivery)';
         } else if (displayStatus.toLowerCase().includes('reject')) {
             displayStatus = 'Rejected by Finance';
         }
 
-        return { ...r, displayStatus, relatedPO, trustTier, trustColor, trustIcon, autoApprovedViaTolerance, glPayload, variance, isGrnCompleted };
+        return { ...r, displayStatus, relatedPO, trustTier, trustColor, trustIcon, autoApprovedViaTolerance, glPayload, variance, isClearedForPayout, isGoodsReceived };
     });
 
     const transactionTimeline = useMemo(() => {
@@ -1228,7 +1253,6 @@ function FinancePortal({ user }) {
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {visibleRecords.map((r) => {
                                 const isActioned = actionedRecords[r.id] || r.displayStatus.includes('Approved') || r.displayStatus.includes('Reject');
-                                const isGrnCompleted = r.isGrnCompleted;
                                 const poNumeric = String(r.po_number || r.invoice_number || '').match(/\d+/)?.[0];
                                 const relatedBoq = boqs.find(b => {
                                     const bNum = String(b.document_number || '');
@@ -1331,17 +1355,21 @@ function FinancePortal({ user }) {
                                                     return (
                                                         <button
                                                             type="button"
-                                                            disabled={!r.isGrnCompleted || !r.displayStatus.includes('Approved') || isStaged}
+                                                            disabled={!r.isClearedForPayout || !r.displayStatus.includes('Approved') || isStaged}
                                                             onClick={(e) => { e.stopPropagation(); handleStagePayout(r); }}
                                                             className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wide rounded-lg transition-all shadow-sm flex items-center gap-1.5 mx-auto ${
-                                                                (!r.isGrnCompleted || !r.displayStatus.includes('Approved') || isStaged)
+                                                                (!r.isClearedForPayout || !r.displayStatus.includes('Approved') || isStaged)
                                                                     ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
                                                                     : 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-500/20'
                                                             }`}
                                                             title={
-                                                                !r.isGrnCompleted
-                                                                    ? "Awaiting Warehouse Clearing"
-                                                                    : "Stage & Schedule Payout"
+                                                                !r.displayStatus.includes('Approved')
+                                                                    ? "Awaiting Finance approval"
+                                                                    : !r.isClearedForPayout
+                                                                        ? (r.isGoodsReceived
+                                                                            ? "Goods received — awaiting Warehouse 'Clear to Payout'"
+                                                                            : "Awaiting Warehouse clearance")
+                                                                        : "Stage & Schedule Payout"
                                                             }
                                                         >
                                                             <CreditCard className="w-3.5 h-3.5" /> Stage Payout
