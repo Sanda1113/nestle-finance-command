@@ -630,13 +630,16 @@ function FinancePortal({ user }) {
             }).then(res => setBoqs(res.data.data || []))
                 .catch(error => { if (import.meta.env.DEV) console.warn('Finance polling request failed (boqs):', error); });
 
-            // Use the light warehouse-scoped list (status + po_data, photos stripped,
-            // up to 500 rows) instead of includePhotos=true. The photo-heavy payload
-            // was timing out, leaving `pos` empty so the queue could never match a
-            // reconciliation to its PO. This is fast and carries everything the
-            // status logic needs (status, delivery_timestamp, warehouse_grn metadata).
+            // IMPORTANT: do NOT request po_data here. Even scope=warehouse selects the
+            // po_data JSONB, which still holds the base64 shortage photos in the DB
+            // (they're only stripped AFTER the read), so the query is huge and times
+            // out — leaving `pos` empty so the queue can never match a reconciliation
+            // to its PO. The default (no scope / no includePhotos) returns only the
+            // light columns (id, po_number, supplier_email, status, created_at,
+            // total_amount) for up to 500 rows — tiny and fast. The status-matching
+            // logic only needs `status`, which this provides.
             const p3 = axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/pending-pos', {
-                params: { scope: 'warehouse', _ts: Date.now() },
+                params: { _ts: Date.now() },
                 timeout: DASHBOARD_POS_FETCH_TIMEOUT_MS,
                 headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
             }).then(res => {
