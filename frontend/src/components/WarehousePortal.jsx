@@ -33,16 +33,24 @@ const UNSUPPORTED_BARCODE_IMAGE_TYPES = new Set(['image/heic', 'image/heif']);
 const VALID_SYNC_ACTION_TYPES = ['submit', 'reject', 'acknowledge', 'clear'];
 const WAREHOUSE_POLL_INTERVAL_MS = 5000;
 const IMMEDIATE_REFRESH_DEBOUNCE_MS = 800;
-// Abort a warehouse fetch if it hangs (e.g. backend cold start) so it can't
-// hold the in-flight guard and freeze every subsequent refresh.
-const WAREHOUSE_FETCH_TIMEOUT_MS = 12000;
+// Abort a warehouse fetch only if it truly hangs, so it can't hold the
+// in-flight guard and freeze refreshes. Generous enough to tolerate a Railway
+// cold start without triggering an abort/retry storm.
+const WAREHOUSE_FETCH_TIMEOUT_MS = 20000;
 // Safety net: if the in-flight guard is somehow still set this long after a
 // fetch started, force-release it so polling/realtime can recover.
-const WAREHOUSE_FETCH_STUCK_MS = 20000;
+const WAREHOUSE_FETCH_STUCK_MS = 30000;
 const WAREHOUSE_PROCESSABLE_STATUSES = new Set(['Pending', 'PO Generated', 'In Transit', 'Delivered to Dock', 'Pending Warehouse GRN', 'Truck at Bay - Pending Unload', 'Goods Received (GRN Logged)', 'Partially Received (Awaiting Backorder)']);
 const WAREHOUSE_COMPLETED_STATUSES = new Set([
     'Transaction Cancelled (Shortage)',
     'Goods Cleared - Ready for Payout'
+]);
+// Every status the warehouse board displays — must mirror the backend's
+// WAREHOUSE_STATUSES filter in routes/sprint2.js (/grn/pending-pos). Used to
+// decide whether a realtime row belongs on the board.
+const WAREHOUSE_ALL_STATUSES = new Set([
+    ...WAREHOUSE_PROCESSABLE_STATUSES,
+    ...WAREHOUSE_COMPLETED_STATUSES
 ]);
 const ACKNOWLEDGED_PATTERNS = [
     'Truck at Bay',          // Acknowledged
@@ -715,53 +723,96 @@ export default function WarehousePortal({ user, onLogout }) {
 
         if (isOffline) return;
 
-        // Debounced scheduler — collapses rapid Realtime/poll events into one fetch.
-        // We do NOT reset isFetchingPOsRef here; if a fetch is already running, the
-        // debounced call will simply be skipped by the guard inside fetchPOs.
+        // Background reconcile — collapses rapid events into ONE Railway refetch.
+        // Skipped when the tab is hidden so it doesn't compete with other requests
+        // (notifications, etc.) for the browser's limited connections to Railway.
         let debounceTimer = null;
         const scheduleFetch = () => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
-                // Fetch even when the tab is hidden. Realtime events only fire on a
-                // real DB change (e.g. a supplier marking a shipment delivered), so
-                // this is cheap and keeps a backgrounded dock board up to date the
-                // instant the operator looks at it.
-                if (navigator.onLine) {
+                if (!document.hidden && navigator.onLine) {
                     fetchPOs();
                 }
             }, 300);
         };
 
-        // Supabase Realtime for instant push-based updates
-        const channels = [
-            'purchase_orders',
-            'reconciliations',
-            'payout_schedules'
-        ].map(table =>
+        // Keep the trust badge stable across merges; only assign a fresh score to
+        // brand-new rows (mirrors the logic used in fetchPOs).
+        const withTrustScore = (po, existing) => ({
+            ...po,
+            trustScore: String(po?.supplier_email || '').toLowerCase().includes('nestle')
+                ? 98
+                : (typeof existing?.trustScore === 'number'
+                    ? existing.trustScore
+                    : Math.floor(Math.random() * (95 - 65 + 1) + 65))
+        });
+
+        // INSTANT PATH: apply a purchase_orders change straight from the realtime
+        // payload — no Railway round-trip — so the shipment shows the moment
+        // Supabase commits it. A background reconcile still runs to backfill any
+        // derived/stripped fields the realtime row doesn't carry.
+        const applyRealtimePO = (payload) => {
+            const row = payload?.new && Object.keys(payload.new).length ? payload.new : null;
+            const poNumber = row?.po_number || payload?.old?.po_number;
+
+            if (!poNumber) {
+                // Not enough info to merge (e.g. a DELETE under default replica
+                // identity) — fall back to a refetch.
+                scheduleFetch();
+                return;
+            }
+
+            setPOs((prev) => {
+                const idx = prev.findIndex((p) => p.po_number === poNumber);
+                const inScope = row && WAREHOUSE_ALL_STATUSES.has(String(row.status || ''));
+
+                // Removed, or status moved out of the warehouse's set → drop it.
+                if (payload?.eventType === 'DELETE' || !inScope) {
+                    if (idx === -1) return prev;
+                    const next = prev.filter((p) => p.po_number !== poNumber);
+                    persistPOCache(next);
+                    return next;
+                }
+
+                const merged = idx === -1
+                    ? withTrustScore(row, null)
+                    : withTrustScore({ ...prev[idx], ...row }, prev[idx]);
+                const next = idx === -1 ? [merged, ...prev] : prev.map((p, i) => (i === idx ? merged : p));
+                persistPOCache(next);
+                return next;
+            });
+
+            // Reconcile in the background so stripped/derived fields stay correct.
+            scheduleFetch();
+        };
+
+        // Supabase Realtime for instant push-based updates.
+        // purchase_orders gets the direct-merge handler (instant display); the
+        // other tables only need to trigger a background reconcile.
+        const poChannel = supabase
+            .channel('warehouse_purchase_orders_v2')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_orders' }, applyRealtimePO)
+            .subscribe();
+
+        const otherChannels = ['reconciliations', 'payout_schedules'].map((table) =>
             supabase
                 .channel(`warehouse_${table}_v2`)
-                .on(
-                    'postgres_changes',
-                    { event: '*', schema: 'public', table },
-                    scheduleFetch
-                )
+                .on('postgres_changes', { event: '*', schema: 'public', table }, scheduleFetch)
                 .subscribe()
         );
+        const channels = [poChannel, ...otherChannels];
 
-        // Polling fallback – respects the in-flight guard; skips if a fetch is running
+        // Polling fallback – used when Realtime is unavailable. Skips when hidden
+        // (so it doesn't contend with other requests) and skips while a fetch runs.
         const pollInterval = setInterval(() => {
-            // Watchdog: a request with no response (e.g. backend cold start) would
-            // otherwise leave the in-flight guard set and block every refresh for
-            // minutes. Release it once it exceeds the stuck threshold; any late
-            // response is safely discarded by the fetchCounterRef check in fetchPOs.
+            // Watchdog: if a request hung (e.g. backend cold start) the in-flight
+            // guard would block every refresh. Release it past the stuck threshold;
+            // any late response is discarded by the fetchCounterRef check in fetchPOs.
             if (isFetchingPOsRef.current && (Date.now() - fetchStartedAtRef.current) > WAREHOUSE_FETCH_STUCK_MS) {
                 console.warn('[WH] In-flight fetch exceeded stuck threshold — releasing guard');
                 isFetchingPOsRef.current = false;
             }
-            // Poll even when hidden. Browsers throttle background timers to ~1/min,
-            // which is an acceptable safety net when Realtime is unavailable, and
-            // means the board is never stale for minutes while the tab sits in back.
-            if (navigator.onLine && !isFetchingPOsRef.current) {
+            if (!document.hidden && navigator.onLine && !isFetchingPOsRef.current) {
                 fetchPOs();
             }
         }, WAREHOUSE_POLL_INTERVAL_MS);
@@ -771,7 +822,7 @@ export default function WarehousePortal({ user, onLogout }) {
             channels.forEach(ch => supabase.removeChannel(ch));
             clearInterval(pollInterval);
         };
-    }, [fetchPOs, isOffline]);
+    }, [fetchPOs, isOffline, persistPOCache]);
 
     useEffect(() => {
         const shouldRefreshImmediately = () => {
