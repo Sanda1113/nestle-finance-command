@@ -1237,8 +1237,21 @@ router.patch('/payouts/:id/discount', async (req, res) => {
 
         if (error) throw error;
 
-        // Notify Supplier (Confirmation Email)
+        // Notify Supplier (in-app notification + confirmation email)
         if (data && data.supplier_email) {
+            try {
+                await supabase.from('notifications').insert([{
+                    user_email: data.supplier_email,
+                    user_role: 'Supplier',
+                    title: '⚡ Early Payout Confirmed',
+                    message: `Your early payout for ${data.title} is confirmed for ${new Date(early_date).toLocaleDateString()}. Net amount: ${formatCurrency(new_amount)}.`,
+                    link: '/payouts',
+                    is_read: false
+                }]);
+            } catch (notifyErr) {
+                console.warn('[Discount Route] Notification insert failed:', notifyErr?.message);
+            }
+
             await sendSupplierEmail(
                 data.supplier_email,
                 `⚡ Early Payout Confirmed – ${data.title}`,

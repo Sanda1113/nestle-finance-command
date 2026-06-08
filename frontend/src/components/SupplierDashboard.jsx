@@ -8,6 +8,10 @@ import FloatingChat from './FloatingChat';
 import { supabase } from '../utils/supabaseClient';
 import DigitalCalendar from './DigitalCalendar';
 
+// Polling fallback so the supplier dashboard (payouts, timeline, statuses)
+// stays current even when Supabase Realtime isn't delivering events.
+const SUPPLIER_POLL_INTERVAL_MS = 7000;
+
 const formatCurrency = (amount, currencyCode = 'USD') => {
     if (amount === undefined || amount === null || isNaN(amount)) return '$0.00';
     try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode }).format(amount); }
@@ -404,9 +408,18 @@ export default function SupplierDashboard({ user, onLogout }) {
                 .subscribe()
         );
 
+        // Polling fallback — keeps payouts/timeline fresh even when Realtime is
+        // unavailable. Visible-only, and fetchData self-guards via isFetchingDataRef.
+        const pollInterval = setInterval(() => {
+            if (!document.hidden && navigator.onLine && isMountedRef.current) {
+                fetchData();
+            }
+        }, SUPPLIER_POLL_INTERVAL_MS);
+
         return () => {
             isMountedRef.current = false;
             channels.forEach(ch => supabase.removeChannel(ch));
+            clearInterval(pollInterval);
         };
     }, [user.email]);
 
@@ -421,12 +434,14 @@ export default function SupplierDashboard({ user, onLogout }) {
         }
     }, [mode, myRecons, myBoqs]);
 
-    // Enhanced fetch when payouts tab is viewed
+    // Enhanced fetch when payouts tab is viewed. Depend only on `mode` — adding
+    // fetchData (recreated every render) would make this refetch on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (mode === 'payouts') {
             fetchData();
         }
-    }, [mode, fetchData]);
+    }, [mode]);
 
     const fetchActiveToleranceRules = async () => {
         try {

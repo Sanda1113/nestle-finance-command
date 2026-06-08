@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import moment from 'moment';
@@ -26,6 +26,10 @@ import {
 
 const localizer = momentLocalizer(moment);
 const DnDCalendar = withDragAndDrop(Calendar);
+
+// Polling fallback so the calendar reflects Finance changes (reschedule, hold,
+// early-pay) within a few seconds even when Supabase Realtime isn't delivering.
+const CALENDAR_POLL_INTERVAL_MS = 5000;
 
 const formatCurrency = (amount, currencyCode = 'USD') => {
     if (amount === undefined || amount === null || isNaN(amount)) return '$0.00';
@@ -137,6 +141,7 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
     const [currentDate, setCurrentDate] = useState(new Date());
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [rejectReason, setRejectReason] = useState('');
+    const isFetchingEventsRef = useRef(false);
 
     const isFinance = userRole === 'Finance';
 
@@ -177,6 +182,9 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
             console.warn('[DigitalCalendar] Skipping fetch: cleanEmail is missing for Supplier');
             return;
         }
+        // Skip if a fetch is already running so the poll can't stack requests.
+        if (isFetchingEventsRef.current) return;
+        isFetchingEventsRef.current = true;
 
         setLoading(true);
         try {
@@ -201,6 +209,7 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
             console.error('[DigitalCalendar] Fetch Error:', err.message);
         } finally {
             setLoading(false);
+            isFetchingEventsRef.current = false;
         }
     }, [isFinance, userEmail]);
 
@@ -218,8 +227,17 @@ export default function DigitalCalendar({ userRole, userEmail, refreshTrigger, t
             )
             .subscribe();
 
+        // Polling fallback — keeps the calendar current even when Realtime is
+        // unavailable. Visible-only, and fetchEvents self-guards against overlap.
+        const pollInterval = setInterval(() => {
+            if (!document.hidden && navigator.onLine) {
+                fetchEvents();
+            }
+        }, CALENDAR_POLL_INTERVAL_MS);
+
         return () => {
             supabase.removeChannel(channel);
+            clearInterval(pollInterval);
         };
     }, [fetchEvents]);
 
