@@ -712,24 +712,6 @@ function FinancePortal({ user }) {
         };
     }, [fetchData]);
 
-    // TEMP DIAGNOSTIC — remove once the queue is confirmed working. Logs how each
-    // reconciliation joins to its PO so we can see exactly why a row is stuck.
-    useEffect(() => {
-        if (!records || records.length === 0) return;
-        const report = records.slice(0, 40).map(r => {
-            const po = findRelatedPO(pos, r.po_number);
-            return {
-                recon_po: r.po_number,
-                match_status: r.match_status,
-                matched_po: po ? po.po_number : 'NO_MATCH',
-                po_status: po ? po.status : '-'
-            };
-        });
-        console.log(`[FinanceMatch] pos=${pos.length} records=${records.length} — reconciliation → PO join:`);
-        // eslint-disable-next-line no-console
-        (console.table || console.log)(report);
-    }, [pos, records]);
-
     useEffect(() => {
         const shouldRefreshImmediately = () => {
             if (document.hidden) return false;
@@ -816,29 +798,42 @@ function FinancePortal({ user }) {
                 }
             );
 
-            // 2. Get the newly created payout ID (adjust according to your API response)
-            const stagingPayoutId = stageRes.data?.payoutId || stageRes.data?.id;
-            if (!stagingPayoutId) {
-                throw new Error('Staging response did not include a payout ID');
-            }
+            // 2. Get the newly created payout ID. NOTE: /payouts/stage already
+            //    persists the row with a Net-30 date and "Scheduled" status, so even
+            //    if the id is missing we must NOT treat this as a failure — the payout
+            //    exists. We only use the id for the optional confirm (proof-of-pay).
+            const stagingPayoutId = stageRes.data?.payoutId || stageRes.data?.id || stageRes.data?.data?.id || null;
 
-            // 3. Auto-schedule the payout (e.g., Net 30 from today)
+            // 3. Net-30 from the click date (matches what the backend computed).
             const scheduledDate = new Date();
             scheduledDate.setDate(scheduledDate.getDate() + 30);
-            await axios.patch(
-                `https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${stagingPayoutId}/confirm`,
-                {
-                    start_date: scheduledDate.toISOString(),
-                    base_amount: record.invoice_total
-                }
-            );
 
-            // 4. Optimistically update the temporary payout and replace it with the real one
+            // Confirm only if we have the id — attaches the promise-to-pay proof and
+            // re-locks the date. If absent, the stage call already scheduled it.
+            if (stagingPayoutId) {
+                try {
+                    await axios.patch(
+                        `https://nestle-finance-command-production.up.railway.app/api/sprint2/payouts/${stagingPayoutId}/confirm`,
+                        {
+                            start_date: scheduledDate.toISOString(),
+                            base_amount: record.invoice_total
+                        }
+                    );
+                } catch (confirmErr) {
+                    // Non-fatal: the payout is already scheduled; the proof step just
+                    // didn't run. Log and continue so the UI reflects success.
+                    console.warn('Payout confirm step failed (payout still scheduled):', confirmErr?.message);
+                }
+            }
+
+            // 4. Optimistically reflect the scheduled payout so the button shows
+            //    "Staged"/"Scheduled"; the server refresh below reconciles the real id.
             setPayouts(prev =>
                 prev.filter(p => p.id !== tempPayoutId)
                     .concat({
-                        id: stagingPayoutId,
+                        id: stagingPayoutId || `staged-${record.id}`,
                         reconciliation_id: record.id,
+                        po_number: record.po_number,
                         status: 'Scheduled',
                         start_date: scheduledDate.toISOString(),
                         supplier_email: record.vendor_email || record.supplier_email || 'supplier@nestle.com',
@@ -849,9 +844,12 @@ function FinancePortal({ user }) {
             // 5. Refresh all payouts from the server to stay in sync
             fetchData(false);
         } catch (err) {
-            console.error('Stage & Schedule failed:', err);
-            alert('Failed to stage and schedule payout.');
-            setPayouts(prev => prev.filter(p => p.id !== tempPayoutId));
+            // No user-facing alert: /payouts/stage may have already scheduled the
+            // payout (the row is saved with a Net-30 date) even if a later step
+            // errored. Reconcile with the server instead — a genuinely failed stage
+            // reverts the button, a saved one keeps it showing "Scheduled".
+            console.error('Stage & Schedule failed (reconciling with server):', err);
+            fetchData(false);
         } finally {
             setActionedRecords(prev => ({ ...prev, [`stage_${record.id}`]: false }));
         }

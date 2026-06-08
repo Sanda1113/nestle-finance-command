@@ -1535,7 +1535,14 @@ router.post('/payouts/stage', async (req, res) => {
             status: 'Scheduled' // Drops it into the Treasury Calendar queue
         };
 
-        const { data, error } = await supabase.from('payout_schedules').insert(payload);
+        // .select().single() so the response carries the new row's id — the Finance
+        // UI needs it to confirm/lock the schedule. Without it the client throws
+        // "Staging response did not include a payout ID" even though the row saved.
+        const { data, error } = await supabase
+            .from('payout_schedules')
+            .insert(payload)
+            .select()
+            .single();
         if (error) throw error;
 
         // Trigger In-App Notification
@@ -1562,7 +1569,7 @@ router.post('/payouts/stage', async (req, res) => {
             { amount: total_amount }
         ).catch(err => console.warn('[Payouts Stage] Email failed:', err.message));
 
-        res.status(200).json({ success: true, data });
+        res.status(200).json({ success: true, data, payoutId: data?.id, id: data?.id });
     } catch (error) {
         console.error('Stage Error:', error);
         res.status(500).json({ error: 'Failed to stage payout' });
