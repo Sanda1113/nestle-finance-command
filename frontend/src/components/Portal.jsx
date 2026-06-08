@@ -28,8 +28,28 @@ const safeParse = (val) => {
     return parseFloat(cleanStr) || 0;
 };
 
+// Reconciliation.po_number is OCR-derived from the uploaded PO, while
+// purchase_orders.po_number is system-generated (e.g. "PO-NESTLE-12345").
+// Those can drift by spaces/dashes/case, so join them tolerantly instead of
+// with strict ===, otherwise a matched reconciliation can never see its PO's
+// warehouse status (delivered / cleared) and stays stuck on "Awaiting Delivery".
+const normalizeRef = (val) => String(val ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+const findRelatedPO = (pos, poNumber) => {
+    if (!Array.isArray(pos) || pos.length === 0) return undefined;
+    const exact = pos.find(p => p.po_number === poNumber);
+    if (exact) return exact;
+    const target = normalizeRef(poNumber);
+    if (!target) return undefined;
+    return pos.find(p => normalizeRef(p.po_number) === target);
+};
+
 const DASHBOARD_POLL_INTERVAL_MS = 5000;
 const DASHBOARD_FETCH_TIMEOUT_MS = 15000;
+// The PO fetch carries full po_data incl. base64 shortage photos and can be
+// large; give it extra time so it doesn't abort and leave the queue without
+// PO statuses to match against.
+const DASHBOARD_POS_FETCH_TIMEOUT_MS = 30000;
 const DASHBOARD_IMMEDIATE_REFRESH_DEBOUNCE_MS = 800;
 
 const handlePrintDocument = (docType, docData) => {
@@ -602,9 +622,11 @@ function FinancePortal({ user }) {
 
             const p3 = axios.get('https://nestle-finance-command-production.up.railway.app/api/sprint2/grn/pending-pos', {
                 params: { includePhotos: true, _ts: Date.now() },
-                timeout: DASHBOARD_FETCH_TIMEOUT_MS,
+                timeout: DASHBOARD_POS_FETCH_TIMEOUT_MS,
                 headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
-            }).then(res => setPOs(res.data.data || []))
+            }).then(res => {
+                if (Array.isArray(res.data?.data)) setPOs(res.data.data);
+            })
                 .catch(error => { if (import.meta.env.DEV) console.warn('Finance polling request failed (pos):', error); });
 
             const p4 = axios.get('https://nestle-finance-command-production.up.railway.app/api/logs', {
@@ -707,7 +729,7 @@ function FinancePortal({ user }) {
             const _isMathMatch = Math.abs(invTotal - poTotal) <= 0.01;
             let newDisplayStatus;
             if (decision === 'Approved') {
-                const relatedPO = pos.find(p => p.po_number === r.po_number);
+                const relatedPO = findRelatedPO(pos, r.po_number);
                 const _poStatus = relatedPO && relatedPO.status ? String(relatedPO.status) : '';
                 const _clearedForPayout = _poStatus === 'Goods Cleared - Ready for Payout';
                 const _goodsReceived = !_clearedForPayout && (_poStatus.includes('GRN Logged') || _poStatus.includes('Goods Received'));
@@ -797,7 +819,10 @@ function FinancePortal({ user }) {
     };
 
     const enrichedRecords = records.map(r => {
-        const relatedPO = pos.find(p => p.po_number === r.po_number);
+        const relatedPO = findRelatedPO(pos, r.po_number);
+        if (!relatedPO && r.po_number && pos.length > 0 && import.meta.env.DEV) {
+            console.debug(`[FinanceQueue] No PO matched recon po_number="${r.po_number}". Available:`, pos.map(p => p.po_number));
+        }
         const poStatus = relatedPO && relatedPO.status ? String(relatedPO.status) : '';
         // Two distinct warehouse stages, kept separate so the queue shows the
         // progression and Stage Payout only unlocks at the final step:
